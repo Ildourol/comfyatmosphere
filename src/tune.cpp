@@ -163,6 +163,12 @@ namespace
         { "colour.day",          "Day Saturation" },
         { "colour.night",        "Night Saturation" },
         { "sky.clouds",          "Clouds" },
+        { "clouds.cover",        "Cloud Cover" },
+        { "clouds.shapes",       "Cloud Shapes" },
+        { "clouds.softness",     "Cloud Softness" },
+        { "clouds.erode",        "Cloud Shape Billows" },
+        { "clouds.clearing",     "Cloud Clearing" },
+        { "clouds.layerCover",   "High Clouds" },
     };
 
     const size_t kLine = 200;   // characters in one chat line

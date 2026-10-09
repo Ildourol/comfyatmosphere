@@ -28,7 +28,7 @@ measurement showed.
 | Sun direction and world camera, for the shadow map and the light | `sun.cpp` | none |
 | Sun rays: radial blur of the bright sky toward the sun | `rays.cpp` | Ctrl+F11 toggle |
 | Volumetric light: fog lit by the sun, shaded by the shadow map | `volume.cpp` (+ `depth.cpp`, `shadow.cpp`) | Alt+F11 toggle |
-| Clouds off: `[sky] clouds = 0` | `comfyfog.cpp` | none |
+| Our clouds in place of the game's layer, and now and then a shaped one (`[sky] clouds = 0`: none) | `clouds.cpp`, `cloudshapes.cpp` | none; `[clouds]` in the ini |
 | In-game controls: CVars for the addon's sliders, and the quality levels | `cvars.cpp`, `config.cpp` | none |
 | Diagnostics | all | F12: one-frame probe, then a 180-frame trace of the light and the map |
 | Lamp probe: where local lights can be found (street lamps, lanterns, torches) | `lamps.cpp` | F12, with the frame probe: a 60-frame report |
@@ -2928,6 +2928,85 @@ rest came after it: with the volumetric light off they were gone. The same depth
 Now the creatures at 4 to 10 yards are faint at Clarity 100 and gone at 25, with sun shadows off or on. The tests of
 legs in the shallows, the canal fog, the camera under the swell, the swimmer's wake and a ship's shade are
 unchanged.
+
+## Clouds with shapes (2026-10-08)
+
+Chiro found the sky poor, the clouds most of all, and asked for clouds that can take shapes, for cloud watching:
+dinosaurs, fish, kodos, turtles. Her answers to the scope: soft, "is that a kodo?" rather than a clear picture, and
+one shape once in a while.
+
+**Why not the game's layer.** The game's clouds are one textured strip, ~177 vertices, that scrolls over the sky
+dome. It is one picture that tiles and moves as a sheet: a kodo painted into it would repeat across the sky and
+could not form or break up. Full 3D clouds were left for later: the laptop GPU is power capped, and a kodo is hard
+to build in 3D and to read from below.
+
+**Where it draws.** `clouds.cpp` is drawn at the game's cloud draw (`IsCloudDraw`), which is then skipped. The sun
+sprite, the dome, the stars and the moons come before it and the world after, so the far mountains and the grass
+stay in front, and a cloud before the sun cuts the sun rays (`skyOnly` takes the darker of the sky kept before the
+clouds and the finished frame). A frame whose sky drew a sun or moon sprite but no cloud layer gets ours at the end
+of the sky. `[sky] gameClouds = 1` draws the game's layer instead, to compare.
+
+**The layer.** Each line of sight meets a flat base `[clouds] height` (1200) yards over the camera. Four reads of one
+256 x 256 tiling noise texture (built on a thread of its own, about 400 ms, which on the game's thread froze the
+first frame in the world: plain and billowed gradient noise, each channel equalised to an even spread so `cover` is
+the share of sky) give three sizes of billow and one of cover, each
+with its own wind speed, so the clouds change as they drift. Two reads 350 yards toward the sun shade the far side,
+and the thick middle is darker. Every read is `tex2Dgrad`, with the gradients taken before the branch that skips the
+pixels under the horizon. With the shapes in it, it was 489 of ps_3_0's 512 slots.
+
+**The shapes.** A shape is a picture in the addon's `clouds` folder: dark on light, drawn from the side, facing right.
+`cloudshapes.cpp` decodes them with WIC on a thread of its own and makes each a signed distance field in a 128 x 128
+cell of a 512 x 512 atlas (Felzenszwalb's exact distance transform on a 256 mask, halved). In the sky a shape is an
+upright sheet with its foot at the base, turned to face the camera, so a kodo drawn from the side is seen from the
+side wherever you stand. (In the first builds it was upright and faded overhead; see the third build.) The pictures (bunny, cat, fish,
+kodo, longneck, turtle, whale) are ellipses and strokes drawn by a script, the turtle, whale, cat and bunny after
+silhouettes the owner sent; Chiro can paint over them.
+
+**Merging (the first build).** The shape sat in a clearing: the layer was cut to 10% round it, and its own billows
+and light differed from the layer's. The owner: "those are pretty good but they need to merge in nicely with the
+other clouds". Now the layer's own billows at the same pixel eat the shape's edge, the layer thins round it by
+`[clouds] clearing` (0.6) over 0.45 of the sheet instead of being cut, the two join as a soft union
+(1 - (1 - a)(1 - b)), and the shape is shaded the same way as the layer. The second build turned the kodo into a
+round blob (Debug View 31): legs and horn are about 0.1 of the sheet wide, and the edge (0.10) and the billows'
+bite (0.12) ate them. The shape's edge is now 0.02 + softness x 0.15, the bite 0.20 x erode, the push 0.10 x erode,
+and `shapeSize` 900: the kodo keeps its legs and horn and still reads as a cloud. The owner then asked for shapes more
+like what they are: the bite is now 0.14 x erode, the push 0.06 x erode, the edge 0.015 + softness x 0.10, and the
+defaults `erode` 0.35 and `clearing` 0.75 (a Cloud Clearing slider).
+
+**Separate clouds (the third build).** With the shapes merged, the owner saw what the layer lacked: "we would need to
+add more random clouds that work like the animals too". The plain clouds are now drawn as the shapes are: one sheet
+each, with a cumulus silhouette that `cloudshapes.cpp` makes in code (`MakePuff`: a big billow and three to six
+smaller ones on a flat foot, cut flat underneath; 8 kinds in atlas cells 8 to 15, the pictures in cells 0 to 7).
+Plain clouds come from patches of `puffCell` (2000) yards out to `reach` (15000): each rolls `cover` (0.5) for a cloud
+in each `puffLife` (600 s) window, half `puffSize` (1000) times 0.55 to 1.3. The sheets face the camera fully, so a
+cloud overhead is drawn too, and they are drawn far ones first, 192 at most (103 at Lakeshire). Their billows bite
+0.30 x `puffBillows`, a shape's 0.14 x `erode`. The plain clouds near a shape fade by `clearing`. The old layer is the
+thin high layer behind them (`layerCover` 0.3, `layerOpacity` 0.55, `layerHeight` 2600). The sheet pixel shader is 74
+slots; the layer's, without the shapes, 114.
+
+**Lighter, and the other way (the owner).** The clouds were lit with the full sun colour at 0.92 opacity and stood
+out lighter than the shaded, half see-through high layer: they now take `puffBrightness` (0.8) of the lit colour and
+`opacity` 0.8. The layer drifted against the clouds: its offset added the wind times the clock, which moves the
+texture the other way; it now subtracts it.
+
+**The same sky for everyone.** The clock is the real one (UTC), not the game's, which comfytime sets per player. The
+layer's place is the camera plus the wind times that clock, each layer's offset taken in doubles and wrapped to the
+texture's tile. Shapes come from a grid of 6000-yard cells on each map: in each window of `shapeLife` (360 s,
+shifted per cell) a cell rolls `shapes` percent (15) for a shape, which one, where, and which way it faces. It forms
+over `shapeForm` (60 s), drifts with the wind through the rolled point at mid-life, and breaks up. The four nearest
+of the 5 x 5 cells round the camera are drawn. About 6.5 cells lie 2,500 to 9,000 yards away, where a shape is 10 to
+30 degrees up. At 5% (the first default) a third of a shape was alive there at a time, and the owner watched
+Redridge with none; at 15% it is about one, in some direction.
+
+**Colours.** White by day, warm as the sun sets, grey-blue at night (Night Darkness then darkens it with the sky).
+The shade is mostly the lit colour, cooler, with 35% of the game's fog colour, which the game sets per zone and hour.
+The blend is premultiplied and the shade lowers alpha by `shadeSky`, so some of the sky's own colour shows in it.
+Rain closes the cover toward 0.97, darkens the clouds, and stops shapes forming.
+
+**Controls.** The Clouds box, Cloud Cover, Cloud Shapes, Cloud Softness and Cloud Shape Billows (`erode`) on the
+Atmosphere page; the rest in `[clouds]`. `[clouds] testShape` N puts shape N, formed, 3200 yards ahead of the camera.
+Debug View 31: the shapes red, the plain clouds green, the high layer blue. The test is `redridge-cloud-shapes` (at Lakeshire). The test
+client has no comfytime in `dlls.txt` on 2026-10-08, so its shots came out at night, by the server's clock.
 
 ## The framing that matters
 

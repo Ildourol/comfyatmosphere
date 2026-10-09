@@ -42,6 +42,8 @@ add_library(comfyatmos SHARED
     src/beacon.cpp
     src/shadercache.cpp
     src/memtrace.cpp
+    src/clouds.cpp
+    src/cloudshapes.cpp
 )
 
 # version.h: comfyatmos's version from git, for the client report (cmake/version.cmake).

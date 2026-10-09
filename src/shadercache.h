@@ -22,6 +22,7 @@ void BodyMaskShaderList();
 void CoverShaderList();
 void GradeShaderList();
 void GrassShaderList();
+void CloudsShaderList();
 void LampGlowShaderList();
 void RaysShaderList();
 void ShadowShaderList();

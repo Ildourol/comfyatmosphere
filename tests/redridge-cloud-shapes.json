@@ -1,0 +1,159 @@
+{
+    "name": "redridge-cloud-shapes",
+    "about": "Our clouds (2026-10-08, Chiro's brief: soft clouds, and now and then one with a shape, for cloud watching; then \"they need to merge in nicely with the other clouds\"). On open ground at Lakeshire in Redridge, the camera 25 degrees up. Shots 1 to 7: each shape formed ahead of the camera ([clouds] testShape 0 to 6: bunny, cat, fish, kodo, longneck, turtle, whale). Shot 8: the kodo in Debug View 31 (red the shapes, green the other clouds, blue the high layer). Shots 9 and 10: the kodo with [clouds] clearing 0.3 and 0.9 (the plain clouds near it fade). Shot 11: the sky as it is. The probe must show our clouds drawn in place of the game's. The owner and Chiro judge the shots.",
+    "config": {
+        "character": 1,
+        "flight": false,
+        "camera": 0,
+        "start": {
+            "map": 0,
+            "x": -9416.7,
+            "y": -2248,
+            "z": 67.8,
+            "facing": 53,
+            "about": "the elwynn-ridge-fog start: on the ground, first person, toward the ridges"
+        },
+        "cvars": {
+            "comfyClouds": 1,
+            "comfyCloudCover": 50,
+            "comfyCloudShapes": 15,
+            "comfyCloudSoftness": 45,
+            "comfyCloudShapeBillows": 35
+        }
+    },
+    "steps": [
+        {
+            "face": {
+                "heading": 53,
+                "pitch": 25
+            }
+        },
+        {
+            "wait": 3
+        },
+        {
+            "atmos": "clouds.testShape 0"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.testShape 1"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.testShape 2"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.testShape 3"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.testShape 4"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.testShape 5"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.testShape 6"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.testShape 3"
+        },
+        {
+            "cvar": "comfyDebugView 31"
+        },
+        {
+            "wait": 1.5
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "cvar": "comfyDebugView 0"
+        },
+        {
+            "atmos": "clouds.clearing 0.3"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.clearing 0.9"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        },
+        {
+            "atmos": "clouds.clearing 0.75"
+        },
+        {
+            "atmos": "clouds.testShape -1"
+        },
+        {
+            "wait": 2
+        },
+        {
+            "probe": true
+        },
+        {
+            "wait": 2
+        },
+        {
+            "screenshot": true
+        }
+    ],
+    "expect": [
+        {
+            "probe": "CLOUDS +the game's skipped \\(\\d+ vertices\\), ours drawn|CLOUDS +ours, at the end of the sky",
+            "min": 1
+        },
+        {
+            "probe": "clouds: [0-9]+ clouds [(][0-9]+ shapes[)]",
+            "min": 1
+        }
+    ]
+}

@@ -103,6 +103,7 @@ namespace
                 kShadowsBody, kShadowNear, kTreeShade, kWaveHeight, kWaveSize, kWater, kWaterColour, kWaterClarity, kWaterReflect, kWaterBend, kWaterCover, kWaterWake, kWaterFoam, kWaterSwash, kWaterGlint, kWaterMoonGlint, kWaterGlintSize, kWaterEdge, kWaterEdgeWidth, kWaterBright, kWaterRippleDepth, kWaterSwashHeight, kWaterSwashLength, kWaterSwashSpeed, kDaySaturation, kNightSaturation, kColour, kWaterRippleMoving, kWaterSpread, kWaterSpreadMoving, kFoamDrawn, kFoamSize, kFoamReach, kOpenFoam, kOpenFoamAmount, kFoamEdge, kWakeFoam, kObjectFoam, kObjectFoamWidth, kLakeSwash, kLakeFoam, kLakeWaves, kRainOnWater, kLighthouses, kLighthouseBeam, kLhBeacon, kLhLength, kLhWidth, kLhSpread, kLhSpeed, kLhTwo, kLhGlint, kLhFace, kLhTilt, kLhSoft, kLhWaterWidth, kRainDarkness, kShipWake, kShipForward, kShipDepth, kShadowWater, kWetSand, kLhReach,
                 kGrass, kGrassWind, kGrassSpeed, kGrassLean, kGrassWave, kGrassWindDir, kGrassParting, kGrassRadius,
                 kHotkeys, kWaterZone, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
+                kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing, kCloudHigh,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -246,13 +247,20 @@ namespace
         "comfyFoliageSelfShade",
         // Creature Shadow on Foliage (2026-10-08): [sunshadows] foliageUnits, as a percentage.
         "comfyFoliageCreatureShadow",
+        // Our clouds (2026-10-08).
+        "comfyCloudCover",
+        "comfyCloudShapes",
+        "comfyCloudSoftness",
+        "comfyCloudShapeBillows",
+        "comfyCloudClearing",
+        "comfyCloudHigh",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
     // options window instead of an ini edit and F11. 0 leaves the ini's own debug values alone. The panel
     // cannot draw a dropdown (it builds a page from a table of tick boxes and sliders), so the names are
     // in the slider's tooltip and in the log.
-    struct DebugViewInfo { const char* name; int volume, sunShadows, lamps, rays, fog, water = 0, grass = 0; };
+    struct DebugViewInfo { const char* name; int volume, sunShadows, lamps, rays, fog, water = 0, grass = 0, clouds = 0; };
     const DebugViewInfo kDebugViews[] = {
         { "off",                                              0, 0, 0, 0, 0 },
         { "volumetric light: the glow alone",                 1, 0, 0, 0, 0 },
@@ -285,6 +293,7 @@ namespace
         { "sun shadows: the water it finds (blue: the water's depth over a bed, grey: none, so the shade falls on what the depth shows)", 0, 7, 0, 0, 0 },
         { "water: the depth under it (0 to 256 yards, blue to red, a line at 1, 2, 4, 8 ... 256; hatched: the map's depth)", 0, 0, 0, 0, 0, 10 },
         { "grass: the bend (black still, white the tips; blue where it comes from the texture)", 0, 0, 0, 0, 0, 0, 1 },
+        { "clouds: the shapes (red), the plain clouds (green), the high layer (blue)", 0, 0, 0, 0, 0, 0, 0, 1 },
     };
     constexpr int kDebugViewCount = sizeof(kDebugViews) / sizeof(kDebugViews[0]);
     int g_debugViewLogged = -1;
@@ -471,6 +480,12 @@ namespace
         case kFoliageEdge:    snprintf(out, cap, "%.0f", s.sunShadows.foliageEdge * 100.0f); break;  // percent
         case kFoliageSlack:   snprintf(out, cap, "%.0f", s.sunShadows.foliageSlack * 10.0f); break;  // tenths of a yard
         case kFoliageUnits:   snprintf(out, cap, "%.0f", s.sunShadows.foliageUnits * 100.0f); break; // percent
+        case kCloudCover:     snprintf(out, cap, "%.0f", s.clouds.cover * 100.0f); break;        // percent
+        case kCloudShapes:    snprintf(out, cap, "%.0f", s.clouds.shapes); break;                // percent already
+        case kCloudSoftness:  snprintf(out, cap, "%.0f", s.clouds.softness * 100.0f); break;     // percent
+        case kCloudBillows:   snprintf(out, cap, "%.0f", s.clouds.erode * 100.0f); break;        // percent
+        case kCloudClearing:  snprintf(out, cap, "%.0f", s.clouds.clearing * 100.0f); break;     // percent
+        case kCloudHigh:      snprintf(out, cap, "%.0f", s.clouds.layerCover * 100.0f); break;   // percent
         case kWaterSwashHeight: snprintf(out, cap, "%.0f", s.water.swashHeight * 100.0f); break; // hundredths of a yard
         case kWaterSwashLength: snprintf(out, cap, "%.0f", s.water.swashLength); break;          // yards
         case kWaterSwashSpeed:  snprintf(out, cap, "%.0f", s.water.swashSpeed * 100.0f); break;  // percent
@@ -611,6 +626,12 @@ namespace
         if (c[kFoliageEdge].seen)    s.sunShadows.foliageEdge = Clamp(c[kFoliageEdge].value * 0.01f, 0.0f, 0.5f);
         if (c[kFoliageSlack].seen)   s.sunShadows.foliageSlack = Clamp(c[kFoliageSlack].value * 0.1f, 0.0f, 10.0f);
         if (c[kFoliageUnits].seen)   s.sunShadows.foliageUnits = Clamp(c[kFoliageUnits].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudCover].seen)     s.clouds.cover = Clamp(c[kCloudCover].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudShapes].seen)    s.clouds.shapes = Clamp(c[kCloudShapes].value, 0.0f, 100.0f);
+        if (c[kCloudSoftness].seen)  s.clouds.softness = Clamp(c[kCloudSoftness].value * 0.01f, 0.05f, 1.0f);
+        if (c[kCloudBillows].seen)   s.clouds.erode = Clamp(c[kCloudBillows].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudClearing].seen)  s.clouds.clearing = Clamp(c[kCloudClearing].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudHigh].seen)      s.clouds.layerCover = Clamp(c[kCloudHigh].value * 0.01f, 0.0f, 1.0f);
         if (c[kWaterSwashHeight].seen) s.water.swashHeight = Clamp(c[kWaterSwashHeight].value * 0.01f, 0.0f, 1.0f);
         if (c[kWaterSwashLength].seen) s.water.swashLength = Clamp(c[kWaterSwashLength].value, 5.0f, 200.0f);
         if (c[kWaterSwashSpeed].seen)  s.water.swashSpeed  = Clamp(c[kWaterSwashSpeed].value * 0.01f, 0.1f, 4.0f);
@@ -667,6 +688,7 @@ namespace
                 s.fog.debug        = d.fog;
                 s.water.debug      = d.water;
                 s.grass.debug      = d.grass;
+                s.clouds.debug     = d.clouds;
             }
             if (v != g_debugViewLogged)
             {

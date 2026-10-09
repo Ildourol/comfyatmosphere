@@ -261,6 +261,7 @@ void ShaderCacheStart(const wchar_t* dir)
     BeaconShaderList();
     GradeShaderList();
     GrassShaderList();
+    CloudsShaderList();
     BodyMaskShaderList();
     ShadowShaderList();
     HANDLE t = CreateThread(nullptr, 0, Worker, nullptr, 0, nullptr);

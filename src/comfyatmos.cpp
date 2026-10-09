@@ -32,6 +32,7 @@
 #include "report.h"
 #include "depth.h"
 #include "grade.h"
+#include "clouds.h"
 #include "grass.h"
 #include "lampglow.h"
 #include "lamps.h"
@@ -346,6 +347,8 @@ namespace
     uint32_t g_frameDraws = 0;       // every draw this frame, probe or not; see hkSetTransform
     D3DMATRIX g_world     = {};      // last world/view/projection, unfiltered, for the probe's sky dump
     bool      g_skyPhase  = true;    // until the frame's first depth-writing draw (see IsCloudDraw)
+    bool      g_skySunSeen = false;  // this frame's sky drew a sun or moon sprite (NoteSkySun)
+    bool      g_cloudsDone = false;  // this frame's sky has had our clouds, or the game's (IsCloudDraw)
     D3DMATRIX g_viewAll   = {};
     D3DMATRIX g_projAll   = {};
 
@@ -1048,6 +1051,7 @@ namespace
             TerrainShadeReset();
             WaterReset();
             GradeReset();
+            CloudsReset();
             BeaconReset();
             GrassReset();
             MapTerrainRelease();
@@ -1312,6 +1316,8 @@ namespace
         g_lastPersp  = false;
         g_worldEnded = false;
         g_skyPhase  = true;
+        g_skySunSeen = false;
+        g_cloudsDone = false;
         SunFrameStart();
 
         PollKeys(dev);
@@ -1394,6 +1400,7 @@ namespace
             DepthProbe();
             ShadowProbe();
             VolumeProbe();
+            CloudsProbe();
             CoverProbe();
             LampsProbe(dev);
             LampGlowProbe();
@@ -1432,6 +1439,7 @@ namespace
         TerrainShadeReset();
         WaterReset();
         GradeReset();
+        CloudsReset();
         BeaconReset();
         GrassReset();
         const HRESULT hr = g_oReset(dev, pp);
@@ -2014,6 +2022,7 @@ namespace
         if (v[2] * v[2] + v[1] * v[1] + v[0] * v[0] < 1e-6f)
             return;
         SunSetView(v);
+        g_skySunSeen = true;
         if (g_probe.active)
             Log("  [draw %4u] SKY SUN        camera-space (%.3f %.3f %.3f)", g_probe.draws, v[0], v[1], v[2]);
     }
@@ -2204,7 +2213,13 @@ namespace
     // draw that turns them on is terrain, and ends the sky phase. So a cloud is: still in the sky phase,
     // blended, textured, a strip of more than 8 vertices (the sun is 4). The world matrix is deliberately
     // not tested: a first version required identity and never matched: the layer is rotated, or drawn
-    // under whatever world the previous draw left behind. With [sky] clouds = 0 it is not forwarded.
+    // under whatever world the previous draw left behind. It is not forwarded: our clouds are drawn in its place
+    // (clouds.cpp), or none with [sky] clouds = 0. [sky] gameClouds = 1 forwards it instead of ours.
+    bool CloudsWanted()
+    {
+        return g_cfg.master && g_cfg.sky.clouds && !g_cfg.sky.gameClouds;
+    }
+
     bool IsCloudDraw(IDirect3DDevice9* dev, D3DPRIMITIVETYPE prim, UINT nv)
     {
         if (!g_skyPhase || g_inPass)
@@ -2214,6 +2229,16 @@ namespace
         if (zwrite || g_frameDraws >= 48)      // 16 until the night sky's dozen extra draws (see NoteSkySun)
         {
             g_skyPhase = false;
+            // A sky with no cloud layer (clouds.cpp): ours at its end, before the world.
+            if (!g_cloudsDone && g_skySunSeen && CloudsWanted())
+            {
+                g_inPass = true;
+                CloudsDraw(dev);
+                g_inPass = false;
+                if (g_probe.active)
+                    Log("  [draw %4u] CLOUDS         ours, at the end of the sky (no cloud layer drawn)", g_probe.draws);
+            }
+            g_cloudsDone = true;
             return false;
         }
         if (prim != D3DPT_TRIANGLESTRIP || nv <= 8)
@@ -2414,11 +2439,20 @@ namespace
             g_inPass = true;
             RaysBeforeClouds(dev);           // [rays] skyOnly: the rays cast from the sky without its clouds
             g_inPass = false;
+            g_cloudsDone = true;
         }
-        if (!g_cfg.sky.clouds && cloud)
+        // Ours in place of the game's layer ([sky] clouds), or none. [sky] gameClouds, or everything off: the game's.
+        if (cloud && g_cfg.master && !g_cfg.sky.gameClouds)
         {
+            if (CloudsWanted())
+            {
+                g_inPass = true;
+                CloudsDraw(dev);
+                g_inPass = false;
+            }
             if (g_probe.active)
-                Log("  [draw %4u] CLOUDS         skipped (%u vertices)", g_probe.draws, nv);
+                Log("  [draw %4u] CLOUDS         the game's skipped (%u vertices), %s", g_probe.draws, nv,
+                    CloudsWanted() ? "ours drawn" : "none drawn");
             CountDraw(dev, "DrawIndexed", prim, pc, true, static_cast<UINT>(bvi) + mvi, nv);
             return S_OK;
         }

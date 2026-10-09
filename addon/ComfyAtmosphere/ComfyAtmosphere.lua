@@ -133,6 +133,12 @@ COMFYATMOSPHERE_COLOR          = "Color Effects";
 COMFYATMOSPHERE_DAY_SATURATION = "Day Saturation";
 COMFYATMOSPHERE_NIGHT_SATURATION = "Night Saturation";
 COMFYATMOSPHERE_CLOUDS         = "Clouds";
+COMFYATMOSPHERE_CLOUD_COVER    = "Cloud Cover";
+COMFYATMOSPHERE_CLOUD_SHAPES   = "Cloud Shapes";
+COMFYATMOSPHERE_CLOUD_SOFTNESS = "Cloud Softness";
+COMFYATMOSPHERE_CLOUD_BILLOWS  = "Cloud Shape Billows";
+COMFYATMOSPHERE_CLOUD_CLEARING = "Cloud Clearing";
+COMFYATMOSPHERE_CLOUD_HIGH     = "High Clouds";
 COMFYATMOSPHERE_MIST           = "Fog";
 COMFYATMOSPHERE_MIST_DENSITY   = "Fog Density";
 COMFYATMOSPHERE_MIST_HEIGHT    = "Fog Height";
@@ -1531,9 +1537,81 @@ local ENTRIES = {
 	},
 	{
 		name = "COMFYATMOSPHERE_CLOUDS",
-		desc = "The cloud layer in the sky.",
+		desc = "Soft clouds that drift with the wind. Now and then one takes a shape. Every player in one place sees the same sky.",
 		type = "checkbutton",
 		cvar = "comfyClouds",
+	},
+	{
+		-- Percent: comfyatmos.dll divides it by 100 for [clouds] cover.
+		name = "COMFYATMOSPHERE_CLOUD_COVER",
+		desc = "How many clouds there are, in percent. Rain brings more.",
+		type = "slider",
+		cvar = "comfyCloudCover",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- [clouds] shapes: the percent chance for each patch of sky in each few minutes.
+		name = "COMFYATMOSPHERE_CLOUD_SHAPES",
+		desc = "How often a cloud takes a shape: a turtle, a kodo, a fish. 0 never.",
+		type = "slider",
+		cvar = "comfyCloudShapes",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 50,
+		step = 1,
+		numberLabels = 1,
+	},
+	{
+		-- Percent: [clouds] softness.
+		name = "COMFYATMOSPHERE_CLOUD_SOFTNESS",
+		desc = "How soft the clouds' edges are, in percent.",
+		type = "slider",
+		cvar = "comfyCloudSoftness",
+		dependency = { "comfyClouds", "1" },
+		minval = 5,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- Percent: [clouds] erode.
+		name = "COMFYATMOSPHERE_CLOUD_BILLOWS",
+		desc = "How much the billows change a shaped cloud's outline, in percent. More makes a shape harder to see.",
+		type = "slider",
+		cvar = "comfyCloudShapeBillows",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- Percent: [clouds] clearing.
+		name = "COMFYATMOSPHERE_CLOUD_CLEARING",
+		desc = "How much the clouds near a shaped cloud fade, in percent. More makes its outline easier to see.",
+		type = "slider",
+		cvar = "comfyCloudClearing",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- Percent: [clouds] layerCover.
+		name = "COMFYATMOSPHERE_CLOUD_HIGH",
+		desc = "How much of the sky the thin high layer behind the clouds covers, in percent.",
+		type = "slider",
+		cvar = "comfyCloudHigh",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
 	},
 	{
 		name = "COMFYATMOSPHERE_GRASS",
@@ -1673,11 +1751,12 @@ local ENTRIES = {
 			.. "27 water: the drawn foam (white) over its age (red), the open water's foam (blue)\n"
 			.. "28 sun shadows: the water it finds (blue: the water's depth over a bed, grey: none, so the shade falls on what the depth shows)\n"
 			.. "29 water: the depth under it (0 to 256 yards, blue to red, a line at 1, 2, 4, 8 ... 256; hatched: the map's depth)\n"
-			.. "30 grass: the bend (black still, white the tips; blue where it comes from the texture)",
+			.. "30 grass: the bend (black still, white the tips; blue where it comes from the texture)\n"
+			.. "31 clouds: the shapes (red), the plain clouds (green), the high layer (blue)",
 		type = "slider",
 		cvar = "comfyDebugView",
 		minval = 0,
-		maxval = 30,
+		maxval = 31,
 		step = 1,
 		numberLabels = 1,
 	},
@@ -1756,7 +1835,9 @@ local WINDOW_SECTIONS = {
 	               "comfySunTint", "comfyShadowResolution", "comfyShadowSoftness", "comfyShadowEvery",
 	               "comfyShadowNear" } },
 	{ "Sky", { "comfyRays", "comfyRaysStrength", "comfyRaysSoften", "comfyRaysSmooth", "comfyNightStrength",
-	           "comfyNightDarkness", "comfyRainDarkness", "comfyMoonlight", "comfyClouds" } },
+	           "comfyNightDarkness", "comfyRainDarkness", "comfyMoonlight", "comfyClouds",
+	           "comfyCloudCover", "comfyCloudShapes", "comfyCloudSoftness", "comfyCloudShapeBillows",
+	           "comfyCloudClearing", "comfyCloudHigh" } },
 	{ "Color", { "comfyColor", "comfyDaySaturation", "comfyNightSaturation" } },
 	{ "Grass", { "comfyGrass", "comfyGrassWind", "comfyGrassSpeed", "comfyGrassWaveLength", "comfyGrassWindDir",
 	             "comfyGrassLean", "comfyGrassParting", "comfyGrassPartingRadius", "frillDensity" } },
@@ -2283,6 +2364,7 @@ local DEBUG_VIEWS = {
 	"sun shadows: the water it finds (blue: the water's depth over a bed, grey: none, so the shade falls on what the depth shows)",
 	"water: the depth under it (0 to 256 yards, blue to red, a line at 1, 2, 4, 8 ... 256; hatched: the map's depth)",
 	"grass: the bend (black still, white the tips; blue where it comes from the texture)",
+	"clouds: the shapes (red), the plain clouds (green), the high layer (blue)",
 };
 
 local PANEL_BACKDROP = {

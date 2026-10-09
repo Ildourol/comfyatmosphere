@@ -454,7 +454,47 @@ struct RaysSettings
 
 struct SkySettings
 {
-    bool clouds = false;   // false: the sky's cloud layer is not drawn
+    bool clouds     = true;    // our cloud layer (clouds.cpp) in place of the game's. false: no clouds at all
+    bool gameClouds = false;   // true: the game's own cloud layer instead of ours (for comparison)
+};
+
+// Our clouds (clouds.cpp, 2026-10-08), drawn where the game's cloud layer was: separate soft clouds that form, drift
+// and break up, and among them now and then one that has a shape (a turtle, a kodo) from the silhouettes in the
+// addon's clouds folder (cloudshapes.cpp); behind them a thin high layer.
+// Every player at one place sees the same sky: the real clock and the world position place the clouds, not the
+// game time, which comfytime sets for each player.
+struct CloudSettings
+{
+    float cover      = 0.50f;   // 0..1: the chance that each patch of sky has a cloud (Cloud Cover)
+    float softness   = 0.45f;   // 0.05..1: how soft the clouds' edges are (Cloud Softness)
+    float shapes     = 15.0f;    // 0..100: percent chance that a sky cell has a shaped cloud in each window
+                                // (Cloud Shapes). At 15, about one shape alive in viewing range at any time
+    float erode      = 0.35f;   // 0..1: how much the billows eat a shape's edge. More: "is that a kodo?"
+    float clearing   = 0.75f;   // 0..1: how much the plain clouds near a shape fade, so its outline shows
+    float height     = 1200.0f; // yards over the camera: the clouds' base
+    float puffSize   = 1000.0f; // yards: half the width of a plain cloud, before its own size (0.55 to 1.3 times)
+    float puffCell   = 2000.0f; // yards a side of the patch of sky that may hold one plain cloud
+    float puffLife   = 600.0f;  // seconds a plain cloud lasts, forming and breaking up included
+    float puffForm   = 90.0f;   // seconds it takes to form, and again to break up
+    float puffBillows = 1.0f;   // 0..2: how much the billows change a plain cloud's outline
+    float puffBrightness = 0.8f; // the clouds' lit side against the high layer's: at 1 they stood out as lighter
+    float reach      = 15000.0f; // yards: clouds further than this are not drawn (they fade over the last fifth)
+    float layerCover = 0.30f;   // 0..1: the share of the sky the thin high layer covers (High Clouds)
+    float layerOpacity = 0.55f; // 0..1: how much of the sky the high layer's thickest part hides
+    float layerHeight = 2600.0f; // yards over the camera: the high layer
+    float scale      = 2600.0f; // yards: the size of the high layer's largest billows
+    float windSpeed  = 7.0f;    // yards a second
+    float windDeg    = 60.0f;   // degrees: where the wind blows TO, 0 = +x (north), counter-clockwise
+    float shapeSize  = 900.0f;  // yards: half the width of a shaped cloud
+    float shapeLife  = 360.0f;  // seconds a shaped cloud lasts, forming and breaking up included
+    float shapeForm  = 60.0f;   // seconds it takes to form, and again to break up
+    float brightness = 1.0f;    // the lit side's brightness
+    float opacity    = 0.80f;   // 0..1: how much of the sky the thickest cloud hides
+    float shadeSky   = 0.35f;   // 0..1: how much sky colour shows through the shaded side
+    float horizon    = 0.10f;   // the sine of the angle over the horizon at which the clouds are full
+    float haze       = 30000.0f; // yards at which the clouds fade into the horizon's colour
+    int   testShape  = -1;      // 0 and up: that shape, formed, ahead of the camera (screenshots and tuning)
+    int   debug      = 0;       // 1 = red the shapes, green the plain clouds, blue the high layer
 };
 
 // The water (water.cpp, 2026-10-02): foam where it is shallow, drawn over each water chunk the client draws.
@@ -639,6 +679,7 @@ struct BenchSettings
 struct Settings
 {
     SkySettings  sky;
+    CloudSettings clouds;
     WaterSettings water;
     RaysSettings rays;
     BenchSettings bench;

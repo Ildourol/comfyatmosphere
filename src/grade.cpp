@@ -96,7 +96,7 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
     {
         const Settings& s = g_cfg;
         return s.volume.debug || s.sunShadows.debug || s.lamps.debug || s.rays.debugView || s.fog.debug ||
-               s.water.debug;
+               s.water.debug || s.clouds.debug;
     }
 
     bool MakeShader(IDirect3DDevice9* dev)
