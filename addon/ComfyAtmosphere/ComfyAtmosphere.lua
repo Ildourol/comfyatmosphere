@@ -1,10 +1,11 @@
--- Adds the comfyatmosphere controls to the options window, on a page of their own: Video -> Atmosphere.
+-- Adds the comfyatmosphere controls to the options window, on pages of their own: Video -> Atmosphere, and
+-- the clouds' controls on Video -> Clouds under it (2026-10-10, the owner: the clouds in a setting of their own).
 --
 -- This client's options panel is data-driven, as the ComfyGrass addon describes: GameOptions is a global
 -- table, and OptionsFrame.lua builds each page from it (both in patch-9.mpq). An entry with `options` is
--- a page in the list on the left, and one without is a heading (Video, Sound, Interface). So the page is
+-- a page in the list on the left, and one without is a heading (Video, Sound, Interface). So each page is
 -- one entry, put after Shaders, and each control is one table entry with a cvar. The list shows 18 rows
--- and the client uses 15, so the page fits without scrolling the list. Until 2026-09-29 the controls
+-- and the client uses 15, so the two pages fit without scrolling the list. Until 2026-09-29 the controls
 -- were added to the Shaders page.
 --
 -- The panel calls SetCVar while a slider moves, and comfyatmos.dll reads the CVars a few times a second, so
@@ -26,6 +27,7 @@
 -- still follows comfyatmos.ini, and the addon keeps no copy of its own.
 
 COMFYATMOSPHERE_CATEGORY       = "Atmosphere";
+COMFYATMOSPHERE_CLOUDS_PAGE    = "Clouds";
 COMFYATMOSPHERE_MASTER         = "Atmosphere Effects";
 COMFYATMOSPHERE_VOLUME         = "Volumetric Light";
 COMFYATMOSPHERE_VOLUME_STRENGTH = "Volumetric Light Strength";
@@ -134,11 +136,19 @@ COMFYATMOSPHERE_DAY_SATURATION = "Day Saturation";
 COMFYATMOSPHERE_NIGHT_SATURATION = "Night Saturation";
 COMFYATMOSPHERE_CLOUDS         = "Clouds";
 COMFYATMOSPHERE_CLOUD_COVER    = "Cloud Cover";
-COMFYATMOSPHERE_CLOUD_SHAPES   = "Cloud Shapes";
+COMFYATMOSPHERE_CLOUD_SHAPES_ON = "Cloud Shapes";
+COMFYATMOSPHERE_CLOUD_SHAPES   = "Cloud Shape Amount";
 COMFYATMOSPHERE_CLOUD_SOFTNESS = "Cloud Softness";
 COMFYATMOSPHERE_CLOUD_BILLOWS  = "Cloud Shape Billows";
-COMFYATMOSPHERE_CLOUD_CLEARING = "Cloud Clearing";
-COMFYATMOSPHERE_CLOUD_HIGH     = "High Clouds";
+COMFYATMOSPHERE_CLOUD_CLEARING = "Cloud Shape Cutout";
+COMFYATMOSPHERE_CLOUD_CUTOUT_WIDTH = "Cloud Shape Cutout Width";
+COMFYATMOSPHERE_CLOUD_SHAPE_SIZE = "Cloud Shape Size";
+COMFYATMOSPHERE_CLOUD_RESHAPE  = "Cloud Reshaping";
+COMFYATMOSPHERE_CLOUD_PUFFINESS = "Cloud Puffiness";
+COMFYATMOSPHERE_CLOUD_SPEED    = "Cloud Speed";
+COMFYATMOSPHERE_CLOUD_TRANSITION = "Cloud Transition Time";
+COMFYATMOSPHERE_CLOUD_SCALE    = "Cloud Scale";
+COMFYATMOSPHERE_CLOUD_LAYER_SOFTNESS = "Cloud Layer Softness";
 COMFYATMOSPHERE_MIST           = "Fog";
 COMFYATMOSPHERE_MIST_DENSITY   = "Fog Density";
 COMFYATMOSPHERE_MIST_HEIGHT    = "Fog Height";
@@ -171,7 +181,7 @@ local ENTRIES = {
 		-- Every effect at once. The panel can make a control depend on one CVar only, and the others
 		-- depend on their own boxes, so they stay movable while this is off; they do nothing then.
 		name = "COMFYATMOSPHERE_MASTER",
-		desc = "All the effects on this page at once. Off, the game looks as it does without the mod.",
+		desc = "All the effects on this page and the Clouds page at once. Off, the game looks as it does without the mod.",
 		type = "checkbutton",
 		cvar = "comfyAtmosphere",
 	},
@@ -1544,25 +1554,13 @@ local ENTRIES = {
 	{
 		-- Percent: comfyatmos.dll divides it by 100 for [clouds] cover.
 		name = "COMFYATMOSPHERE_CLOUD_COVER",
-		desc = "How many clouds there are, in percent. Rain brings more.",
+		desc = "How much of the sky the clouds cover, in percent. Rain brings more.",
 		type = "slider",
 		cvar = "comfyCloudCover",
 		dependency = { "comfyClouds", "1" },
 		minval = 0,
 		maxval = 100,
 		step = 5,
-		numberLabels = 1,
-	},
-	{
-		-- [clouds] shapes: the percent chance for each patch of sky in each few minutes.
-		name = "COMFYATMOSPHERE_CLOUD_SHAPES",
-		desc = "How often a cloud takes a shape: a turtle, a kodo, a fish. 0 never.",
-		type = "slider",
-		cvar = "comfyCloudShapes",
-		dependency = { "comfyClouds", "1" },
-		minval = 0,
-		maxval = 50,
-		step = 1,
 		numberLabels = 1,
 	},
 	{
@@ -1578,12 +1576,116 @@ local ENTRIES = {
 		numberLabels = 1,
 	},
 	{
+		-- [clouds] puffiness, as a percentage.
+		name = "COMFYATMOSPHERE_CLOUD_PUFFINESS",
+		desc = "How much the clouds are round, puffy cumulus, in percent. 0 gives smooth sheets and streaks.",
+		type = "slider",
+		cvar = "comfyCloudPuffiness",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- [clouds] scale, yards.
+		name = "COMFYATMOSPHERE_CLOUD_SCALE",
+		desc = "How big the clouds are, in yards across their largest billows. Bigger makes fewer, larger clouds. While the slider moves, the clouds jump.",
+		type = "slider",
+		cvar = "comfyCloudScale",
+		dependency = { "comfyClouds", "1" },
+		minval = 1000,
+		maxval = 8000,
+		step = 100,
+		numberLabels = 1,
+	},
+	{
+		-- [clouds] layerSoftness, as a percentage.
+		name = "COMFYATMOSPHERE_CLOUD_LAYER_SOFTNESS",
+		desc = "How much of the clouds' fine detail is smoothed away, in percent. More gives big soft masses with fewer small bits; 0 is fine and broken.",
+		type = "slider",
+		cvar = "comfyCloudLayerSoftness",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- [clouds] reshape, as a percentage.
+		name = "COMFYATMOSPHERE_CLOUD_RESHAPE",
+		desc = "How much the clouds change shape and thin out as they drift, in percent. 0 keeps their shape as they move.",
+		type = "slider",
+		cvar = "comfyCloudReshape",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- [clouds] windSpeed, yards a second. Every player at one place must have the same to see the same sky.
+		name = "COMFYATMOSPHERE_CLOUD_SPEED",
+		desc = "How fast the clouds drift with the wind, in yards a second. While the slider moves, the clouds jump.",
+		type = "slider",
+		cvar = "comfyCloudSpeed",
+		dependency = { "comfyClouds", "1" },
+		minval = 0,
+		maxval = 300,   -- 60 until 2026-10-11 (the owner: "a lot faster")
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- [clouds] transitionTime, seconds.
+		name = "COMFYATMOSPHERE_CLOUD_TRANSITION",
+		desc = "How many seconds the clouds take to change between clear and rain, both ways. After twice this time the change is nearly done.",
+		type = "slider",
+		cvar = "comfyCloudTransition",
+		dependency = { "comfyClouds", "1" },
+		minval = 1,
+		maxval = 60,
+		step = 1,
+		numberLabels = 1,
+	},
+	{
+		-- [clouds] shapesOn: the shaped clouds at all; the sliders under it are theirs.
+		name = "COMFYATMOSPHERE_CLOUD_SHAPES_ON",
+		desc = "Now and then a cloud takes a shape: a kodo, a whale, a crab. It comes in over the horizon on the wind.",
+		type = "checkbutton",
+		cvar = "comfyCloudShapesOn",
+		dependency = { "comfyClouds", "1" },
+	},
+	{
+		-- [clouds] shapes: the percent chance for each patch of sky in each few minutes.
+		name = "COMFYATMOSPHERE_CLOUD_SHAPES",
+		desc = "How often a cloud takes a shape: a turtle, a kodo, a fish. 0 never.",
+		type = "slider",
+		cvar = "comfyCloudShapes",
+		dependency = { "comfyCloudShapesOn", "1" },
+		minval = 0,
+		maxval = 100,   -- 50 until 2026-10-11
+		step = 1,
+		numberLabels = 1,
+	},
+	{
+		-- [clouds] shapeSize, shown as the whole width in yards (the setting is half of it).
+		name = "COMFYATMOSPHERE_CLOUD_SHAPE_SIZE",
+		desc = "How big a shaped cloud is, in yards across. Bigger shapes also come further apart.",
+		type = "slider",
+		cvar = "comfyCloudShapeSize",
+		dependency = { "comfyCloudShapesOn", "1" },
+		minval = 1000,
+		maxval = 6000,
+		step = 100,
+		numberLabels = 1,
+	},
+	{
 		-- Percent: [clouds] erode.
 		name = "COMFYATMOSPHERE_CLOUD_BILLOWS",
 		desc = "How much the billows change a shaped cloud's outline, in percent. More makes a shape harder to see.",
 		type = "slider",
 		cvar = "comfyCloudShapeBillows",
-		dependency = { "comfyClouds", "1" },
+		dependency = { "comfyCloudShapesOn", "1" },
 		minval = 0,
 		maxval = 100,
 		step = 5,
@@ -1592,22 +1694,22 @@ local ENTRIES = {
 	{
 		-- Percent: [clouds] clearing.
 		name = "COMFYATMOSPHERE_CLOUD_CLEARING",
-		desc = "How much the clouds near a shaped cloud fade, in percent. More makes its outline easier to see.",
+		desc = "How much the clouds are cleared round a shaped cloud, in percent, so it stands on its own. The gap follows the shape's outline, with a fluffy rim.",
 		type = "slider",
 		cvar = "comfyCloudClearing",
-		dependency = { "comfyClouds", "1" },
+		dependency = { "comfyCloudShapesOn", "1" },
 		minval = 0,
 		maxval = 100,
 		step = 5,
 		numberLabels = 1,
 	},
 	{
-		-- Percent: [clouds] layerCover.
-		name = "COMFYATMOSPHERE_CLOUD_HIGH",
-		desc = "How much of the sky the thin high layer behind the clouds covers, in percent.",
+		-- [clouds] cutoutWidth, as a percentage.
+		name = "COMFYATMOSPHERE_CLOUD_CUTOUT_WIDTH",
+		desc = "How far the clear gap round a shaped cloud reaches out from its outline, in percent. 0 hugs the edge.",
 		type = "slider",
-		cvar = "comfyCloudHigh",
-		dependency = { "comfyClouds", "1" },
+		cvar = "comfyCloudCutoutWidth",
+		dependency = { "comfyCloudShapesOn", "1" },
 		minval = 0,
 		maxval = 100,
 		step = 5,
@@ -1752,7 +1854,7 @@ local ENTRIES = {
 			.. "28 sun shadows: the water it finds (blue: the water's depth over a bed, grey: none, so the shade falls on what the depth shows)\n"
 			.. "29 water: the depth under it (0 to 256 yards, blue to red, a line at 1, 2, 4, 8 ... 256; hatched: the map's depth)\n"
 			.. "30 grass: the bend (black still, white the tips; blue where it comes from the texture)\n"
-			.. "31 clouds: the shapes (red), the plain clouds (green), the high layer (blue)",
+			.. "31 clouds: the shapes (red), the layer (blue)",
 		type = "slider",
 		cvar = "comfyDebugView",
 		minval = 0,
@@ -1785,13 +1887,21 @@ local function AddControls()
 
 	for index, category in ipairs(GameOptions) do
 		if category.name == PIXEL_SHADERS and category.options then
-			local options = {};
+			-- The clouds' controls (comfyClouds, comfyCloud*) on a page of their own, the rest on Atmosphere.
+			local options, clouds = {}, {};
 			for _, option in ipairs(ENTRIES) do
 				if HasCVar(option.cvar) then
-					table.insert(options, option);
+					if string.find(option.cvar, "^comfyCloud") then
+						table.insert(clouds, option);
+					else
+						table.insert(options, option);
+					end
 				end
 			end
 			table.insert(GameOptions, index + 1, { name = COMFYATMOSPHERE_CATEGORY, options = options });
+			if table.getn(clouds) > 0 then
+				table.insert(GameOptions, index + 2, { name = COMFYATMOSPHERE_CLOUDS_PAGE, options = clouds });
+			end
 			-- The panel draws its list of pages once, as it loads, which is before this.
 			if OptionsFrame_UpdateCategories then
 				OptionsFrame_UpdateCategories();
@@ -1835,9 +1945,11 @@ local WINDOW_SECTIONS = {
 	               "comfySunTint", "comfyShadowResolution", "comfyShadowSoftness", "comfyShadowEvery",
 	               "comfyShadowNear" } },
 	{ "Sky", { "comfyRays", "comfyRaysStrength", "comfyRaysSoften", "comfyRaysSmooth", "comfyNightStrength",
-	           "comfyNightDarkness", "comfyRainDarkness", "comfyMoonlight", "comfyClouds",
-	           "comfyCloudCover", "comfyCloudShapes", "comfyCloudSoftness", "comfyCloudShapeBillows",
-	           "comfyCloudClearing", "comfyCloudHigh" } },
+	           "comfyNightDarkness", "comfyRainDarkness", "comfyMoonlight" } },
+	{ "Clouds", { "comfyClouds", "comfyCloudCover", "comfyCloudSoftness", "comfyCloudPuffiness", "comfyCloudScale",
+	              "comfyCloudLayerSoftness", "comfyCloudReshape", "comfyCloudSpeed", "comfyCloudTransition",
+	              "comfyCloudShapesOn", "comfyCloudShapes", "comfyCloudShapeSize", "comfyCloudShapeBillows",
+	              "comfyCloudClearing", "comfyCloudCutoutWidth" } },
 	{ "Color", { "comfyColor", "comfyDaySaturation", "comfyNightSaturation" } },
 	{ "Grass", { "comfyGrass", "comfyGrassWind", "comfyGrassSpeed", "comfyGrassWaveLength", "comfyGrassWindDir",
 	             "comfyGrassLean", "comfyGrassParting", "comfyGrassPartingRadius", "frillDensity" } },
@@ -2364,7 +2476,7 @@ local DEBUG_VIEWS = {
 	"sun shadows: the water it finds (blue: the water's depth over a bed, grey: none, so the shade falls on what the depth shows)",
 	"water: the depth under it (0 to 256 yards, blue to red, a line at 1, 2, 4, 8 ... 256; hatched: the map's depth)",
 	"grass: the bend (black still, white the tips; blue where it comes from the texture)",
-	"clouds: the shapes (red), the plain clouds (green), the high layer (blue)",
+	"clouds: the shapes (red), the layer (blue)",
 };
 
 local PANEL_BACKDROP = {

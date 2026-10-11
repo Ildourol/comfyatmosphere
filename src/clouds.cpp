@@ -7,35 +7,32 @@
 // take the darker of the sky before the clouds and the finished frame). Where a frame draws no cloud layer, the pass
 // is drawn at the end of the sky instead.
 //
-// The clouds. Each is a sheet that faces the camera with a silhouette's distance field on it (cloudshapes.cpp): a
-// plain cumulus made in code, or now and then a picture (a kodo, a turtle). Plain clouds and shapes are drawn the
-// same way, so a shape is one of the clouds (the owner, 2026-10-08: "we would need to add more random clouds that
-// work like the animals too"; the first build drew the plain clouds as one flat layer, and a shape on it looked laid
-// on top). Billows of the sheet's own push the edge about and eat it, more for a plain cloud than for a shape, whose
-// outline has to survive ([clouds] erode, puffBillows). A read toward the sun across the sheet shades the far side,
-// the thick middle is darker and so is the foot. The sheet faces the camera fully, so a cloud overhead is seen too:
-// a kodo overhead is the kodo you see lying in the grass. The plain clouds near a shape fade by [clouds] clearing, so
-// its outline shows. The sheets are drawn far ones first.
+// One layer (2026-10-10, the owner: one layer, the low clouds removed). Each pixel's line of sight meets a flat
+// base [clouds] layerHeight yards over the camera, where four reads of one tiling noise texture give three sizes of
+// billow and one of cover, each moving with the wind at its own speed. [clouds] layerSoftness reads coarser levels of
+// the noise, so the layer is big soft masses. Every read is tex2Dgrad, with the gradients taken before the branch
+// that skips the pixels under the horizon. From 2026-10-08 to 2026-10-10 there were also low clouds: a sheet each,
+// facing the camera, in front of this layer, which was then thin. Two kinds of cloud, lit two ways, came out a mix of
+// white and grey.
 //
-// The high layer. Behind the clouds, a thin layer: each pixel's line of sight meets a flat base [clouds] layerHeight
-// yards over the camera, where four reads of one tiling noise texture give three sizes of billow and one of cover,
-// each moving with the wind at its own speed. Every read is tex2Dgrad, with the gradients taken before the branch
-// that skips the pixels under the horizon.
+// The shapes (a kodo, a turtle) are in the layer. The layer's shader takes the eight nearest, each a sheet facing
+// the camera at layerHeight: a line of sight meets the sheet, the silhouette's distance field (cloudshapes.cpp)
+// gives the outline, the layer's own billows at that pixel eat its edge ([clouds] erode), the layer thins round it
+// ([clouds] clearing), and the two are joined and shaded alike. A kodo overhead is the kodo you see lying in the grass.
 //
 // Where they are. The sky is the same for every player at one place: the clock is the real one (UTC, which every
 // computer keeps to within seconds), not the game's, which comfytime sets for each player. The layer's place is the
-// wind times that clock. The clouds come from grids over each map: a plain cloud from patches of puffCell yards, each
-// rolling [clouds] cover for a cloud in each window of puffLife seconds; a shape from patches of 6000 yards, each
-// rolling [clouds] shapes percent in each window of shapeLife seconds. The windows are shifted per patch. A cloud
-// forms, drifts with the wind through its rolled point at mid-life, and breaks up.
+// wind times that clock. The shapes come from patches on each map, a grid fixed in the air that the wind carries as it
+// carries the layer, each patch rolling [clouds] shapes percent once for a shape. The wind brings them in from the far
+// edge of the sky; they cross and leave at the other side.
 //
 // The colours follow the sun: white by day, warm as the sun sets, grey-blue at night (Night Darkness then darkens
 // it with the sky). The shade takes some of the game's fog colour, which the game sets for the zone and the hour.
-// In rain the clouds and the layer close up and darken, and no shape forms.
+// In rain the layer covers the whole sky and darkens, its billows still seen, and no shape forms. The clouds follow
+// the rain over about 12 seconds (the overcast), not at once as the water does.
 //
-// Both draws are ps_3_0 with a vs_3_0, blended premultiplied (ONE, INVSRCALPHA): alpha is lowered in the shade, so
-// some of the sky's colour shows through it. [clouds] debug 1 (Debug View 31) shows the shapes red, the plain clouds
-// green and the high layer blue.
+// The draw is ps_3_0 with a vs_3_0, blended premultiplied (ONE, INVSRCALPHA): alpha is lowered in the shade, so some
+// of the sky's colour shows through it. [clouds] debug 1 (Debug View 31) shows the shapes red and the layer blue.
 
 #define CINTERFACE
 #define WIN32_LEAN_AND_MEAN
@@ -75,9 +72,9 @@ O main(float3 pos : POSITION, float2 uv : TEXCOORD0)
 }
 )HLSL";
 
-    // The high layer, full screen.
+    // The layer, full screen.
     const char* kPsHlsl = R"HLSL(
-sampler2D sNoise  : register(s0);   // tiling noise: r, g, b billows at three sizes, a the cover's
+sampler2D sNoise  : register(s0);   // tiling noise: r, g billows at two sizes, b round puffs, a the cover
 float4 gInv0  : register(c0);       // rows of inverse(view-projection): clip -> camera-relative world
 float4 gInv1  : register(c1);
 float4 gInv2  : register(c2);
@@ -85,15 +82,24 @@ float4 gInv3  : register(c3);
 float4 gSun   : register(c4);       // xyz the world direction to the sun, w the cover
 float4 gLit   : register(c5);       // rgb the lit side, w the opacity
 float4 gShade : register(c6);       // rgb the shaded side, w the share of sky seen through the shade
-float4 gP     : register(c7);       // x the base's height over the camera, y the edge's width, w debug
+float4 gP     : register(c7);       // x the base's height over the camera, y the edge's width, z the reads'
+                                    // footprint (1..16, softer), w debug
 float4 gL0    : register(c8);       // per layer: xy its offset, z 1 / its size in yards
 float4 gL1    : register(c9);
 float4 gL2    : register(c10);
 float4 gL3    : register(c11);      // the cover's layer
 float4 gHaze  : register(c12);      // rgb the horizon's colour, w 1 / the yards at which clouds fade into it
-float4 gMisc  : register(c13);      // x the horizon's sine
+float4 gMisc  : register(c13);      // x the horizon's sine, y layerSoftness, z Cloud Puffiness
+// The shapes in the layer (2026-10-10), eight at most (four until 2026-10-11), four rows each:
+// the way to its centre (a unit vector) and its distance over its half-width; its right (turned for one that faces
+// left) and how formed; its up; the atlas cell's corner, how much the billows bite and the cutout's width.
+// An unused one is formed 0.
+float4 gS[32] : register(c14);
+float4 gQ     : register(c46);      // x a shape's edge, y Cloud Clearing, z a shape's opacity, w overcast (rain)
 
 struct I { float2 uv : TEXCOORD0; };
+sampler2D sShapes : register(s1);   // the silhouettes' fields (cloudshapes.cpp): r the field, 0.5 at the edge;
+                                    // a the cutout round each shape: an oval with puffs, as a distance
 
 float4 Read(float2 p, float2 gx, float2 gy, float4 l)
 {
@@ -106,119 +112,104 @@ float4 main(I i) : COLOR
     float3 d = normalize(h.xyz / h.w);
     float  t = gP.x / max(d.z, 0.01);
     float2 p = d.xy * t;               // yards across the base from under the camera
-    float2 gx = ddx(p), gy = ddy(p);
+    // [clouds] layerSoftness (2026-10-10, the owner: softer, big blurred masses, not torn bits): the reads take
+    // coarser levels of the noise, gP.z times the pixel's own, which leaves out the fine billows.
+    float2 gx = ddx(p) * gP.z, gy = ddy(p) * gP.z;
 
     float fade = smoothstep(0.0, gMisc.x, d.z);
     [branch] if (fade <= 0.0)
         return float4(0.0, 0.0, 0.0, 0.0);   // under the horizon: the ground is drawn over it
+    if (gP.w > 1.5)
+        return float4(1.0, 1.0, 1.0, 1.0);   // [clouds] debug 2: the whole sky flat white, for what is drawn over it
 
-    float a = Read(p, gx, gy, gL0).r;
+    float soft = gMisc.y;
+    float4 t0 = Read(p, gx, gy, gL0);
+    float a = t0.r;
     float b = Read(p, gx, gy, gL1).g;
     float c = Read(p, gx, gy, gL2).b;
     float big = Read(p, gx, gy, gL3).a;
     float cover = saturate(gSun.w + (big - 0.5) * 0.6);
-    float f = a * 0.55 + b * 0.30 + c * 0.15;
-    float dens = saturate((f - (1.0 - cover)) / gP.y);
+    // Soft: the smallest billows out, the contrast the coarser levels lose put back (so the cover holds), and a
+    // wider edge.
+    float k = 1.0 + soft * 0.6;
+    // Cumulus (Cloud Puffiness, 2026-10-11): the big billows say where the clouds are, the round puffs (b, read
+    // with them at their size, so about 520 and 260 yards at Cloud Scale 2600) give them round, lumpy edges and tops.
+    float fOld = lerp(a * 0.55 + b * 0.30 + c * 0.15, a * 0.65 + b * 0.35, soft);
+    float f = 0.5 + (lerp(fOld, a * 0.45 + t0.b * 0.55, gMisc.z) - 0.5) * k;
+    float edge = gP.y * (1.0 + soft * 3.0);
+    float dens = saturate((f - (1.0 - cover)) / edge) * step(0.0001, gSun.w);   // Cloud Cover 0: shapes alone
+
+    // The shapes (2026-10-10, the owner: blend them in; until then they were sheets among the low clouds). Each is
+    // a sheet facing the camera, met by this line of sight, with its outline from the field. The layer's own
+    // billows at this pixel eat the edge, and the layer thins round it by Cloud Clearing, so the outline shows.
+    float shapeA = 0.0, near = 0.0, shapeThick = 0.0;
+    // The layer's lumps carried into a shape (2026-10-11, the owner: a shape "just got stamped into the clouds map"):
+    // thin where the layer's billows are low, thick and shaded where they are high, as the layer round it is.
+    float lump = smoothstep(0.2, 0.8, f);
+    [unroll] for (int n = 0; n < 8; ++n)   // unrolled: a loop indexed the constants by a chain of compares
+    {
+        float4 s0 = gS[n * 4], s1 = gS[n * 4 + 1], s2 = gS[n * 4 + 2], s3 = gS[n * 4 + 3];
+        // The sheet faces the camera, so its right and up are square to the way to its centre: where this line of
+        // sight meets it is d x (distance / dn), and on the sheet (d . right, d . up) times that over the half-width.
+        float  dn = dot(d, s0.xyz);
+        float2 s  = float2(dot(d, s1.xyz), dot(d, s2.xyz)) * (s0.w / max(dn, 0.05));
+        float2 cuv = clamp(s3.xy + (float2(s.x, -s.y) * 0.5 + 0.5) * 0.25, s3.xy + 0.002, s3.xy + 0.248);
+        float  sd = tex2Dlod(sShapes, float4(cuv, 0.0, 0.5)).r;
+        float  e0 = (sd - 0.5) * 0.75;   // sheet units from the outline, + inside: 0.375 reach either way
+        float  e  = e0 + (f - 0.5) * s3.z;
+        float  w  = s1.w * step(0.05, dn);
+        shapeA = 1.0 - (1.0 - shapeA) * (1.0 - saturate(e / gQ.x) * w * lerp(0.55, 1.0, lump));
+        shapeThick = max(shapeThick, saturate(e / (gQ.x * 3.0)) * w * lump);
+        // The cutout (2026-10-11, the owner: "draw a circle around the shape, then circles around the edge of that
+        // circle in various sizes"): a, made by cloudshapes.cpp, is the distance in from an oval round the shape with
+        // puffs on its rim; 1 in a is 1 in sheet units (32 cell texels each way). s3.w (Cloud Shape Cutout Width)
+        // grows or shrinks it, and the layer's own billows push the rim a little. Tries before this followed the
+        // shape's own outline, grown or blurred, and read as a stamp of it (the owner's screenshots of a fish, a cat).
+        float  cut = tex2Dlod(sShapes, float4(cuv, 0.0, 0.0)).a - 0.5;
+        // The rim fades on an S-curve from just outside the cutout's edge to 0.35 of the half-width inside it, so the
+        // clouds thin all the way in (2026-10-11, the owner: "much smoother", and "it should start inside the cutout";
+        // until then a straight ramp 0.06 wide, then a curve centred on the edge).
+        near = max(near, w * smoothstep(-0.05, 0.35, cut + s3.w + (f - 0.5) * 0.12));
+    }
+    dens *= 1.0 - gQ.y * near;
+    // Rain (2026-10-10, the owner): the whole sky covered, with its billows still seen. Where the noise is low the
+    // cover is thinner and lets a little sky through; where it is high it is thick, and darker (below).
+    dens = lerp(dens, lerp(0.8, 1.0, smoothstep(0.2, 0.7, f)), gQ.w);
+
     // Toward the sun across the base: the cloud the light comes through.
     float2 toSun = gSun.xy * 350.0;
-    float o = saturate((Read(p + toSun, gx, gy, gL0).r * 0.55 + Read(p + toSun, gx, gy, gL1).g * 0.30 + 0.075
-                        - (1.0 - cover)) / gP.y);
-    float thick = saturate((f - (1.0 - cover)) / (gP.y * 3.0));
-    float L = (1.0 - 0.35 * thick) * (1.0 - 0.40 * o);
+    float4 t2 = Read(p + toSun, gx, gy, gL0);
+    float a2 = t2.r, b2 = Read(p + toSun, gx, gy, gL1).g;
+    float f2 = 0.5 + (lerp(lerp(a2 * 0.55 + b2 * 0.30 + 0.075, a2 * 0.65 + b2 * 0.35, soft), a2 * 0.45 + t2.b * 0.55,
+                            gMisc.z) - 0.5) * k;
+    float o = saturate((f2 - (1.0 - cover)) / edge);
+    // The thick middle darker: grey bellies and bright thin parts, more so when soft.
+    // A shape is shaded as the layer is: its thick middle as the layer's.
+    float thick = max(lerp(saturate((f - (1.0 - cover)) / (edge * 3.0)) * step(0.0001, gSun.w),
+                           smoothstep(0.25, 0.85, f), gQ.w), shapeThick);
+    float L = (1.0 - lerp(0.35, 0.5, soft) * thick) * (1.0 - 0.40 * o);
 
     float3 col = lerp(gShade.rgb, gLit.rgb, L);
     float fwd = pow(saturate(dot(d, gSun.xyz)), 8.0);
-    col += gLit.rgb * fwd * (1.0 - dens) * 0.8;                // thin edges toward the sun glow
+    col += gLit.rgb * fwd * (1.0 - max(dens, shapeA)) * 0.8;  // thin edges toward the sun glow
     float hz = saturate(t * gHaze.w);
     hz *= hz;
     col = lerp(col, gHaze.rgb, hz * 0.8);
-    float alpha = dens * gLit.w * fade * (1.0 - hz * 0.5);
+    // The layer and the shapes joined, each with its own opacity.
+    float alpha = (1.0 - (1.0 - dens * gLit.w) * (1.0 - shapeA * gQ.z)) * fade * (1.0 - hz * 0.5);
 
     if (gP.w > 0.0)
-        return float4(0.0, 0.0, dens * fade, 1.0);
+        return float4(shapeA * fade, 0.0, dens * fade, 1.0);
     return float4(col * alpha, alpha * (1.0 - gShade.w * (1.0 - L)));
 }
 )HLSL";
 
-    // The clouds: one sheet each, its corners placed on the CPU, camera-relative.
-    const char* kSheetVsHlsl = R"HLSL(
-float4 gVP0 : register(c0);   // rows of view-projection: camera-relative world -> clip
-float4 gVP1 : register(c1);
-float4 gVP2 : register(c2);
-float4 gVP3 : register(c3);
-struct V { float3 pos : POSITION; float2 s : TEXCOORD0; float4 cell : TEXCOORD1; float4 more : TEXCOORD2; };
-struct O { float4 pos : POSITION; float2 s : TEXCOORD0; float4 cell : TEXCOORD1; float4 more : TEXCOORD2;
-           float3 rel : TEXCOORD3; };
-O main(V v)
-{
-    O o;
-    o.pos = v.pos.x * gVP0 + v.pos.y * gVP1 + v.pos.z * gVP2 + gVP3;
-    o.pos.z = 0.5 * o.pos.w;      // past the game's far plane, and depth is off: keep it inside
-    o.s = v.s;
-    o.cell = v.cell;
-    o.more = v.more;
-    o.rel = v.pos;
-    return o;
-}
-)HLSL";
-
-    const char* kSheetPsHlsl = R"HLSL(
-sampler2D sNoise  : register(s0);   // tiling noise
-sampler2D sShapes : register(s1);   // the silhouettes' distance fields, 4 x 4 cells, 0.5 at the edge
-float4 gSun   : register(c0);       // xyz the world direction to the sun
-float4 gLit   : register(c1);       // rgb the lit side, w the opacity
-float4 gShade : register(c2);       // rgb the shaded side, w the share of sky seen through the shade
-float4 gP     : register(c3);       // x the edge's width, y the billows' drift, z debug, w the horizon's sine
-float4 gHaze  : register(c4);       // rgb the horizon's colour, w 1 / the yards at which clouds fade into it
-
-// s: the sheet, -1..1 (x turned for a cloud that faces left); cell: xy the cell's corner, z 1 a plain cloud and
-// 2 a shape, w how formed; more: xy toward the sun across the sheet, z the billows' bite, w the cloud's own seed.
-struct I { float2 s : TEXCOORD0; float4 cell : TEXCOORD1; float4 more : TEXCOORD2; float3 rel : TEXCOORD3; };
-
-float4 main(I i) : COLOR
-{
-    float bite = i.more.z;
-    float4 w = tex2D(sNoise, i.s * 0.35 + i.more.ww + gP.yy);
-    float4 v = tex2D(sNoise, i.s * 0.9 + i.more.ww * 1.7 - gP.yy);
-    float2 s = i.s + (w.rg - 0.5) * bite * 0.45;             // the billows push the edge about
-    float2 lo = i.cell.xy + 0.002, hi = i.cell.xy + 0.248;
-    float2 cuv = clamp(i.cell.xy + (float2(s.x, -s.y) * 0.5 + 0.5) * 0.25, lo, hi);
-    float2 cs  = clamp(cuv + float2(i.more.x, -i.more.y) * 0.125, lo, hi);
-    float sd  = tex2D(sShapes, cuv).r;
-    float sd2 = tex2D(sShapes, cs).r;
-    // Sheet units: half the width is 1, and the field holds 0.75 of that to either side of the edge.
-    float puff = v.g * 0.6 + v.b * 0.4;
-    float e  = (sd - 0.5) * 0.75 + (puff - 0.5) * bite;      // and they eat it
-    float dk = saturate(e / gP.x) * i.cell.w;
-    // The thick middle darker, darker again where the cloud lies toward the sun, and a darker foot.
-    float lk = (1.0 - 0.35 * saturate(e / 0.35)) * (1.0 - 0.40 * saturate((sd2 - 0.5) * 0.75 / 0.15));
-    lk *= lerp(0.80, 1.0, saturate(i.s.y * 0.8 + 0.6));
-
-    float dist = length(i.rel);
-    float3 d = i.rel / dist;
-    float fade = smoothstep(0.0, gP.w, d.z);
-    float3 col = lerp(gShade.rgb, gLit.rgb, lk);
-    col += gLit.rgb * pow(saturate(dot(d, gSun.xyz)), 8.0) * (1.0 - dk) * 0.8;   // thin edges toward the sun glow
-    float hz = saturate(dist * gHaze.w);
-    hz *= hz;
-    col = lerp(col, gHaze.rgb, hz * 0.8);
-    float a = dk * gLit.w * fade * (1.0 - hz * 0.5);
-
-    if (gP.z > 0.0)
-        return float4((i.cell.z > 1.5 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0)) * a, a);
-    return float4(col * a, a * (1.0 - gShade.w * (1.0 - lk)));
-}
-)HLSL";
-
-    constexpr int    kNoise     = 256;      // the noise texture's size a side
-    constexpr float  kShapeCell = 6000.0f;  // yards a side of a shape's patch
-    constexpr int    kShapeReach = 2;       // shape patches to each side of the camera's
-    constexpr int    kMaxClouds = 192;      // sheets drawn at once, the nearest
+    constexpr int    kNoise    = 256;      // the noise texture's size a side
+    constexpr float  kShapeRange = 15000.0f;   // yards round the camera that shapes are seen to: low over the horizon
+    constexpr int    kShapesInLayer = 8;    // shapes the layer's shader takes (gS); 4 until 2026-10-11
 
     IDirect3DVertexShader9* g_vs = nullptr;
     IDirect3DPixelShader9*  g_ps = nullptr;
-    IDirect3DVertexShader9* g_vsSheet = nullptr;
-    IDirect3DPixelShader9*  g_psSheet = nullptr;
     IDirect3DTexture9*      g_noise = nullptr;
     IDirect3DTexture9*      g_atlas = nullptr;   // made when the loader is done
     IDirect3DStateBlock9*   g_sb = nullptr;
@@ -341,6 +332,26 @@ float4 main(I i) : COLOR
         return sum;
     }
 
+    // Round puffs that tile every `period` cells (2026-10-11, the owner: the clouds read as cirrus or stratus, "more
+    // like cumulus, round and puffy"): cellular noise, one point a cell, and over each point a dome, sqrt(1 - d^2) of
+    // the distance d to the nearest point in cells, so each puff is round on top.
+    float Puffs(float x, float y, int period, uint32_t seed)
+    {
+        const float px = x * period, py = y * period;
+        const int cx = static_cast<int>(floorf(px)), cy = static_cast<int>(floorf(py));
+        float best = 4.0f;
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                const int ix = cx + dx, iy = cy + dy;
+                const int wx = ((ix % period) + period) % period, wy = ((iy % period) + period) % period;
+                const float fx = ix + 0.15f + 0.7f * U(Hash(wx, wy, seed, 0x9E37u));
+                const float fy = iy + 0.15f + 0.7f * U(Hash(wx, wy, seed, 0x79B9u));
+                best = std::min(best, (px - fx) * (px - fx) + (py - fy) * (py - fy));
+            }
+        return sqrtf(std::max(0.0f, 1.0f - best));
+    }
+
     // Each channel equalised to an even spread over 0..1, so [clouds] cover reads as the share of sky covered.
     void Equalise(std::vector<float>& v)
     {
@@ -370,8 +381,12 @@ float4 main(I i) : COLOR
             cur[c].resize(static_cast<size_t>(n) * n);
             for (int y = 0; y < n; ++y)
                 for (int x = 0; x < n; ++x)
-                    cur[c][y * n + x] = Fbm((x + 0.5f) / n, (y + 0.5f) / n, spec[c].freq, spec[c].octaves, spec[c].seed,
-                                            spec[c].billow);
+                {
+                    const float u = (x + 0.5f) / n, v = (y + 0.5f) / n;
+                    // b: the round puffs, two sizes (until 2026-10-11 small billows, Fbm at 8).
+                    cur[c][y * n + x] = c == 2 ? Puffs(u, v, 8, 37u) * 0.65f + Puffs(u, v, 16, 41u) * 0.35f
+                                               : Fbm(u, v, spec[c].freq, spec[c].octaves, spec[c].seed, spec[c].billow);
+                }
             Equalise(cur[c]);
         }
         // Level 0 from the channels, each next level the mean of four texels of the one before.
@@ -436,20 +451,21 @@ float4 main(I i) : COLOR
         return true;
     }
 
-    // The silhouettes' fields, as the loader left them. Five levels: a sixth would mix neighbouring cells.
+    // The silhouettes' fields (r, as L) and their fluffy blobs (a, as A), as the loader left them: A8L8, two bytes
+    // a texel (L8, the field alone, until 2026-10-11). Five levels: a sixth would mix neighbouring cells.
     bool MakeAtlas(IDirect3DDevice9* dev)
     {
         const unsigned char* src = CloudShapesAtlas();
         if (!src)
             return false;
         const int levels = 5;
-        if (FAILED(dev->lpVtbl->CreateTexture(dev, kCloudAtlas, kCloudAtlas, levels, 0, D3DFMT_L8, D3DPOOL_MANAGED,
+        if (FAILED(dev->lpVtbl->CreateTexture(dev, kCloudAtlas, kCloudAtlas, levels, 0, D3DFMT_A8L8, D3DPOOL_MANAGED,
                                               &g_atlas, nullptr)))
         {
             Log("clouds: the shapes' texture could not be made: no shaped clouds");
             return false;
         }
-        std::vector<float> cur(src, src + static_cast<size_t>(kCloudAtlas) * kCloudAtlas);
+        std::vector<float> cur(src, src + static_cast<size_t>(kCloudAtlas) * kCloudAtlas * 2);
         int size = kCloudAtlas;
         for (int l = 0; l < levels; ++l)
         {
@@ -459,16 +475,20 @@ float4 main(I i) : COLOR
             for (int y = 0; y < size; ++y)
             {
                 unsigned char* row = static_cast<unsigned char*>(lr.pBits) + y * lr.Pitch;
-                for (int x = 0; x < size; ++x)
-                    row[x] = static_cast<unsigned char>(cur[y * size + x] + 0.5f);
+                for (int x = 0; x < size * 2; ++x)
+                    row[x] = static_cast<unsigned char>(cur[static_cast<size_t>(y) * size * 2 + x] + 0.5f);
             }
             g_atlas->lpVtbl->UnlockRect(g_atlas, l);
             const int half = size / 2;
-            std::vector<float> next(static_cast<size_t>(half) * half);
+            std::vector<float> next(static_cast<size_t>(half) * half * 2);
             for (int y = 0; y < half; ++y)
                 for (int x = 0; x < half; ++x)
-                    next[y * half + x] = 0.25f * (cur[(2 * y) * size + 2 * x] + cur[(2 * y) * size + 2 * x + 1] +
-                                                  cur[(2 * y + 1) * size + 2 * x] + cur[(2 * y + 1) * size + 2 * x + 1]);
+                    for (int c = 0; c < 2; ++c)
+                    {
+                        auto at = [&](int yy, int xx) { return cur[(static_cast<size_t>(yy) * size + xx) * 2 + c]; };
+                        next[(static_cast<size_t>(y) * half + x) * 2 + c] =
+                            0.25f * (at(2 * y, 2 * x) + at(2 * y, 2 * x + 1) + at(2 * y + 1, 2 * x) + at(2 * y + 1, 2 * x + 1));
+                    }
             cur.swap(next);
             size = half;
         }
@@ -520,9 +540,7 @@ float4 main(I i) : COLOR
     {
         if (!g_vs)      g_vs      = MakeVS(dev, kVsHlsl, "clouds_vs");
         if (!g_ps)      g_ps      = MakePS(dev, kPsHlsl, "clouds_ps");
-        if (!g_vsSheet) g_vsSheet = MakeVS(dev, kSheetVsHlsl, "clouds_sheet_vs");
-        if (!g_psSheet) g_psSheet = MakePS(dev, kSheetPsHlsl, "clouds_sheet_ps");
-        return g_vs && g_ps && g_vsSheet && g_psSheet;
+        return g_vs && g_ps;
     }
 
     // --- the clouds --------------------------------------------------------------------------------
@@ -534,9 +552,7 @@ float4 main(I i) : COLOR
         int   cell;       // which silhouette (atlas cell)
         float flip;       // +1 faces right, -1 left
         float weight;     // how formed, 0..1
-        bool  shape;      // a picture, not a plain cloud
-        float bite;       // how much the billows eat the edge
-        float seed;       // the cloud's own place in the noise
+        float bite;       // how much the layer's billows eat the edge
         float dist;       // yards from the camera
     };
 
@@ -550,20 +566,13 @@ float4 main(I i) : COLOR
         return h;
     }
 
-    float Life(float age, float life, float form)
-    {
-        return Smooth(0.0f, form, age) * (1.0f - Smooth(life - form, life, age));
-    }
-
-    // Every cloud round the camera now: the shapes, the plain clouds, and the plain clouds faded near a shape.
-    void FindClouds(const CloudSettings& cl, const float cam[3], double now, const float wind[2], float rain,
+    // The shapes round the camera now, the kShapesInLayer nearest.
+    void FindShapes(const CloudSettings& cl, const float cam[3], double now, const float wind[2], float rain,
                     const D3DMATRIX& view, std::vector<Cloud>& out)
     {
         out.clear();
-        const int animals = CloudShapesCount(), puffs = CloudPuffCount();
+        const int animals = CloudShapesCount();
         const uint32_t salt = MapSalt();
-
-        // The shapes.
         const float half = cl.shapeSize;
         if (animals > 0 && cl.testShape >= 0)
         {
@@ -571,131 +580,65 @@ float4 main(I i) : COLOR
             float fx = view.m[0][2], fy = view.m[1][2];
             const float len = sqrtf(fx * fx + fy * fy);
             if (len < 1e-3f) { fx = 1.0f; fy = 0.0f; } else { fx /= len; fy /= len; }
-            Cloud c = { { fx * 3200.0f, fy * 3200.0f, cl.height + half * 0.74f }, half, cl.testShape % animals, 1.0f,
-                        1.0f, true, 0.14f * cl.erode, 0.37f, 3200.0f };
+            Cloud c = { { fx * 3200.0f, fy * 3200.0f, cl.layerHeight }, half, cl.testShape % animals, 1.0f,
+                        1.0f, 0.18f * cl.erode, 0.0f };
             out.push_back(c);
         }
-        else if (animals > 0 && cl.shapes > 0.0f && rain < 1.0f)
+        else if (animals > 0 && cl.shapesOn && cl.shapes > 0.0f && rain < 1.0f)
         {
-            const double life = cl.shapeLife;
-            const float  form = std::min(cl.shapeForm, cl.shapeLife * 0.5f);
-            const int cx = static_cast<int>(floorf(cam[0] / kShapeCell)), cy = static_cast<int>(floorf(cam[1] / kShapeCell));
-            for (int dy = -kShapeReach; dy <= kShapeReach; ++dy)
-                for (int dx = -kShapeReach; dx <= kShapeReach; ++dx)
-                {
-                    const int ix = cx + dx, iy = cy + dy;
-                    const double shift = U(Hash(ix, iy, 0u, salt ^ 0xA5A5u)) * life;
-                    const double k = floor((now + shift) / life);
-                    const float age = static_cast<float>(now + shift - k * life);
-                    const uint32_t h = Hash(ix, iy, static_cast<uint32_t>(static_cast<int64_t>(k)), salt);
-                    if (U(Mix(h ^ 1u)) * 100.0f >= cl.shapes)
-                        continue;
-                    Cloud c = {};
-                    c.shape = true;
-                    c.cell = static_cast<int>(Mix(h ^ 2u) % static_cast<uint32_t>(animals));
-                    c.flip = (Mix(h ^ 5u) & 1u) ? 1.0f : -1.0f;
-                    c.half = half * (0.85f + 0.3f * U(Mix(h ^ 6u)));
-                    c.bite = 0.14f * cl.erode;
-                    c.seed = U(Mix(h ^ 8u)) * 7.0f;
-                    // Placed so that it drifts through the rolled point at the middle of its life.
-                    const float drift = age - static_cast<float>(life) * 0.5f;
-                    c.rel[0] = (ix + U(Mix(h ^ 3u))) * kShapeCell + wind[0] * drift - cam[0];
-                    c.rel[1] = (iy + U(Mix(h ^ 4u))) * kShapeCell + wind[1] * drift - cam[1];
-                    c.rel[2] = cl.height + c.half * 0.74f;   // the silhouette's foot near the base
-                    c.weight = Life(age, static_cast<float>(life), form) * (1.0f - rain);
-                    if (c.weight > 0.002f)
-                        out.push_back(c);
-                }
-        }
-        const size_t shapes = out.size();
-
-        // The plain clouds.
-        if (puffs > 0)
-        {
-            const float pc = cl.puffCell;
-            const int reach = static_cast<int>(ceilf(cl.reach / pc));
-            const float cover = cl.cover + (0.9f - cl.cover) * rain;
-            const float life = cl.puffLife, form = std::min(cl.puffForm, cl.puffLife * 0.5f);
-            const int cx = static_cast<int>(floorf(cam[0] / pc)), cy = static_cast<int>(floorf(cam[1] / pc));
+            // The patches ride the wind: their grid is fixed in the air, as the layer's billows are, and the camera's
+            // place in the air is its place less the wind times the clock. A patch holds its shape, or none, for good,
+            // and the wind brings new patches in from upwind: a shape comes in from the far edge of the sky, fading
+            // in over its last 2500 yards, crosses, and fades out at the other side (2026-10-11, the owner: "shapes
+            // should come in from back where the skybox starts"). Until then each patch rolled again every 6 minutes,
+            // and a shape formed and broke up in the middle of the sky; before that the grid was fixed to the ground.
+            // The patches are sized so that about kShapesInLayer of them lie within kShapeRange: Cloud Shapes 100
+            // fills the sky with as many as the shader draws. And at least 2.6 half-widths a side, so the spacing
+            // below keeps neighbours apart.
+            const double cell = std::max(kShapeRange * sqrt(3.14159265 / kShapesInLayer), cl.shapeSize * 2.6);
+            const double ax = cam[0] - static_cast<double>(wind[0]) * now, ay = cam[1] - static_cast<double>(wind[1]) * now;
+            const int reach = std::min(8, static_cast<int>(ceil(kShapeRange / cell)) + 1);
+            const int cx = static_cast<int>(floor(ax / cell)), cy = static_cast<int>(floor(ay / cell));
             for (int dy = -reach; dy <= reach; ++dy)
                 for (int dx = -reach; dx <= reach; ++dx)
                 {
                     const int ix = cx + dx, iy = cy + dy;
-                    const double shift = U(Hash(ix, iy, 0u, salt ^ 0x5EEDu)) * life;
-                    const double k = floor((now + shift) / life);
-                    const float age = static_cast<float>(now + shift - k * life);
-                    const uint32_t h = Hash(ix, iy, static_cast<uint32_t>(static_cast<int64_t>(k)), salt ^ 0xC10Du);
-                    if (U(Mix(h ^ 1u)) >= cover)
+                    const uint32_t h = Hash(ix, iy, 0u, salt);
+                    if (U(Mix(h ^ 1u)) * 100.0f >= cl.shapes)
                         continue;
                     Cloud c = {};
-                    c.cell = kCloudPuffFirst + static_cast<int>(Mix(h ^ 2u) % static_cast<uint32_t>(puffs));
+                    c.cell = static_cast<int>(Mix(h ^ 2u) % static_cast<uint32_t>(animals));
                     c.flip = (Mix(h ^ 5u) & 1u) ? 1.0f : -1.0f;
-                    c.half = cl.puffSize * (0.55f + 0.75f * U(Mix(h ^ 6u)));
-                    c.bite = 0.30f * cl.puffBillows;
-                    c.seed = U(Mix(h ^ 8u)) * 7.0f;
-                    const float drift = age - life * 0.5f;
-                    c.rel[0] = (ix + U(Mix(h ^ 3u))) * pc + wind[0] * drift - cam[0];
-                    c.rel[1] = (iy + U(Mix(h ^ 4u))) * pc + wind[1] * drift - cam[1];
-                    c.rel[2] = cl.height + (U(Mix(h ^ 7u)) - 0.5f) * 300.0f + c.half * 0.35f;
+                    c.half = half * (0.85f + 0.3f * U(Mix(h ^ 6u)));
+                    c.bite = 0.18f * cl.erode;   // the layer's billows (0.14 of the sheet's own until 2026-10-10)
+                    // At its rolled point in the air, which the wind carries past the camera. The point keeps the
+                    // shape's half-width (and a little) from the patch's edges, so two neighbours never overlap
+                    // (2026-10-11, the owner: shapes "super stacked"). A choice by the view, tried first, left one of
+                    // two overlapping shapes out by their distances, and as the wind moved them they traded places: a
+                    // shape "changing into different variations".
+                    const double m = std::min(0.45, c.half * 1.1 / cell);
+                    c.rel[0] = static_cast<float>((ix + m + (1.0 - 2.0 * m) * U(Mix(h ^ 3u))) * cell - ax);
+                    c.rel[1] = static_cast<float>((iy + m + (1.0 - 2.0 * m) * U(Mix(h ^ 4u))) * cell - ay);
+                    c.rel[2] = cl.layerHeight;   // in the layer (at the low clouds' base until 2026-10-10)
                     const float flat = sqrtf(c.rel[0] * c.rel[0] + c.rel[1] * c.rel[1]);
-                    c.weight = Life(age, life, form) * (1.0f - Smooth(cl.reach * 0.8f, cl.reach, flat));
-                    // Faded near a shape, so its outline shows.
-                    for (size_t s = 0; s < shapes; ++s)
-                    {
-                        const Cloud& a = out[s];
-                        const float ddx = c.rel[0] - a.rel[0], ddy = c.rel[1] - a.rel[1], ddz = c.rel[2] - a.rel[2];
-                        const float d = sqrtf(ddx * ddx + ddy * ddy + ddz * ddz), r = a.half + c.half;
-                        c.weight *= 1.0f - cl.clearing * a.weight * (1.0f - Smooth(r * 0.7f, r * 1.3f, d));
-                    }
+                    c.weight = Smooth(kShapeRange, kShapeRange - 2500.0f, flat) * (1.0f - rain);
                     if (c.weight > 0.002f)
                         out.push_back(c);
                 }
         }
-
         for (Cloud& c : out)
             c.dist = sqrtf(c.rel[0] * c.rel[0] + c.rel[1] * c.rel[1] + c.rel[2] * c.rel[2]);
-        // The nearest kMaxClouds, then far ones first, for the blend.
+        // The kShapesInLayer nearest in the sky, by distance alone, so turning the camera changes nothing (2026-10-11,
+        // the owner: "max shapes in the sky, not in view"; a choice of the shapes in front first made them blink as
+        // the camera turned).
         std::sort(out.begin(), out.end(), [](const Cloud& a, const Cloud& b) { return a.dist < b.dist; });
-        if (out.size() > static_cast<size_t>(kMaxClouds))
-            out.resize(kMaxClouds);
-        std::reverse(out.begin(), out.end());
-    }
-
-    struct SheetVertex { float x, y, z, s, t, cellU, cellV, kind, weight, sunX, sunY, bite, seed; };
-
-    // Two triangles a cloud, facing the camera, upright.
-    void BuildSheets(const std::vector<Cloud>& clouds, const float sun[3], std::vector<SheetVertex>& out)
-    {
-        out.clear();
-        out.reserve(clouds.size() * 6);
-        for (const Cloud& c : clouds)
-        {
-            const float f[3] = { c.rel[0] / c.dist, c.rel[1] / c.dist, c.rel[2] / c.dist };   // from the camera
-            // The viewer's right is f x up; straight overhead, any level line will do.
-            float r[3] = { f[1], -f[0], 0.0f };
-            float rl = sqrtf(r[0] * r[0] + r[1] * r[1]);
-            if (rl < 1e-3f) { r[0] = 1.0f; r[1] = 0.0f; rl = 1.0f; }
-            r[0] /= rl; r[1] /= rl;
-            const float u[3] = { r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0] };
-            float sx = (sun[0] * r[0] + sun[1] * r[1] + sun[2] * r[2]) * c.flip;
-            float sy = sun[0] * u[0] + sun[1] * u[1] + sun[2] * u[2];
-            const float sl = sqrtf(sx * sx + sy * sy);
-            sx = sl > 1e-4f ? sx / sl * 0.10f : 0.0f;
-            sy = sl > 1e-4f ? sy / sl * 0.10f : 0.10f;
-            const float cu = (c.cell % kCloudCellsSide) * 0.25f, cv = (c.cell / kCloudCellsSide) * 0.25f;
-            const float corner[4][2] = { { -1.0f, -1.0f }, { 1.0f, -1.0f }, { -1.0f, 1.0f }, { 1.0f, 1.0f } };
-            SheetVertex q[4];
-            for (int i = 0; i < 4; ++i)
-            {
-                const float a = corner[i][0] * c.half, b = corner[i][1] * c.half;
-                q[i] = { c.rel[0] + r[0] * a + u[0] * b, c.rel[1] + r[1] * a + u[1] * b, c.rel[2] + r[2] * a + u[2] * b,
-                         corner[i][0] * c.flip, corner[i][1], cu, cv, c.shape ? 2.0f : 1.0f, c.weight, sx, sy, c.bite,
-                         c.seed };
-            }
-            const int order[6] = { 0, 1, 2, 2, 1, 3 };
-            for (int i : order)
-                out.push_back(q[i]);
-        }
+        // Only the last one taken fades, by how near the next one is: as they come to change places both are near
+        // 0. Fading every one within 1500 yards of the next (the first try) left most of them faint once the shapes
+        // were many and close together (the owner: shapes "very faded").
+        if (out.size() > static_cast<size_t>(kShapesInLayer))
+            out[kShapesInLayer - 1].weight *= Smooth(0.0f, 1500.0f, out[kShapesInLayer].dist - out[kShapesInLayer - 1].dist);
+        if (out.size() > static_cast<size_t>(kShapesInLayer))
+            out.resize(kShapesInLayer);
     }
 
     // --- the pass ----------------------------------------------------------------------------------
@@ -716,8 +659,9 @@ float4 main(I i) : COLOR
             out[i] = a[i] + (b[i] - a[i]) * t;
     }
 
-    std::vector<Cloud>       g_clouds;
-    std::vector<SheetVertex> g_sheets;
+    std::vector<Cloud>       g_shapes;      // in the layer
+    float                    g_overcast = 0.0f;   // the rain, as the clouds follow it
+    double                   g_overcastLast = 0.0;
 }
 
 bool CloudsDraw(IDirect3DDevice9* dev)
@@ -770,7 +714,16 @@ bool CloudsDraw(IDirect3DDevice9* dev)
     SunDirection(sun);
     float hour = 12.0f;
     const float night = ClientHour(hour) ? NightWeight(hour) : Smooth(0.05f, -0.15f, sun[2]);
-    const float rain = std::clamp(WaterRainAmount(), 0.0f, 1.0f);
+    // The overcast: the rain (water.cpp, from the rain drawn, eased over 0.8 s), followed over about 12 s, so the
+    // sky closes as a shower comes on and does not jump with how much rain is in view. Light rain covers it too.
+    {
+        const double t = Now();
+        const float target = std::min(1.0f, std::clamp(WaterRainAmount(), 0.0f, 1.0f) * 2.0f);
+        const float ease = g_overcastLast > 0.0 ? static_cast<float>(1.0 - exp(-(t - g_overcastLast) / cl.transitionTime)) : 1.0f;
+        g_overcast += (target - g_overcast) * std::min(1.0f, ease);
+        g_overcastLast = t;
+    }
+    const float rain = g_overcast;
     const float warm = (1.0f - night) * Smooth(0.35f, 0.03f, sun[2]);
 
     // The colours.
@@ -795,14 +748,22 @@ bool CloudsDraw(IDirect3DDevice9* dev)
     for (int i = 0; i < 3; ++i)
         shade[i] = (lit[i] * 0.52f * cool[i]) * 0.65f + fog[i] * 0.85f * 0.35f + pink[i] * warm;
 
-    // The high layer's place: the camera and the wind, from the real clock. A billow fixed in the air that drifts
+    // The layer's place: the camera and the wind, from the real clock. A billow fixed in the air that drifts
     // with the wind is at the same texel while (its place - the camera) / size + offset holds, so the offset takes
     // the camera and gives back the wind. It was added once, and the layer drifted against the clouds (the owner).
     const double now = UtcSeconds();
     const float wr = cl.windDeg * 0.0174532925f;
     const float wind[2] = { cosf(wr) * cl.windSpeed, sinf(wr) * cl.windSpeed };
-    const float  size[4]  = { cl.scale, cl.scale * 0.43f, cl.scale * 0.19f, cl.scale * 3.7f };
-    const float  speed[4] = { 1.0f, 1.25f, 1.6f, 0.7f };
+    // Soft, the billows are up to twice as big (layerSoftness, 2026-10-10: big masses).
+    const float  big = cl.scale * (1.0f + cl.layerSoftness);
+    const float  size[4]  = { big, big * 0.43f, big * 0.19f, cl.scale * 3.7f };
+    // Each pattern's speed against the wind: apart, they slide over each other and the clouds change shape and thin
+    // as they drift. Cloud Reshaping (2026-10-11, the owner: the clouds "reshape and fade" too much as they move)
+    // sets how far apart: 0 moves all four together, 1 is 1, 1.25, 1.6 and 0.7 as until then.
+    const float  base[4]  = { 1.0f, 1.25f, 1.6f, 0.7f };
+    float speed[4];
+    for (int l = 0; l < 4; ++l)
+        speed[l] = 1.0f + (base[l] - 1.0f) * cl.reshape;
     float layers[16];
     for (int l = 0; l < 4; ++l)
     {
@@ -811,52 +772,64 @@ bool CloudsDraw(IDirect3DDevice9* dev)
         layers[l * 4 + 2] = 1.0f / size[l];
         layers[l * 4 + 3] = 0.0f;
     }
-    const float layerCover = cl.layerCover + (0.97f - cl.layerCover) * rain;
-    const bool  drawLayer = layerCover > 0.0f && cl.layerOpacity > 0.0f;
+    const float layerCover = cl.cover + (0.97f - cl.cover) * rain;
 
     if (g_atlas)
-        FindClouds(cl, cam, now, wind, rain, view, g_clouds);
+        FindShapes(cl, cam, now, wind, rain, view, g_shapes);
     else
-        g_clouds.clear();
-    BuildSheets(g_clouds, sun, g_sheets);
+        g_shapes.clear();
+    const bool drawLayer = (layerCover > 0.0f && cl.opacity > 0.0f) || !g_shapes.empty();
 
     // --- constants ---------------------------------------------------------------------------------
-    float pc[14 * 4] = {};
+    float pc[47 * 4] = {};
     for (int r = 0; r < 4; ++r)
         for (int c = 0; c < 4; ++c)
             pc[r * 4 + c] = inv.m[r][c];
     pc[16] = sun[0]; pc[17] = sun[1]; pc[18] = sun[2]; pc[19] = layerCover;
-    pc[20] = lit[0]; pc[21] = lit[1]; pc[22] = lit[2]; pc[23] = cl.layerOpacity;
+    pc[20] = lit[0]; pc[21] = lit[1]; pc[22] = lit[2]; pc[23] = cl.opacity + (0.95f - cl.opacity) * rain;
     pc[24] = shade[0]; pc[25] = shade[1]; pc[26] = shade[2]; pc[27] = cl.shadeSky;
-    pc[28] = cl.layerHeight; pc[29] = 0.02f + cl.softness * 0.25f; pc[31] = cl.debug ? 1.0f : 0.0f;
+    pc[28] = cl.layerHeight; pc[29] = 0.02f + cl.softness * 0.25f; pc[30] = 1.0f + cl.layerSoftness * 15.0f;
+    pc[31] = static_cast<float>(cl.debug);
     memcpy(&pc[32], layers, sizeof(layers));
     pc[48] = fog[0]; pc[49] = fog[1]; pc[50] = fog[2]; pc[51] = 1.0f / cl.haze;
-    pc[52] = cl.horizon;
-
-    const float sheetPc[5 * 4] = {
-        sun[0], sun[1], sun[2], 0.0f,
-        lit[0] * cl.puffBrightness, lit[1] * cl.puffBrightness, lit[2] * cl.puffBrightness, cl.opacity,
-        shade[0], shade[1], shade[2], cl.shadeSky,
-        0.015f + cl.softness * 0.10f, static_cast<float>(Frac(now * 0.004)), cl.debug ? 1.0f : 0.0f, cl.horizon,
-        fog[0], fog[1], fog[2], 1.0f / cl.haze,
-    };
-    float vpRows[16];
-    for (int r = 0; r < 4; ++r)
-        for (int c = 0; c < 4; ++c)
-            vpRows[r * 4 + c] = vp.m[r][c];
+    pc[52] = cl.horizon; pc[53] = cl.layerSoftness; pc[54] = cl.puffiness;
+    // The shapes in the layer: each a sheet facing the camera, upright; the viewer's right is f x up (straight
+    // overhead, any level line will do).
+    for (size_t n = 0; n < g_shapes.size(); ++n)
+    {
+        const Cloud& c = g_shapes[n];
+        float* q = &pc[56 + n * 16];
+        const float f[3] = { c.rel[0] / c.dist, c.rel[1] / c.dist, c.rel[2] / c.dist };
+        float r[3] = { f[1], -f[0], 0.0f };
+        float rl = sqrtf(r[0] * r[0] + r[1] * r[1]);
+        if (rl < 1e-3f) { r[0] = 1.0f; r[1] = 0.0f; rl = 1.0f; }
+        r[0] /= rl; r[1] /= rl;
+        const float u[3] = { r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0] };
+        q[0] = f[0]; q[1] = f[1]; q[2] = f[2]; q[3] = c.dist / c.half;
+        q[4] = r[0] * c.flip; q[5] = r[1] * c.flip; q[6] = 0.0f; q[7] = c.weight;
+        q[8] = u[0]; q[9] = u[1]; q[10] = u[2]; q[11] = 0.0f;
+        q[12] = (c.cell % kCloudCellsSide) * 0.25f; q[13] = (c.cell / kCloudCellsSide) * 0.25f; q[14] = c.bite;
+        q[15] = -0.15f + cl.cutoutWidth * 0.3f;   // sheet units the cutout is grown by: -0.15 shrunk to +0.15 grown
+    }
+    for (size_t n = g_shapes.size(); n < static_cast<size_t>(kShapesInLayer); ++n)
+        pc[56 + n * 16 + 2] = 1.0f;   // unused: formed 0, and a way that is not 0
+    // A shape's edge, in half-widths of its sheet: Cloud Softness alone sets it (2026-10-11, the owner: the shapes'
+    // edges "fade too wide"; until then Cloud Layer Softness added 0.2 of it, and at 60 the edge was a fifth of the
+    // shape, more so once the shapes grew).
+    pc[184] = 0.02f + cl.softness * 0.15f;
+    pc[185] = cl.clearing;
+    pc[186] = cl.opacity;
+    pc[187] = rain;
 
     if (logThis)
     {
-        int shapes = 0;
-        for (const Cloud& c : g_clouds)
-            shapes += c.shape ? 1 : 0;
-        Log("clouds: %d clouds (%d shapes) of %d shapes and %d plain kinds; high layer cover %.2f; rain %.2f, night %.2f, "
+        const int shapes = static_cast<int>(g_shapes.size());
+        Log("clouds: %d shapes of %d in the sky; cover %.2f; rain %.2f, night %.2f, "
             "warm %.2f, sun (%.2f %.2f %.2f), lit (%.2f %.2f %.2f), shade (%.2f %.2f %.2f), fog (%.2f %.2f %.2f), utc %.0f",
-            static_cast<int>(g_clouds.size()), shapes, CloudShapesCount(), CloudPuffCount(), layerCover, rain, night, warm,
+            shapes, CloudShapesCount(), layerCover, rain, night, warm,
             sun[0], sun[1], sun[2], lit[0], lit[1], lit[2], shade[0], shade[1], shade[2], fog[0], fog[1], fog[2], now);
-        for (const Cloud& c : g_clouds)
-            if (c.shape)
-                Log("clouds:   shape %s at (%.0f %.0f %.0f) yards from the camera, %.0f wide, formed %.2f",
+        for (const Cloud& c : g_shapes)
+            Log("clouds:   shape %s at (%.0f %.0f %.0f) yards from the camera, %.0f wide, formed %.2f",
                     CloudShapeName(c.cell), c.rel[0], c.rel[1], c.rel[2], c.half * 2.0f, c.weight);
     }
 
@@ -910,12 +883,12 @@ bool CloudsDraw(IDirect3DDevice9* dev)
     d->SetTexture(dev, 0, reinterpret_cast<IDirect3DBaseTexture9*>(g_noise));
     d->SetTexture(dev, 1, reinterpret_cast<IDirect3DBaseTexture9*>(g_atlas ? g_atlas : g_noise));
 
-    // The high layer, full screen.
+    // The layer, full screen.
     if (drawLayer || cl.debug)
     {
         d->SetVertexShader(dev, g_vs);
         d->SetPixelShader(dev, g_ps);
-        d->SetPixelShaderConstantF(dev, 0, pc, 14);
+        d->SetPixelShaderConstantF(dev, 0, pc, 47);
         const float halfPx[4] = { -1.0f / rd.Width, 1.0f / rd.Height, 0.0f, 0.0f };
         d->SetVertexShaderConstantF(dev, 0, halfPx, 1);
         const ClipVertex q[4] = {
@@ -926,19 +899,6 @@ bool CloudsDraw(IDirect3DDevice9* dev)
         };
         d->SetFVF(dev, D3DFVF_XYZ | D3DFVF_TEX1);
         d->DrawPrimitiveUP(dev, D3DPT_TRIANGLESTRIP, 2, q, sizeof(ClipVertex));
-    }
-
-    // The clouds, far ones first.
-    if (!g_sheets.empty())
-    {
-        d->SetVertexShader(dev, g_vsSheet);
-        d->SetPixelShader(dev, g_psSheet);
-        d->SetVertexShaderConstantF(dev, 0, vpRows, 4);
-        d->SetPixelShaderConstantF(dev, 0, sheetPc, 5);
-        d->SetFVF(dev, D3DFVF_XYZ | D3DFVF_TEX3 | D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE4(1) |
-                       D3DFVF_TEXCOORDSIZE4(2));
-        d->DrawPrimitiveUP(dev, D3DPT_TRIANGLELIST, static_cast<UINT>(g_sheets.size() / 3), g_sheets.data(),
-                           sizeof(SheetVertex));
     }
 
     // --- restore -----------------------------------------------------------------------------------
@@ -967,8 +927,6 @@ void CloudsReset()
     SafeRelease(g_sb);
     SafeRelease(g_vs);
     SafeRelease(g_ps);
-    SafeRelease(g_vsSheet);
-    SafeRelease(g_psSheet);
     SafeRelease(g_noise);
     SafeRelease(g_atlas);
     g_failed = false;
@@ -984,6 +942,4 @@ void CloudsShaderList()
 {
     ShaderPrecompile("clouds_vs", kVsHlsl, "vs_3_0");
     ShaderPrecompile("clouds_ps", kPsHlsl, "ps_3_0");
-    ShaderPrecompile("clouds_sheet_vs", kSheetVsHlsl, "vs_3_0");
-    ShaderPrecompile("clouds_sheet_ps", kSheetPsHlsl, "ps_3_0");
 }

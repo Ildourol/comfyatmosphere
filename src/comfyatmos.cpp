@@ -2176,9 +2176,150 @@ namespace
         return hr;
     }
 
+    // The game's rain streaks, for [sky] hideRainStreaks (2026-10-11, the owner: screenshots of the weather show
+    // nothing through them). DrawPrimitive through the client's rain shader, blended DESTCOLOR, SRCCOLOR with no
+    // depth write, a 16 x 128 texture: as WaterNoteRain finds them, which counts them first, so the rain is still known.
+    bool IsRainStreak(IDirect3DDevice9* dev)
+    {
+        auto* d = dev->lpVtbl;
+        DWORD blend = 0, src = 0, dst = 0, zw = 1;
+        d->GetRenderState(dev, D3DRS_ALPHABLENDENABLE, &blend);
+        if (!blend)
+            return false;
+        d->GetRenderState(dev, D3DRS_SRCBLEND, &src);
+        d->GetRenderState(dev, D3DRS_DESTBLEND, &dst);
+        d->GetRenderState(dev, D3DRS_ZWRITEENABLE, &zw);
+        if (src != D3DBLEND_DESTCOLOR || dst != D3DBLEND_SRCCOLOR || zw)
+            return false;
+        IDirect3DBaseTexture9* tex = nullptr;
+        d->GetTexture(dev, 0, &tex);
+        if (!tex)
+            return false;
+        D3DSURFACE_DESC td = {};
+        const bool streak = tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
+            SUCCEEDED(reinterpret_cast<IDirect3DTexture9*>(tex)->lpVtbl->GetLevelDesc(reinterpret_cast<IDirect3DTexture9*>(tex), 0, &td)) &&
+            td.Width == 16 && td.Height == 128;
+        tex->lpVtbl->Release(tex);
+        return streak;
+    }
+
+    // The game's rain clouds, for [sky] hideRainClouds (2026-10-11, the owner: "smoke" a few seconds after a shower
+    // starts, over the land and the sky; over the flat white sky of [clouds] debug 2 it showed as grey puffs drifting
+    // in front of everything). Two probes, dry and in rain, showed rain adds two draws. Besides the streaks there is a
+    // second one through another vertex shader of the client's, blended DESTCOLOR, SRCCOLOR as the streaks are (so a
+    // texel under mid grey darkens what is behind it), with no depth write, a 256 x 256 texture and FVF 0x142
+    // (position, colour, one texture): 7 draws, 42,932 triangles a frame.
+    bool IsRainCloud(IDirect3DDevice9* dev)
+    {
+        auto* d = dev->lpVtbl;
+        DWORD blend = 0, src = 0, dst = 0, zw = 1, fvf = 0;
+        d->GetRenderState(dev, D3DRS_ALPHABLENDENABLE, &blend);
+        if (!blend)
+            return false;
+        d->GetRenderState(dev, D3DRS_SRCBLEND, &src);
+        d->GetRenderState(dev, D3DRS_DESTBLEND, &dst);
+        d->GetRenderState(dev, D3DRS_ZWRITEENABLE, &zw);
+        if (src != D3DBLEND_DESTCOLOR || dst != D3DBLEND_SRCCOLOR || zw)
+            return false;
+        d->GetFVF(dev, &fvf);
+        IDirect3DBaseTexture9* tex = nullptr;
+        d->GetTexture(dev, 0, &tex);
+        if (!tex)
+            return false;
+        D3DSURFACE_DESC td = {};
+        const bool cloud = tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
+            SUCCEEDED(reinterpret_cast<IDirect3DTexture9*>(tex)->lpVtbl->GetLevelDesc(reinterpret_cast<IDirect3DTexture9*>(tex), 0, &td)) &&
+            td.Width == 256 && td.Height == 256;
+        tex->lpVtbl->Release(tex);
+        if (cloud && fvf != 0x142 && g_probe.active)
+            Log("  [draw %4u] RAIN CLOUDS?   the blend and the texture match, the FVF 0x%X does not", g_probe.draws, fvf);
+        return cloud && fvf == 0x142;
+    }
+
+    // [sky] hideTexture (2026-10-11, a debugging tool): the game's draws whose first texture is at this address are
+    // left out. The probe prints each draw's texture (tex0=...); the address holds until the client restarts. Never
+    // our own passes.
+    bool HiddenTexture(IDirect3DDevice9* dev, UINT pc)
+    {
+        if (!g_cfg.sky.hideTexture || g_inPass)
+            return false;
+        IDirect3DBaseTexture9* tex = nullptr;
+        dev->lpVtbl->GetTexture(dev, 0, &tex);
+        if (!tex)
+            return false;
+        const bool hide = static_cast<DWORD>(reinterpret_cast<uintptr_t>(tex)) == g_cfg.sky.hideTexture;
+        tex->lpVtbl->Release(tex);
+        if (hide && g_probe.active)
+            Log("  [draw %4u] TEXTURE %08X left out ([sky] hideTexture, %u triangles)", g_probe.draws,
+                g_cfg.sky.hideTexture, pc);
+        return hide;
+    }
+
+    // The game's rain mist (2026-10-11, the owner: "smoke" over the land and the sky a couple of seconds after a
+    // shower starts). Found by leaving out one draw at a time over the flat white sky of [clouds] debug 2: right
+    // after the rain's own draws (the streaks and the 256 x 256 rain layer, both through the client's rain shaders,
+    // blended DESTCOLOR, SRCCOLOR) the client turns its fog off and draws grey puffs: DrawIndexedPrimitive with no
+    // shaders, alpha blended (SRCALPHA, INVSRCALPHA), no depth write, FVF 0x142 (position, colour, one texture), a
+    // 256 x 256 texture, some 70 triangles. Leaving that texture out ([sky] hideTexture) took the smoke away. Its
+    // address changes at each start, so the draw is known by its place instead: one of that form in the same frame as
+    // a rain draw and after it, with no other draw between. Particles anywhere else (smoke from a chimney, a spell)
+    // are not drawn right after the rain, and stay. [sky] hideRainMist = 0 draws it.
+    uint64_t g_rainDrawFrame = ~0ull;   // the frame of the last rain draw, while nothing else has been drawn since
+
+    bool IsRainDraw(IDirect3DDevice9* dev)
+    {
+        auto* d = dev->lpVtbl;
+        DWORD blend = 0, src = 0, dst = 0, zw = 1;
+        d->GetRenderState(dev, D3DRS_ALPHABLENDENABLE, &blend);
+        if (!blend)
+            return false;
+        d->GetRenderState(dev, D3DRS_SRCBLEND, &src);
+        d->GetRenderState(dev, D3DRS_DESTBLEND, &dst);
+        d->GetRenderState(dev, D3DRS_ZWRITEENABLE, &zw);
+        return src == D3DBLEND_DESTCOLOR && dst == D3DBLEND_SRCCOLOR && !zw;
+    }
+
+    bool IsRainMistDraw(IDirect3DDevice9* dev)
+    {
+        if (g_vshader)
+            return false;
+        auto* d = dev->lpVtbl;
+        IDirect3DPixelShader9* ps = nullptr;
+        d->GetPixelShader(dev, &ps);
+        if (ps)
+        {
+            ps->lpVtbl->Release(ps);
+            return false;
+        }
+        DWORD blend = 0, src = 0, dst = 0, zw = 1, fvf = 0;
+        d->GetRenderState(dev, D3DRS_ALPHABLENDENABLE, &blend);
+        if (!blend)
+            return false;
+        d->GetRenderState(dev, D3DRS_SRCBLEND, &src);
+        d->GetRenderState(dev, D3DRS_DESTBLEND, &dst);
+        d->GetRenderState(dev, D3DRS_ZWRITEENABLE, &zw);
+        d->GetFVF(dev, &fvf);
+        if (src != D3DBLEND_SRCALPHA || dst != D3DBLEND_INVSRCALPHA || zw || fvf != 0x142)
+            return false;
+        IDirect3DBaseTexture9* tex = nullptr;
+        d->GetTexture(dev, 0, &tex);
+        if (!tex)
+            return false;
+        D3DSURFACE_DESC td = {};
+        const bool mist = tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
+            SUCCEEDED(reinterpret_cast<IDirect3DTexture9*>(tex)->lpVtbl->GetLevelDesc(reinterpret_cast<IDirect3DTexture9*>(tex), 0, &td)) &&
+            td.Width == 256 && td.Height == 256;
+        tex->lpVtbl->Release(tex);
+        return mist;
+    }
+
     HRESULT STDMETHODCALLTYPE hkDrawPrimitive(IDirect3DDevice9* dev, D3DPRIMITIVETYPE prim, UINT sv, UINT pc)
     {
         HookTimer timer;
+        if (HiddenTexture(dev, pc))
+            return S_OK;
+        if (!g_inPass)
+            g_rainDrawFrame = g_vshader && IsRainDraw(dev) ? g_frame : ~0ull;
         NoteSkySun(dev, prim, pc, VertsForPrims(prim, pc));
         NoteOrder(dev, "Draw", pc, VertsForPrims(prim, pc));
         if (WaterProbing() && !g_inPass && !g_worldEnded && !g_skyPhase)
@@ -2198,6 +2339,14 @@ namespace
                                           &g_projAll };
             if (GrassTake(dev, grass, hr))
                 return hr;
+        }
+        if (g_cfg.sky.hideRainStreaks && !g_inPass && g_vshader && IsRainStreak(dev))
+            return S_OK;   // not forwarded, whatever [general] enabled says: a tool for screenshots
+        if (g_cfg.sky.hideRainClouds && !g_inPass && g_vshader && IsRainCloud(dev))
+        {
+            if (g_probe.active)
+                Log("  [draw %4u] RAIN CLOUDS    left out ([sky] hideRainClouds, %u triangles)", g_probe.draws, pc);
+            return S_OK;
         }
         if (!g_hookTiming)
             return g_oDrawPrim(dev, prim, sv, pc);
@@ -2233,6 +2382,9 @@ namespace
             if (!g_cloudsDone && g_skySunSeen && CloudsWanted())
             {
                 g_inPass = true;
+                // The sky without our clouds, for [rays] skyOnly, as at the game's cloud draw. Until 2026-10-10
+                // this path kept none, and the rays cast from the finished frame: our white clouds cast too.
+                RaysBeforeClouds(dev);
                 CloudsDraw(dev);
                 g_inPass = false;
                 if (g_probe.active)
@@ -2407,6 +2559,22 @@ namespace
                                                      UINT mvi, UINT nv, UINT si, UINT pc)
     {
         HookTimer timer;
+        if (HiddenTexture(dev, pc))
+            return S_OK;
+        if (!g_inPass && g_rainDrawFrame == g_frame)
+        {
+            if (IsRainMistDraw(dev))
+            {
+                if (g_cfg.master && g_cfg.sky.hideRainMist)
+                {
+                    if (g_probe.active)
+                        Log("  [draw %4u] RAIN MIST      left out ([sky] hideRainMist, %u triangles)", g_probe.draws, pc);
+                    return S_OK;   // the next one may be mist too: the frame stays marked
+                }
+            }
+            else
+                g_rainDrawFrame = ~0ull;
+        }
         if (IsDepthOnlyModel(dev))
         {
             ++g_depthOnlySkipped;

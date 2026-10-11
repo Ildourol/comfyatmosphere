@@ -456,45 +456,51 @@ struct SkySettings
 {
     bool clouds     = true;    // our cloud layer (clouds.cpp) in place of the game's. false: no clouds at all
     bool gameClouds = false;   // true: the game's own cloud layer instead of ours (for comparison)
+    bool hideRainStreaks = false;   // the game's rain streaks left out, for debugging the weather (2026-10-11)
+    bool hideRainClouds = false;    // the game's grey puffs drawn over everything in rain left out (2026-10-11)
+    DWORD hideTexture = 0;          // the game's draws with this first texture (a probe's tex0) left out, for debugging
+    bool hideRainMist = true;       // the game's grey mist puffs, drawn right after its rain, left out (2026-10-11)
 };
 
-// Our clouds (clouds.cpp, 2026-10-08), drawn where the game's cloud layer was: separate soft clouds that form, drift
-// and break up, and among them now and then one that has a shape (a turtle, a kodo) from the silhouettes in the
-// addon's clouds folder (cloudshapes.cpp); behind them a thin high layer.
+// Our clouds (clouds.cpp, 2026-10-08), drawn where the game's cloud layer was: one soft layer that drifts with the
+// wind, and in it now and then a cloud that has a shape (a turtle, a kodo) from the silhouettes in the addon's
+// clouds folder (cloudshapes.cpp). Low clouds in front of the layer were removed on 2026-10-10.
 // Every player at one place sees the same sky: the real clock and the world position place the clouds, not the
 // game time, which comfytime sets for each player.
 struct CloudSettings
 {
-    float cover      = 0.50f;   // 0..1: the chance that each patch of sky has a cloud (Cloud Cover)
+    float cover      = 0.45f;   // 0..1: the share of the sky the layer covers (Cloud Cover). Until 2026-10-10 the
+                                // chance of a low cloud, and layerCover (0.3, High Clouds) the layer's
     float softness   = 0.45f;   // 0.05..1: how soft the clouds' edges are (Cloud Softness)
-    float shapes     = 15.0f;    // 0..100: percent chance that a sky cell has a shaped cloud in each window
-                                // (Cloud Shapes). At 15, about one shape alive in viewing range at any time
+    bool  shapesOn   = true;    // the shaped clouds at all (the Cloud Shapes box, 2026-10-11)
+    float shapes     = 15.0f;    // 0..100: percent chance that a patch of sky has a shape (Cloud Shapes). At 100
+                                // about 8 are in the sky, as many as are drawn; at 15 about one
     float erode      = 0.35f;   // 0..1: how much the billows eat a shape's edge. More: "is that a kodo?"
-    float clearing   = 0.75f;   // 0..1: how much the plain clouds near a shape fade, so its outline shows
-    float height     = 1200.0f; // yards over the camera: the clouds' base
-    float puffSize   = 1000.0f; // yards: half the width of a plain cloud, before its own size (0.55 to 1.3 times)
-    float puffCell   = 2000.0f; // yards a side of the patch of sky that may hold one plain cloud
-    float puffLife   = 600.0f;  // seconds a plain cloud lasts, forming and breaking up included
-    float puffForm   = 90.0f;   // seconds it takes to form, and again to break up
-    float puffBillows = 1.0f;   // 0..2: how much the billows change a plain cloud's outline
-    float puffBrightness = 0.8f; // the clouds' lit side against the high layer's: at 1 they stood out as lighter
-    float reach      = 15000.0f; // yards: clouds further than this are not drawn (they fade over the last fifth)
-    float layerCover = 0.30f;   // 0..1: the share of the sky the thin high layer covers (High Clouds)
-    float layerOpacity = 0.55f; // 0..1: how much of the sky the high layer's thickest part hides
-    float layerHeight = 2600.0f; // yards over the camera: the high layer
-    float scale      = 2600.0f; // yards: the size of the high layer's largest billows
-    float windSpeed  = 7.0f;    // yards a second
+    float clearing   = 0.75f;   // 0..1: how much the layer is cleared in a shape's cutout (Cloud Shape Cutout)
+    float cutoutWidth = 0.5f;   // 0..1: how far the cutout reaches out from a shape's outline (Cloud Shape Cutout
+                                // Width; 0 hugs the edge, 1 is about an eighth of the shape's width) (2026-10-11)
+    float layerHeight = 2600.0f; // yards over the camera: the layer
+    float layerSoftness = 0.6f; // 0..1: the layer in big soft masses, without its fine billows; 0 = as it was
+                                // before 2026-10-10
+    float scale      = 2600.0f; // yards: the size of the layer's largest billows
+    float puffiness  = 0.75f;   // 0..1: cumulus, round puffs; 0 = the smooth billows of before (Cloud Puffiness,
+                                // 2026-10-11; at 1 the owner found them "a bit too rounded")
+    float reshape    = 0.15f;   // 0..1: how much the clouds change shape as they drift (Cloud Reshaping; 1 until
+                                // 2026-10-11)
+    float windSpeed  = 15.0f;   // yards a second (Cloud Speed; 7 until 2026-10-10, and the layer looked still)
+    float transitionTime = 12.0f; // seconds the clouds take to change between clear and rain, both ways (Cloud
+                                  // Transition Time; after twice this the change is nearly done)
     float windDeg    = 60.0f;   // degrees: where the wind blows TO, 0 = +x (north), counter-clockwise
-    float shapeSize  = 900.0f;  // yards: half the width of a shaped cloud
-    float shapeLife  = 360.0f;  // seconds a shaped cloud lasts, forming and breaking up included
-    float shapeForm  = 60.0f;   // seconds it takes to form, and again to break up
+    float shapeSize  = 1400.0f; // yards: half the width of a shaped cloud (Cloud Shape Size, as the whole width;
+                                // 900 until 2026-10-11)
     float brightness = 1.0f;    // the lit side's brightness
-    float opacity    = 0.80f;   // 0..1: how much of the sky the thickest cloud hides
+    float opacity    = 0.80f;   // 0..1: how much of the sky the thickest cloud hides (the layer's was layerOpacity,
+                                // 0.55, until 2026-10-10)
     float shadeSky   = 0.35f;   // 0..1: how much sky colour shows through the shaded side
     float horizon    = 0.10f;   // the sine of the angle over the horizon at which the clouds are full
     float haze       = 30000.0f; // yards at which the clouds fade into the horizon's colour
     int   testShape  = -1;      // 0 and up: that shape, formed, ahead of the camera (screenshots and tuning)
-    int   debug      = 0;       // 1 = red the shapes, green the plain clouds, blue the high layer
+    int   debug      = 0;       // 1 = red the shapes, blue the layer; 2 = the whole sky flat white (2026-10-11)
 };
 
 // The water (water.cpp, 2026-10-02): foam where it is shallow, drawn over each water chunk the client draws.

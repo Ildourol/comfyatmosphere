@@ -164,11 +164,19 @@ namespace
         { "colour.night",        "Night Saturation" },
         { "sky.clouds",          "Clouds" },
         { "clouds.cover",        "Cloud Cover" },
-        { "clouds.shapes",       "Cloud Shapes" },
+        { "clouds.shapesOn",     "Cloud Shapes" },
+        { "clouds.shapes",       "Cloud Shape Amount" },
         { "clouds.softness",     "Cloud Softness" },
         { "clouds.erode",        "Cloud Shape Billows" },
-        { "clouds.clearing",     "Cloud Clearing" },
-        { "clouds.layerCover",   "High Clouds" },
+        { "clouds.clearing",     "Cloud Shape Cutout" },
+        { "clouds.cutoutWidth",  "Cloud Shape Cutout Width" },
+        { "clouds.shapeSize",    "Cloud Shape Size" },
+        { "clouds.reshape",      "Cloud Reshaping" },
+        { "clouds.puffiness",    "Cloud Puffiness" },
+        { "clouds.windSpeed",    "Cloud Speed" },
+        { "clouds.transitionTime", "Cloud Transition Time" },
+        { "clouds.scale",        "Cloud Scale" },
+        { "clouds.layerSoftness", "Cloud Layer Softness" },
     };
 
     const size_t kLine = 200;   // characters in one chat line

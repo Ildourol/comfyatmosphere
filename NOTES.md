@@ -3008,6 +3008,52 @@ Atmosphere page; the rest in `[clouds]`. `[clouds] testShape` N puts shape N, fo
 Debug View 31: the shapes red, the plain clouds green, the high layer blue. The test is `redridge-cloud-shapes` (at Lakeshire). The test
 client has no comfytime in `dlls.txt` on 2026-10-08, so its shots came out at night, by the server's clock.
 
+## Clouds: one cumulus layer, shapes on the wind (2026-10-10 and 2026-10-11)
+
+The section above describes the clouds of 2026-10-08. Most of it was replaced over two evenings with the owner.
+
+**One layer.** The low cloud sheets are gone. Two kinds of cloud, lit two ways (the sheets with 0.8 of the sun and
+round shading, the layer half see-through), came out a mix of white and grey, and the owner had asked for one layer.
+The layer is now the only cloud: Cloud Cover is its cover (High Clouds is gone), and one `[clouds] opacity` (0.8)
+covers it and the shapes.
+
+**Softer and cumulus.** `layerSoftness` reads coarser levels of the noise (up to 16 times the pixel's footprint) and
+makes the billows up to twice as big, so the fine broken bits go. Cumulus: the noise's blue channel is now round
+puffs, cellular noise with a dome, sqrt(1 - d^2), over each point, in two sizes. The big billows say where the
+clouds are and the puffs give them round, lumpy edges (Cloud Puffiness; 75, as at 100 they were "a bit too rounded").
+Cloud Reshaping (0.15) sets how far apart the four noise patterns drift: apart, the clouds changed shape and thinned
+as they moved, which the owner did not like.
+
+**The shapes in the layer.** A shape is a sheet facing the camera inside the layer's shader, eight at most (the eight
+nearest, by distance alone; a choice of those in front first made them blink as the camera turned). The layer's own
+billows eat its edge and run through it, so it is thin and thick where the clouds round it are. Its cutout is an oval
+round the shape's box with ten circles of various sizes on its rim (the owner's design), kept as a distance in the
+atlas's second channel (A8L8): a cutout grown or blurred from the shape's own outline read as a stamp of it, twice.
+The cutout fades on an S-curve from just outside its edge to 0.35 of the half-width inside.
+
+**Shapes on the wind.** The shapes' patches are a grid fixed in the air, carried by the wind as the layer is: a
+patch holds its shape for good, and the wind brings new ones in over the horizon (they fade in over the last 2500 of
+15000 yards). The grid had been fixed to the ground, with each shape drifting from its patch through its life: at a
+fast Cloud Speed most shapes were far out of range. Patches are about 9400 yards a side, so about eight lie in range
+at Cloud Shapes 100, and a shape keeps its half-width from its patch's edges, so two never overlap. Cloud Shape Size
+(2800 yards across) sets the size; the patches grow with it.
+
+**Rain.** The layer covers the sky with its billows still seen, over Cloud Transition Time (12 s), following the
+rain counted from the drops drawn. The "smoke" the owner saw a few seconds into a shower was none of the fog, the
+fog's colour, the rain layers or our volumetric light, as was guessed in turn: it was a particle draw the client
+makes right after its rain, found by leaving draws out one at a time over the flat white sky of `[clouds] debug 2`
+(`[sky] hideTexture`, a probe's tex0). `[sky] hideRainMist` leaves it out: a fixed-function, alpha-blended draw of a
+256 x 256 texture with FVF 0x142, in the same frame as a rain draw and after it. It can still show for a moment as a
+shower starts, before the rain's own draws begin.
+
+**Tools.** `[sky] hideRainStreaks`, `hideRainClouds` and `hideTexture` leave the game's draws out for debugging;
+`[clouds] debug 2` draws the sky flat white; `Logs\comfyatmos_cloudshapes.bmp` shows each shape white and its cutout
+grey. The sun rays kept no sky before our clouds when the game drew no cloud strip, so the white clouds cast rays;
+that path calls RaysBeforeClouds too.
+
+**Open.** A `/reload` after a hot reload has frozen or closed the game three times. The shapes are the owner's
+pictures, made into silhouettes from renders or clip art (black on white or lit on black, mirrored to face right).
+
 ## The framing that matters
 
 **comfygrass is a vertex-shader substitution mod. This is a post-process mod.** comfygrass never allocates

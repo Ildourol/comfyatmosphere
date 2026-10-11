@@ -103,7 +103,8 @@ namespace
                 kShadowsBody, kShadowNear, kTreeShade, kWaveHeight, kWaveSize, kWater, kWaterColour, kWaterClarity, kWaterReflect, kWaterBend, kWaterCover, kWaterWake, kWaterFoam, kWaterSwash, kWaterGlint, kWaterMoonGlint, kWaterGlintSize, kWaterEdge, kWaterEdgeWidth, kWaterBright, kWaterRippleDepth, kWaterSwashHeight, kWaterSwashLength, kWaterSwashSpeed, kDaySaturation, kNightSaturation, kColour, kWaterRippleMoving, kWaterSpread, kWaterSpreadMoving, kFoamDrawn, kFoamSize, kFoamReach, kOpenFoam, kOpenFoamAmount, kFoamEdge, kWakeFoam, kObjectFoam, kObjectFoamWidth, kLakeSwash, kLakeFoam, kLakeWaves, kRainOnWater, kLighthouses, kLighthouseBeam, kLhBeacon, kLhLength, kLhWidth, kLhSpread, kLhSpeed, kLhTwo, kLhGlint, kLhFace, kLhTilt, kLhSoft, kLhWaterWidth, kRainDarkness, kShipWake, kShipForward, kShipDepth, kShadowWater, kWetSand, kLhReach,
                 kGrass, kGrassWind, kGrassSpeed, kGrassLean, kGrassWave, kGrassWindDir, kGrassParting, kGrassRadius,
                 kHotkeys, kWaterZone, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
-                kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing, kCloudHigh,
+                kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing,
+                kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -253,7 +254,23 @@ namespace
         "comfyCloudSoftness",
         "comfyCloudShapeBillows",
         "comfyCloudClearing",
-        "comfyCloudHigh",
+        // Cloud Speed (2026-10-10): [clouds] windSpeed, yards a second.
+        "comfyCloudSpeed",
+        // Cloud Transition Time, Cloud Scale, Cloud Layer Softness (2026-10-11): [clouds] transitionTime in seconds, scale in
+        // yards, layerSoftness as a percentage.
+        "comfyCloudTransition",
+        "comfyCloudScale",
+        "comfyCloudLayerSoftness",
+        // Cloud Shape Cutout Width (2026-10-11): [clouds] cutoutWidth, as a percentage.
+        "comfyCloudCutoutWidth",
+        // Cloud Shape Size (2026-10-11): [clouds] shapeSize, as the whole width in yards (twice the setting).
+        "comfyCloudShapeSize",
+        // Cloud Reshaping (2026-10-11): [clouds] reshape, as a percentage.
+        "comfyCloudReshape",
+        // Cloud Puffiness (2026-10-11): [clouds] puffiness, as a percentage.
+        "comfyCloudPuffiness",
+        // The Cloud Shapes box (2026-10-11): [clouds] shapesOn.
+        "comfyCloudShapesOn",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -293,7 +310,7 @@ namespace
         { "sun shadows: the water it finds (blue: the water's depth over a bed, grey: none, so the shade falls on what the depth shows)", 0, 7, 0, 0, 0 },
         { "water: the depth under it (0 to 256 yards, blue to red, a line at 1, 2, 4, 8 ... 256; hatched: the map's depth)", 0, 0, 0, 0, 0, 10 },
         { "grass: the bend (black still, white the tips; blue where it comes from the texture)", 0, 0, 0, 0, 0, 0, 1 },
-        { "clouds: the shapes (red), the plain clouds (green), the high layer (blue)", 0, 0, 0, 0, 0, 0, 0, 1 },
+        { "clouds: the shapes (red), the layer (blue)", 0, 0, 0, 0, 0, 0, 0, 1 },
     };
     constexpr int kDebugViewCount = sizeof(kDebugViews) / sizeof(kDebugViews[0]);
     int g_debugViewLogged = -1;
@@ -485,7 +502,15 @@ namespace
         case kCloudSoftness:  snprintf(out, cap, "%.0f", s.clouds.softness * 100.0f); break;     // percent
         case kCloudBillows:   snprintf(out, cap, "%.0f", s.clouds.erode * 100.0f); break;        // percent
         case kCloudClearing:  snprintf(out, cap, "%.0f", s.clouds.clearing * 100.0f); break;     // percent
-        case kCloudHigh:      snprintf(out, cap, "%.0f", s.clouds.layerCover * 100.0f); break;   // percent
+        case kCloudSpeed:     snprintf(out, cap, "%.0f", s.clouds.windSpeed); break;              // yards a second
+        case kCloudTransition:  snprintf(out, cap, "%.0f", s.clouds.transitionTime); break;               // seconds
+        case kCloudScale:     snprintf(out, cap, "%.0f", s.clouds.scale); break;                  // yards
+        case kCloudLayerSoftness: snprintf(out, cap, "%.0f", s.clouds.layerSoftness * 100.0f); break; // percent
+        case kCloudCutoutWidth: snprintf(out, cap, "%.0f", s.clouds.cutoutWidth * 100.0f); break;    // percent
+        case kCloudShapeSize: snprintf(out, cap, "%.0f", s.clouds.shapeSize * 2.0f); break;         // yards across
+        case kCloudReshape:   snprintf(out, cap, "%.0f", s.clouds.reshape * 100.0f); break;          // percent
+        case kCloudPuffiness: snprintf(out, cap, "%.0f", s.clouds.puffiness * 100.0f); break;        // percent
+        case kCloudShapesOn:  snprintf(out, cap, "%d", s.clouds.shapesOn ? 1 : 0); break;
         case kWaterSwashHeight: snprintf(out, cap, "%.0f", s.water.swashHeight * 100.0f); break; // hundredths of a yard
         case kWaterSwashLength: snprintf(out, cap, "%.0f", s.water.swashLength); break;          // yards
         case kWaterSwashSpeed:  snprintf(out, cap, "%.0f", s.water.swashSpeed * 100.0f); break;  // percent
@@ -631,7 +656,15 @@ namespace
         if (c[kCloudSoftness].seen)  s.clouds.softness = Clamp(c[kCloudSoftness].value * 0.01f, 0.05f, 1.0f);
         if (c[kCloudBillows].seen)   s.clouds.erode = Clamp(c[kCloudBillows].value * 0.01f, 0.0f, 1.0f);
         if (c[kCloudClearing].seen)  s.clouds.clearing = Clamp(c[kCloudClearing].value * 0.01f, 0.0f, 1.0f);
-        if (c[kCloudHigh].seen)      s.clouds.layerCover = Clamp(c[kCloudHigh].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudSpeed].seen)     s.clouds.windSpeed = Clamp(c[kCloudSpeed].value, 0.0f, 500.0f);
+        if (c[kCloudTransition].seen)  s.clouds.transitionTime = Clamp(c[kCloudTransition].value, 1.0f, 120.0f);
+        if (c[kCloudScale].seen)     s.clouds.scale = Clamp(c[kCloudScale].value, 200.0f, 50000.0f);
+        if (c[kCloudLayerSoftness].seen) s.clouds.layerSoftness = Clamp(c[kCloudLayerSoftness].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudCutoutWidth].seen) s.clouds.cutoutWidth = Clamp(c[kCloudCutoutWidth].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudShapeSize].seen) s.clouds.shapeSize = Clamp(c[kCloudShapeSize].value * 0.5f, 250.0f, 5000.0f);
+        if (c[kCloudReshape].seen)   s.clouds.reshape = Clamp(c[kCloudReshape].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudPuffiness].seen) s.clouds.puffiness = Clamp(c[kCloudPuffiness].value * 0.01f, 0.0f, 1.0f);
+        if (c[kCloudShapesOn].seen)  s.clouds.shapesOn = c[kCloudShapesOn].value != 0.0f;
         if (c[kWaterSwashHeight].seen) s.water.swashHeight = Clamp(c[kWaterSwashHeight].value * 0.01f, 0.0f, 1.0f);
         if (c[kWaterSwashLength].seen) s.water.swashLength = Clamp(c[kWaterSwashLength].value, 5.0f, 200.0f);
         if (c[kWaterSwashSpeed].seen)  s.water.swashSpeed  = Clamp(c[kWaterSwashSpeed].value * 0.01f, 0.1f, 4.0f);
