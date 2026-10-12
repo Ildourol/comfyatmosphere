@@ -3712,6 +3712,17 @@ namespace
     };
     std::vector<PendingChunk> g_pending;
     WaterDrawFn               g_pendingDraw = nullptr;
+    // The client's states at its water draws (2026-10-11): the held chunks are drawn at its next draw that is not
+    // water, and by then it may have set that draw's states. The water flashed pale now and then in Ashenvale (the
+    // owner): our water part drawn under another draw's states was culled or failed the depth test, and the client's
+    // own water showed. Taken at the run's first chunk, set for our draws, the client's put back after.
+    const D3DRENDERSTATETYPE kRunStates[] = {
+        D3DRS_CULLMODE, D3DRS_FILLMODE, D3DRS_SCISSORTESTENABLE, D3DRS_CLIPPLANEENABLE, D3DRS_SLOPESCALEDEPTHBIAS,
+        D3DRS_MULTISAMPLEANTIALIAS, D3DRS_COLORWRITEENABLE, D3DRS_STENCILPASS, D3DRS_STENCILFAIL, D3DRS_STENCILZFAIL,
+    };
+    constexpr int kRunStateCount = sizeof(kRunStates) / sizeof(kRunStates[0]);
+    DWORD         g_runStates[kRunStateCount];
+    D3DVIEWPORT9  g_runViewport = {};
 
     void ReleasePending(PendingChunk& p)
     {
@@ -3891,6 +3902,12 @@ void WaterAfterDraw(IDirect3DDevice9* dev, const WaterChunk& c, WaterDrawFn draw
     }
     p.c.world = nullptr;   // the list moves its items: nothing keeps a pointer into one
     g_pendingDraw = draw;
+    if (g_pending.empty())
+    {
+        for (int i = 0; i < kRunStateCount; ++i)
+            d->GetRenderState(dev, kRunStates[i], &g_runStates[i]);
+        d->GetViewport(dev, &g_runViewport);
+    }
     g_pending.push_back(p);
     p.vb = nullptr;   // the list's copy holds the references now
     p.ib = nullptr;
@@ -3937,6 +3954,17 @@ void WaterFlush(IDirect3DDevice9* dev)
     const D3DRENDERSTATETYPE zs[4] = { D3DRS_ZENABLE, D3DRS_ZWRITEENABLE, D3DRS_ZFUNC, D3DRS_DEPTHBIAS };
     for (int i = 0; i < 4; ++i)
         d->GetRenderState(dev, zs[i], &oz[i]);
+    // The water run's own states (see kRunStates), the client's current ones put back at the end.
+    DWORD runOld[kRunStateCount];
+    for (int i = 0; i < kRunStateCount; ++i)
+    {
+        d->GetRenderState(dev, kRunStates[i], &runOld[i]);
+        if (runOld[i] != g_runStates[i])
+            d->SetRenderState(dev, kRunStates[i], g_runStates[i]);
+    }
+    D3DVIEWPORT9 vpOld = {};
+    d->GetViewport(dev, &vpOld);
+    d->SetViewport(dev, &g_runViewport);
     DWORD oldCw = 0xF;
     d->GetRenderState(dev, D3DRS_COLORWRITEENABLE, &oldCw);
     // The client sets vertex registers up to c255 (the probe, 2026-10-02): its own c240 to c252 go back after.
@@ -4144,6 +4172,9 @@ void WaterFlush(IDirect3DDevice9* dev)
     // Our textures stay bound until the world's end (WaterWorldEnded); the client's state goes back now.
     for (int i = 0; i < 4; ++i)
         d->SetRenderState(dev, zs[i], oz[i]);
+    for (int i = 0; i < kRunStateCount; ++i)
+        d->SetRenderState(dev, kRunStates[i], runOld[i]);
+    d->SetViewport(dev, &vpOld);
     if (skipBodies)
         for (int i = 0; i < kStencilCount; ++i)
             d->SetRenderState(dev, kStencil[i], oldSt[i]);

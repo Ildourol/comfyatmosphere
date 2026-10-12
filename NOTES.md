@@ -3394,6 +3394,13 @@ buffer. So the held chunks are drawn before every such write (`WaterPendingUses`
 into buffers of ours instead was tried and dropped: it needs a copy of the client's buffers, and reading them is what
 stuttered (below).
 
+**The run's states.** The held chunks are drawn at the client's next draw that is not water, and by then the client
+may have set that draw's states. Now and then the water flashed pale for a few frames (the owner, Ashenvale; frame
+differences of recordings found 3 frames in 12 at times, the build before the batching never): our water part, drawn
+under another draw's cull mode or viewport, was culled or failed the depth test, and the client's own water showed.
+The states of the run's first water draw (cull, fill, scissor, clip planes, slope bias, anti-aliasing, colour write,
+the stencil's operations, the viewport) are kept and set for our draws (`kRunStates`).
+
 **Never read the client's water buffers.** A chunk's wet cells were read from the client's index buffer with a
 read-only lock, kept until the buffer was written again. Turning, every chunk was read again, each lock waited for the
 GPU (frames of 60 to 76 ms), and once the game's buffers had been read the game stuttered while turning with the water
