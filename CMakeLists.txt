@@ -44,6 +44,7 @@ add_library(comfyatmos SHARED
     src/memtrace.cpp
     src/clouds.cpp
     src/cloudshapes.cpp
+    src/weather.cpp
 )
 
 # version.h: comfyatmos's version from git, for the client report (cmake/version.cmake).

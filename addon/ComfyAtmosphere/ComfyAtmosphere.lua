@@ -1854,11 +1854,12 @@ local ENTRIES = {
 			.. "29 water: the depth under it (0 to 256 yards, blue to red, a line at 1, 2, 4, 8 ... 256; hatched: the map's depth)\n"
 			.. "30 grass: the bend (black still, white the tips; blue where it comes from the texture)\n"
 			.. "31 clouds: the shapes (red), the layer (blue)\n"
-			.. "32 water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)",
+			.. "32 water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)\n"
+			.. "33 water: the game's rain splashes left out; its other particles red under the water, green above",
 		type = "slider",
 		cvar = "comfyDebugView",
 		minval = 0,
-		maxval = 32,
+		maxval = 33,
 		step = 1,
 		numberLabels = 1,
 	},
@@ -2470,6 +2471,7 @@ local DEBUG_VIEWS = {
 	"grass: the bend (black still, white the tips; blue where it comes from the texture)",
 	"clouds: the shapes (red), the layer (blue)",
 	"water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)",
+	"water: the game's rain splashes left out; its other particles red under the water, green above",
 };
 
 local PANEL_BACKDROP = {

@@ -312,6 +312,7 @@ namespace
         { "grass: the bend (black still, white the tips; blue where it comes from the texture)", 0, 0, 0, 0, 0, 0, 1 },
         { "clouds: the shapes (red), the layer (blue)", 0, 0, 0, 0, 0, 0, 0, 1 },
         { "water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)", 0, 0, 0, 0, 0, 11 },
+        { "water: the game's rain splashes left out; its other particles red under the water, green above", 0, 0, 0, 0, 0, 12 },
     };
     constexpr int kDebugViewCount = sizeof(kDebugViews) / sizeof(kDebugViews[0]);
     int g_debugViewLogged = -1;

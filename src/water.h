@@ -42,6 +42,14 @@ void WaterProbeDraw(IDirect3DDevice9* dev, const WaterChunk& c, unsigned index, 
 // A fixed-function draw about to be made: the game's own wake on the water (see water.cpp)? `c` carries the
 // draw's buffers and its world matrix.
 bool WaterGameWake(IDirect3DDevice9* dev, const WaterChunk& c);
+// The game's rain splashes (comfyatmos.cpp knows the draw by its texture): Begin binds a pixel shader that
+// leaves out the ones under the water; true: make the client's draw, then End puts its state back.
+bool WaterSplashBegin(IDirect3DDevice9* dev, bool debug = false);   // debug: Debug View 33's red and green
+void WaterSplashEnd(IDirect3DDevice9* dev);
+// The rain's splashes, the rain's 256 x 256 draw through the game's vertex shader: Begin binds a pixel shader that
+// drops those under the water; true: make the client's draw, then End puts its state back.
+bool WaterRainSplashBegin(IDirect3DDevice9* dev);
+void WaterRainSplashEnd(IDirect3DDevice9* dev);
 // The depth under the water this frame (copied before the first water draw), for the sun shadows; or null.
 IDirect3DTexture9* WaterUnderDepth();
 // The world is drawn: the water's textures come off samplers s10 to s15, before the body mask is built again into

@@ -33,6 +33,7 @@
 #include "depth.h"
 #include "grade.h"
 #include "clouds.h"
+#include "weather.h"
 #include "grass.h"
 #include "lampglow.h"
 #include "lamps.h"
@@ -44,6 +45,7 @@
 #include "terrainshade.h"
 #include "timeofday.h"
 #include "mapterrain.h"
+#include "mapm2.h"
 #include "memtrace.h"
 #include "volume.h"
 #include "water.h"
@@ -54,6 +56,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <functional>
+#include <unordered_map>
 #include <unordered_set>
 #include <map>
 #include <set>
@@ -207,6 +210,13 @@ static void StartupFrame(bool world)
     g_compileMsFrame = 0.0;
     g_compilesFrame = 0;
     g_compileNames.clear();
+}
+
+namespace
+{
+    void ForgetMistTextures();   // below, with the rain mist
+    bool MistFileReady();
+    void SplashFileReady();
 }
 
 namespace
@@ -1052,6 +1062,7 @@ namespace
             WaterReset();
             GradeReset();
             CloudsReset();
+            ForgetMistTextures();
             BeaconReset();
             GrassReset();
             MapTerrainRelease();
@@ -1178,6 +1189,7 @@ namespace
         const size_t slots = g_patched.size();
         const int restored = RestoreSlots();
         GrassDetach();
+        WeatherDetach();
         DepthDetach(dev);   // after the slots: its SetDepthStencilSurface goes straight to the device
         ShadowReset();
         VolumeReset();
@@ -1312,6 +1324,9 @@ namespace
         BodyMarkFrameEnd(dev);
         WaterFrameEnd(dev);
         GrassFrameEnd();
+        WeatherFrameEnd();
+        MistFileReady();   // the rain mist's texture asked of the loader until it is read
+        SplashFileReady(); // and the rain splash's
         g_frameDraws = 0;
         g_lastPersp  = false;
         g_worldEnded = false;
@@ -1409,6 +1424,7 @@ namespace
             WaterProbe();
             BeaconProbe();
             GrassProbe();
+            WeatherProbe();
             TimeProbe();
             IDirect3DSurface9* bb = nullptr;
             if (SUCCEEDED(dev->lpVtbl->GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb)
@@ -1440,6 +1456,7 @@ namespace
         WaterReset();
         GradeReset();
         CloudsReset();
+        ForgetMistTextures();
         BeaconReset();
         GrassReset();
         const HRESULT hr = g_oReset(dev, pp);
@@ -1980,12 +1997,69 @@ namespace
         return g_oStretchRect(dev, src, sr, dst, dr, f);
     }
 
+    // The weather's particle draws in the probe (2026-10-12, the owner: the game's rain splashes show through the
+    // water near the shore): every blended draw with a 256 x 256 texture (the splash, RainDropSplash01.blp, and the
+    // mist are that size), with what DetailDraw leaves out after its first draws. 60 at most.
+    void ProbeWeatherDraw(IDirect3DDevice9* dev, const char* kind, UINT pc, UINT nv)
+    {
+        static unsigned listed = 0;
+        if (g_probe.draws == 0)
+            listed = 0;   // a new probe
+        if (listed >= 60)
+            return;
+        auto* d = dev->lpVtbl;
+        DWORD blend = 0;
+        d->GetRenderState(dev, D3DRS_ALPHABLENDENABLE, &blend);
+        if (!blend)
+            return;
+        IDirect3DBaseTexture9* tex = nullptr;
+        d->GetTexture(dev, 0, &tex);
+        if (!tex)
+            return;
+        D3DSURFACE_DESC td = {};
+        const bool big = tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
+            SUCCEEDED(reinterpret_cast<IDirect3DTexture9*>(tex)->lpVtbl->GetLevelDesc(reinterpret_cast<IDirect3DTexture9*>(tex), 0, &td)) &&
+            td.Width == 256 && td.Height == 256;
+        if (big)
+        {
+            ++listed;
+            DWORD src = 0, dst = 0, zen = 0, zw = 0, fvf = 0, atest = 0, aref = 0, cull = 0, fog = 0;
+            d->GetRenderState(dev, D3DRS_SRCBLEND, &src);
+            d->GetRenderState(dev, D3DRS_DESTBLEND, &dst);
+            d->GetRenderState(dev, D3DRS_ZENABLE, &zen);
+            d->GetRenderState(dev, D3DRS_ZWRITEENABLE, &zw);
+            d->GetRenderState(dev, D3DRS_ALPHATESTENABLE, &atest);
+            d->GetRenderState(dev, D3DRS_ALPHAREF, &aref);
+            d->GetRenderState(dev, D3DRS_CULLMODE, &cull);
+            d->GetRenderState(dev, D3DRS_FOGENABLE, &fog);
+            d->GetFVF(dev, &fvf);
+            IDirect3DPixelShader9* ps = nullptr;
+            d->GetPixelShader(dev, &ps);
+            DWORD cop = 0, ca1 = 0, ca2 = 0, aop = 0, tci = 0;
+            d->GetTextureStageState(dev, 0, D3DTSS_COLOROP, &cop);
+            d->GetTextureStageState(dev, 0, D3DTSS_COLORARG1, &ca1);
+            d->GetTextureStageState(dev, 0, D3DTSS_COLORARG2, &ca2);
+            d->GetTextureStageState(dev, 0, D3DTSS_ALPHAOP, &aop);
+            d->GetTextureStageState(dev, 0, D3DTSS_TEXCOORDINDEX, &tci);
+            D3DMATRIX world = {};
+            d->GetTransform(dev, D3DTS_WORLD, &world);
+            Log("  [draw %4u] WEATHER? %s prims=%u verts=%u tex0=%p 256x256 fmt=%u ps=%p vs=%p fvf=0x%X "
+                "blend %u/%u z=%u zw=%u atest=%u ref=%u cull=%u fog=%u stage0 cop=%u (%u,%u) aop=%u tci=0x%X "
+                "world t=(%.1f %.1f %.1f)",
+                g_probe.draws, kind, pc, nv, tex, static_cast<unsigned>(td.Format), ps, g_vshader, fvf, src, dst, zen,
+                zw, atest, aref, cull, fog, cop, ca1, ca2, aop, tci, world.m[3][0], world.m[3][1], world.m[3][2]);
+            if (ps) ps->lpVtbl->Release(ps);
+        }
+        tex->lpVtbl->Release(tex);
+    }
+
     inline void CountDraw(IDirect3DDevice9* dev, const char* kind, D3DPRIMITIVETYPE prim, UINT pc,
                           bool indexed = false, UINT first = 0, UINT nv = 0, const void* upData = nullptr)
     {
         g_frameDraws++;
         if (!g_probe.active)
             return;
+        ProbeWeatherDraw(dev, kind, pc, nv);
         DetailDraw(dev, kind, prim, pc, indexed, first, nv, upData);
         g_probe.draws++;
         if (g_fogEnable)
@@ -2291,6 +2365,180 @@ namespace
         return src == D3DBLEND_DESTCOLOR && dst == D3DBLEND_SRCCOLOR && !zw;
     }
 
+    // The mist by its texture (2026-10-12, the owner: "figure out what the smoke is", and why it was found on the fly).
+    // It is textures\Weather\SnowMist01.blp, which WoW.exe names with its rain and snow textures (by
+    // MapWeather.cpp): 256 x 256, DXT with 8-bit alpha. The first time a draw of the mist's form (below) binds a
+    // texture, its top level is compared with the file's, once, and the answer kept. A match is left out in every
+    // frame: as a shower starts and as it ends, the client draws the mist with no rain draw before it, and the place
+    // after a rain draw missed it then. Until the file is read, or if the client's copy differs, the place alone.
+    constexpr const char* kMistTexName = "textures\\Weather\\SnowMist01.blp";
+    std::vector<uint8_t> g_mistTop;                           // the file's top level, as a D3D texture holds it
+    int                  g_mistState = 0;                     // 0 not read yet, 1 read, -1 could not be read
+    std::unordered_map<const void*, bool> g_mistTex;          // textures compared: whether each is the mist
+
+    bool MistFileReady()
+    {
+        if (g_mistState == 0)
+        {
+            BlpData b;
+            const int r = MapRequestTexture(kMistTexName, b);
+            if (r > 0 && !b.levels.empty() && b.width == 256 && b.height == 256)
+            {
+                g_mistTop.swap(b.levels[0]);
+                g_mistState = 1;
+                Log("sky: the rain mist's texture %s read (%u bytes at the top level)", kMistTexName,
+                    static_cast<unsigned>(g_mistTop.size()));
+            }
+            else if (r != 0)
+            {
+                g_mistState = -1;
+                Log("sky: the rain mist's texture %s could not be read: the mist is found after a rain draw alone",
+                    kMistTexName);
+            }
+        }
+        return g_mistState > 0;
+    }
+
+    // The rain's splashes (2026-10-12): textures\Weather\RainDropSplash01.blp, 256 x 256, a palette with 1-bit alpha,
+    // which the client holds as A4R4G4B4. Known by its pixels as the mist is, each channel within one step of the file's
+    // (the client's rounding from 8 bits to 4 is not known), so that water.cpp can leave out the ones under the water.
+    constexpr const char* kSplashTexName = "textures\\Weather\\RainDropSplash01.blp";
+    std::vector<uint8_t> g_splashTop;                         // the file's top level, BGRA
+    int                  g_splashState = 0;                   // 0 not read yet, 1 read, -1 could not be read
+    std::unordered_map<const void*, bool> g_splashTex;        // textures compared: whether each is the splash
+
+    void SplashFileReady()
+    {
+        if (g_splashState != 0)
+            return;
+        BlpData b;
+        const int r = MapRequestTexture(kSplashTexName, b);
+        if (r > 0 && !b.levels.empty() && b.width == 256 && b.height == 256 && b.format == 3)
+        {
+            g_splashTop.swap(b.levels[0]);
+            g_splashState = 1;
+            Log("water: the rain splash's texture %s read", kSplashTexName);
+        }
+        else if (r != 0)
+        {
+            g_splashState = -1;
+            Log("water: the rain splash's texture %s could not be read: the game's splashes stay under the water",
+                kSplashTexName);
+        }
+    }
+
+    bool IsSplashTexture(IDirect3DTexture9* t)
+    {
+        const auto it = g_splashTex.find(t);
+        if (it != g_splashTex.end())
+            return it->second;
+        bool same = false;
+        D3DSURFACE_DESC desc = {};
+        D3DLOCKED_RECT lr = {};
+        if (SUCCEEDED(t->lpVtbl->GetLevelDesc(t, 0, &desc)) && desc.Format == D3DFMT_A4R4G4B4 && desc.Width == 256 &&
+            desc.Height == 256 && g_splashTop.size() == 256u * 256u * 4u &&
+            SUCCEEDED(t->lpVtbl->LockRect(t, 0, &lr, nullptr, D3DLOCK_READONLY)) && lr.pBits)
+        {
+            unsigned match = 0;
+            for (UINT y = 0; y < 256; ++y)
+            {
+                const uint16_t* row = reinterpret_cast<const uint16_t*>(static_cast<const uint8_t*>(lr.pBits) +
+                                                                        static_cast<size_t>(y) * lr.Pitch);
+                for (UINT x = 0; x < 256; ++x)
+                {
+                    const uint8_t* f = &g_splashTop[(static_cast<size_t>(y) * 256 + x) * 4];   // B G R A
+                    const uint16_t v = row[x];
+                    const int got[4] = { v & 0xF, (v >> 4) & 0xF, (v >> 8) & 0xF, (v >> 12) & 0xF };
+                    bool ok = true;
+                    for (int ch = 0; ch < 4 && ok; ++ch)
+                        ok = std::abs(got[ch] - f[ch] * 15 / 255) <= 1;
+                    match += ok ? 1u : 0u;
+                }
+            }
+            t->lpVtbl->UnlockRect(t, 0);
+            same = match >= 256u * 256u * 98u / 100u;
+            Log("water: texture %p, 256x256 A4R4G4B4: %u of 65536 texels as the rain splash's: %s", t, match,
+                same ? "the splash, left out under the water" : "not the splash");
+        }
+        if (g_splashTex.size() < 256)
+            g_splashTex[t] = same;
+        return same;
+    }
+
+    // A fixed-function particle draw of the splash's form: vertex format 0x142, blended, no depth writes.
+    bool IsParticle142(IDirect3DDevice9* dev)
+    {
+        auto* d = dev->lpVtbl;
+        DWORD fvf = 0, blend = 0, zw = 1;
+        d->GetFVF(dev, &fvf);
+        if (fvf != 0x142)
+            return false;
+        d->GetRenderState(dev, D3DRS_ALPHABLENDENABLE, &blend);
+        d->GetRenderState(dev, D3DRS_ZWRITEENABLE, &zw);
+        if (!blend || zw)
+            return false;
+        // In the world: a perspective projection. The UI's text is drawn in this form too, flat, after the world.
+        D3DMATRIX proj = {};
+        return SUCCEEDED(d->GetTransform(dev, D3DTS_PROJECTION, &proj)) && proj.m[2][3] != 0.0f;
+    }
+
+    // A draw of the splashes: fixed function, vertex format 0x142, blended, its texture the splash's.
+    bool IsSplashDraw(IDirect3DDevice9* dev)
+    {
+        if (g_splashState <= 0 || g_vshader || g_inPass)   // the weather comes after the world's end
+            return false;
+        auto* d = dev->lpVtbl;
+        DWORD fvf = 0;
+        d->GetFVF(dev, &fvf);
+        if (fvf != 0x142)
+            return false;
+        IDirect3DBaseTexture9* tex = nullptr;
+        d->GetTexture(dev, 0, &tex);
+        if (!tex)
+            return false;
+        const bool splash = tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
+                            IsSplashTexture(reinterpret_cast<IDirect3DTexture9*>(tex));
+        tex->lpVtbl->Release(tex);
+        return splash;
+    }
+
+    // A new device or a Reset: the textures compared may be gone, and their addresses taken by others.
+    void ForgetMistTextures()
+    {
+        g_mistTex.clear();
+        g_splashTex.clear();
+    }
+
+    // Whether the texture is the mist: its top level against the file's, once for each texture.
+    bool IsMistTexture(IDirect3DTexture9* t)
+    {
+        const auto it = g_mistTex.find(t);
+        if (it != g_mistTex.end())
+            return it->second;
+        bool same = false;
+        D3DSURFACE_DESC desc = {};
+        if (SUCCEEDED(t->lpVtbl->GetLevelDesc(t, 0, &desc)) &&
+            (desc.Format == D3DFMT_DXT3 || desc.Format == D3DFMT_DXT5))
+        {
+            const UINT rowBytes = desc.Width / 4 * 16, rows = desc.Height / 4;
+            D3DLOCKED_RECT lr = {};
+            if (static_cast<size_t>(rowBytes) * rows == g_mistTop.size() &&
+                SUCCEEDED(t->lpVtbl->LockRect(t, 0, &lr, nullptr, D3DLOCK_READONLY)) && lr.pBits)
+            {
+                same = true;
+                for (UINT r = 0; r < rows && same; ++r)
+                    same = memcmp(static_cast<const uint8_t*>(lr.pBits) + static_cast<size_t>(r) * lr.Pitch,
+                                  g_mistTop.data() + static_cast<size_t>(r) * rowBytes, rowBytes) == 0;
+                t->lpVtbl->UnlockRect(t, 0);
+            }
+        }
+        if (g_mistTex.size() < 256)
+            g_mistTex[t] = same;
+        if (same)
+            Log("sky: texture %p is the rain mist (SnowMist01.blp): left out in every frame", t);
+        return same;
+    }
+
     bool IsRainMistDraw(IDirect3DDevice9* dev)
     {
         if (g_vshader)
@@ -2318,9 +2566,12 @@ namespace
         if (!tex)
             return false;
         D3DSURFACE_DESC td = {};
-        const bool mist = tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
+        bool mist = tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
             SUCCEEDED(reinterpret_cast<IDirect3DTexture9*>(tex)->lpVtbl->GetLevelDesc(reinterpret_cast<IDirect3DTexture9*>(tex), 0, &td)) &&
             td.Width == 256 && td.Height == 256;
+        // By its pixels once the file is read; until then by its size and its place (the caller).
+        if (mist && MistFileReady())
+            mist = IsMistTexture(reinterpret_cast<IDirect3DTexture9*>(tex));
         tex->lpVtbl->Release(tex);
         return mist;
     }
@@ -2333,6 +2584,32 @@ namespace
             return S_OK;
         if (!g_inPass)
             g_rainDrawFrame = g_vshader && IsRainDraw(dev) ? g_frame : ~0ull;
+        // The rain's 256 x 256 draw is its splashes (2026-10-12: left out in Debug View 33, every splash went). Those under
+        // the water are dropped by our pixel shader (water.cpp, WaterRainSplashBegin); the view still leaves it all out.
+        if (g_rainDrawFrame == g_frame)
+        {
+            IDirect3DBaseTexture9* tex = nullptr;
+            dev->lpVtbl->GetTexture(dev, 0, &tex);
+            D3DSURFACE_DESC td = {};
+            const bool layer = tex && tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
+                SUCCEEDED(reinterpret_cast<IDirect3DTexture9*>(tex)->lpVtbl->GetLevelDesc(reinterpret_cast<IDirect3DTexture9*>(tex), 0, &td)) &&
+                td.Width == 256 && td.Height == 256;
+            if (g_probe.active && tex)
+                Log("  [draw %4u] RAIN           %ux%u texture %p, format %u, %u triangles%s", g_probe.draws, td.Width,
+                    td.Height, tex, static_cast<unsigned>(td.Format), pc,
+                    !layer ? "" : g_cfg.water.debug == 12 ? ": the splashes, left out (Debug View 33)" :
+                    ": the splashes, none under the water");
+            if (tex)
+                tex->lpVtbl->Release(tex);
+            if (layer && g_cfg.water.debug == 12)
+                return S_OK;
+            if (layer && WaterRainSplashBegin(dev))
+            {
+                const HRESULT hr = g_oDrawPrim(dev, prim, sv, pc);
+                WaterRainSplashEnd(dev);
+                return hr;
+            }
+        }
         NoteSkySun(dev, prim, pc, VertsForPrims(prim, pc));
         NoteOrder(dev, "Draw", pc, VertsForPrims(prim, pc));
         if (WaterProbing() && !g_inPass && !g_worldEnded && !g_skyPhase)
@@ -2595,6 +2872,20 @@ namespace
             else
                 g_rainDrawFrame = ~0ull;
         }
+        // The mist known by its texture, in any frame (above, IsMistTexture). The vertex format first: one call,
+        // and few draws have the mist's.
+        else if (!g_inPass && !g_vshader && g_mistState > 0 && g_cfg.master && g_cfg.sky.hideRainMist)
+        {
+            DWORD fvf = 0;
+            dev->lpVtbl->GetFVF(dev, &fvf);
+            if (fvf == 0x142 && IsRainMistDraw(dev))
+            {
+                if (g_probe.active)
+                    Log("  [draw %4u] RAIN MIST      left out by its texture ([sky] hideRainMist, %u triangles)",
+                        g_probe.draws, pc);
+                return S_OK;
+            }
+        }
         if (IsDepthOnlyModel(dev))
         {
             ++g_depthOnlySkipped;
@@ -2670,6 +2961,20 @@ namespace
             HRESULT hr = S_OK;
             if (DrawStealthPass(dev, 'L', prim, bvi, mvi, nv, si, pc, hr))
                 return hr;
+        }
+        // The game's rain splashes: those under the water left out by a pixel shader (water.cpp, WaterSplashBegin).
+        // Debug View 33 (water debug 12): every fixed-function particle of the splash's form, red under the water and
+        // green above, with no texture check (2026-10-12, the owner: "make me a debug view so i can see what your
+        // trying to hide").
+        const bool particleView = g_cfg.water.debug == 12 && !g_vshader && !g_inPass && IsParticle142(dev);
+        if ((particleView || IsSplashDraw(dev)) && WaterSplashBegin(dev, particleView))
+        {
+            if (g_probe.active)
+                Log("  [draw %4u] RAIN SPLASHES  through the splash shader: none under the water (%u triangles)",
+                    g_probe.draws, pc);
+            const HRESULT hr = FwdIdx(dev, prim, bvi, mvi, nv, si, pc);
+            WaterSplashEnd(dev);
+            return hr;
         }
         const LiquidKind liquid = WaterKind(dev, nv);
         const bool isWater = liquid == kWater || liquid == kCityWater;

@@ -45,6 +45,7 @@
 #include "client.h"
 #include "common.h"
 #include "config.h"
+#include "depth.h"
 #include "mapm2.h"
 #include "mapterrain.h"
 #include "shadow.h"
@@ -4403,6 +4404,333 @@ void WaterProbeDraw(IDirect3DDevice9* dev, const WaterChunk& c, unsigned index, 
     }
 }
 
+// The game's rain splashes under the water (2026-10-12, the owner: drops near the shore "should not happen since we
+// have our own"). The client draws its splashes on the ground, never on the water (2026-10-05), and on the sea bed too:
+// out in deep water ours hides them, but near the shore the water is clear and shallow, and they show through it. They
+// come in one draw with the ones on dry ground (RainDropSplash01.blp; fixed function, vertex format 0x142, 1024
+// triangles), so the draw is made through a pixel shader that does what the client's stage 0 does (texture times the
+// vertex colour) and drops a pixel that lies under the map's water level. Its place: the stage's camera-space position
+// (D3DTSS_TCI_CAMERASPACEPOSITION into texture coordinate 1), taken through the draw's projection and back through the
+// world camera's, as WaterGameWake does on the CPU (the particles' space is not the world camera's).
+namespace
+{
+    const char* kSplashPsHlsl = R"HLSL(
+sampler2D sTex   : register(s0);
+sampler2D sLevel : register(s13);  // the water level at each point of the map's cells round you (-10000 where dry)
+float4 gLvS  : register(c0);       // the texture's first point in the world (x, y), 1 / cell, 1 / cells
+float4 gCamS : register(c1);       // the camera in the world; w 1 for Debug View 33
+struct I { float4 col : COLOR0; float2 uv : TEXCOORD0; float4 p : TEXCOORD1; };
+float4 main(I i) : COLOR
+{
+    float4 c = tex2D(sTex, i.uv) * i.col;
+    float3 A = i.p.xyz / i.p.w + gCamS.xyz;
+    float2 q = (A.xy - gLvS.xy) * gLvS.z;   // in cells; the points at whole numbers
+    float2 c0 = floor(q);
+    float2 f = q - c0;
+    float l00 = tex2D(sLevel, (c0 + float2(0.5, 0.5)) * gLvS.w).r;
+    float l10 = tex2D(sLevel, (c0 + float2(1.5, 0.5)) * gLvS.w).r;
+    float l01 = tex2D(sLevel, (c0 + float2(0.5, 1.5)) * gLvS.w).r;
+    float l11 = tex2D(sLevel, (c0 + float2(1.5, 1.5)) * gLvS.w).r;
+    // Each point by how near it is, the dry ones left out.
+    float4 w = float4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);
+    float4 l = float4(l00, l10, l01, l11);
+    w *= step(-1000.0, l);
+    float inTex = (c0.x >= 0.0 && c0.y >= 0.0 && c0.x <= 1.0 / gLvS.w - 2.0 && c0.y <= 1.0 / gLvS.w - 2.0) ? 1.0 : 0.0;
+    float ws = dot(w, float4(1, 1, 1, 1)) * inTex;
+    float lv = ws > 0.001 ? dot(w, l) / ws : -10000.0;
+    // Debug View 33: every particle of this form, red under the water (what is left out), green above.
+    float under = A.z - lv - 0.05 < 0.0 ? 1.0 : 0.0;
+    if (gCamS.w > 0.5)
+        return float4(under, 1.0 - under, 0.0, c.a);
+    clip(A.z - lv - 0.05);   // under the water, or on it: ours draws the rain there
+    return c;
+}
+)HLSL";
+
+    IDirect3DPixelShader9* g_splashPs = nullptr;
+    bool                   g_splashFailed = false;
+
+    struct SplashSaved
+    {
+        IDirect3DPixelShader9* ps = nullptr;
+        IDirect3DBaseTexture9* level = nullptr;
+        DWORD tci = 0, ttf = 0, minF = 0, magF = 0, mipF = 0, addrU = 0, addrV = 0;
+        D3DMATRIX tex1 = {};
+        float c[8] = {};
+    } g_splashSaved;
+}
+
+bool WaterSplashBegin(IDirect3DDevice9* dev, bool debug)
+{
+    if (g_splashFailed || !g_level || g_levelX == 0x7FFFFFFF || !g_cfg.master || !g_cfg.water.enabled)
+        return false;
+    auto* d = dev->lpVtbl;
+    if (!g_splashPs)
+    {
+        if (OgBlob* code = Compile(kSplashPsHlsl, "splash_ps", "ps_2_0"))
+        {
+            d->CreatePixelShader(dev, static_cast<const DWORD*>(code->lpVtbl->GetBufferPointer(code)), &g_splashPs);
+            code->lpVtbl->Release(code);
+        }
+        if (!g_splashPs)
+        {
+            g_splashFailed = true;
+            Log("water: the rain splash shader failed: the game's splashes stay under the water");
+            return false;
+        }
+        Log("water: the rain splash shader is made: the game's splashes under the water are left out");
+    }
+    float cam[3];
+    D3DMATRIX proj, camV, camP, camVP, back, t;
+    if (!ClientCamera(cam) || !(ShadowWorldCamera(camV, camP) || SunCamera(camV, camP)) ||
+        FAILED(d->GetTransform(dev, D3DTS_PROJECTION, &proj)))
+        return false;
+    Mul(camV, camP, camVP);
+    if (!Invert(camVP, back))
+        return false;
+    Mul(proj, back, t);   // the draw's camera space -> its clip space -> the world camera's, camera-relative
+
+    SplashSaved& sv = g_splashSaved;
+    d->GetPixelShader(dev, &sv.ps);
+    d->GetTexture(dev, kLevelSampler, &sv.level);
+    d->GetTextureStageState(dev, 1, D3DTSS_TEXCOORDINDEX, &sv.tci);
+    d->GetTextureStageState(dev, 1, D3DTSS_TEXTURETRANSFORMFLAGS, &sv.ttf);
+    d->GetTransform(dev, D3DTS_TEXTURE1, &sv.tex1);
+    d->GetSamplerState(dev, kLevelSampler, D3DSAMP_MINFILTER, &sv.minF);
+    d->GetSamplerState(dev, kLevelSampler, D3DSAMP_MAGFILTER, &sv.magF);
+    d->GetSamplerState(dev, kLevelSampler, D3DSAMP_MIPFILTER, &sv.mipF);
+    d->GetSamplerState(dev, kLevelSampler, D3DSAMP_ADDRESSU, &sv.addrU);
+    d->GetSamplerState(dev, kLevelSampler, D3DSAMP_ADDRESSV, &sv.addrV);
+    d->GetPixelShaderConstantF(dev, 0, sv.c, 2);
+
+    const float k[8] = { g_levelX * kCell, g_levelY * kCell, 1.0f / kCell, 1.0f / kLevelCells,
+                         cam[0], cam[1], cam[2], debug ? 1.0f : 0.0f };
+    d->SetPixelShaderConstantF(dev, 0, k, 2);
+    d->SetTexture(dev, kLevelSampler, reinterpret_cast<IDirect3DBaseTexture9*>(g_level));
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+    d->SetTextureStageState(dev, 1, D3DTSS_TEXCOORDINDEX, D3DTSS_TCI_CAMERASPACEPOSITION | 1);
+    d->SetTextureStageState(dev, 1, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_COUNT4);
+    d->SetTransform(dev, D3DTS_TEXTURE1, &t);
+    d->SetPixelShader(dev, g_splashPs);
+    return true;
+}
+
+void WaterSplashEnd(IDirect3DDevice9* dev)
+{
+    auto* d = dev->lpVtbl;
+    SplashSaved& sv = g_splashSaved;
+    d->SetPixelShader(dev, sv.ps);
+    d->SetTexture(dev, kLevelSampler, sv.level);
+    d->SetTextureStageState(dev, 1, D3DTSS_TEXCOORDINDEX, sv.tci);
+    d->SetTextureStageState(dev, 1, D3DTSS_TEXTURETRANSFORMFLAGS, sv.ttf);
+    d->SetTransform(dev, D3DTS_TEXTURE1, &sv.tex1);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_MINFILTER, sv.minF);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_MAGFILTER, sv.magF);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_MIPFILTER, sv.mipF);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_ADDRESSU, sv.addrU);
+    d->SetSamplerState(dev, kLevelSampler, D3DSAMP_ADDRESSV, sv.addrV);
+    d->SetPixelShaderConstantF(dev, 0, sv.c, 2);
+    if (sv.ps) sv.ps->lpVtbl->Release(sv.ps);
+    if (sv.level) sv.level->lpVtbl->Release(sv.level);
+    sv = SplashSaved();
+}
+
+// The rain's splashes (2026-10-12): the game draws them in the rain's second draw, through its own vertex shader (the
+// streaks are the first), a 256 x 256 texture in A1R5G5B5, ten draws of about 6,000 triangles. Leaving that draw out
+// took every splash away (Debug View 33), and the particles of the fixed-function form above were not them. The vertex
+// shader is the game's, so the draw keeps it and takes this pixel shader instead: what the client's stage 0 does with
+// the texture and the colour, and a pixel dropped where the world's depth behind it shows a point at or under the
+// map's water level. Splashes on dry ground keep; those on the sea bed seen through shallow water go.
+namespace
+{
+    const char* kRainSplashPsHlsl = R"HLSL(
+sampler2D sTex   : register(s0);
+sampler2D sDepth : register(s12);  // the world's depth (INTZ), resolved
+sampler2D sLevel : register(s13);  // the water level at each point of the map's cells round you (-10000 where dry)
+sampler2D sUnderR : register(s14); // the depth before the water was drawn (WaterUnderDepth), when gOp.z is 1
+float4 gI0  : register(c0);        // rows of inverse(view x projection): clip -> camera-relative world
+float4 gI1  : register(c1);
+float4 gI2  : register(c2);
+float4 gI3  : register(c3);
+float4 gZ   : register(c4);        // the viewport's MinZ, 1 / (MaxZ - MinZ)
+float4 gScr : register(c5);        // 1 / width, 1 / height
+float4 gLvS : register(c6);        // the level texture's first point (x, y), 1 / cell, 1 / cells
+float4 gCamS : register(c7);       // the camera in the world
+float4 gOp  : register(c8);        // the stage's colour and alpha: 0 texture x colour, 1 texture, 2 colour;
+                                   // z 1 with the depth before the water
+struct I { float4 col : COLOR0; float2 uv : TEXCOORD0; };
+// Yards above the water of the point the world's depth shows at uv (-10000 under no water: dry).
+float AboveWater(float2 uv)
+{
+    float  raw = tex2Dlod(sDepth, float4(uv, 0, 0)).r;
+    // Our water drawn here, nearer than the ground was (2026-10-12, the owner: glints where the foam and the glints
+    // are): the swell's crests stand up to the wave height over the map's level, and the level test kept a splash
+    // behind them.
+    if (gOp.z > 0.5 && raw < tex2Dlod(sUnderR, float4(uv, 0, 0)).r - 1e-6)
+        return -1.0;
+    float  d   = min((raw - gZ.x) * gZ.y, 0.99999);
+    float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+    float4 wp  = ndc.x * gI0 + ndc.y * gI1 + d * gI2 + gI3;
+    float3 A   = wp.xyz / wp.w + gCamS.xyz;
+    float2 q = (A.xy - gLvS.xy) * gLvS.z;
+    float2 c0 = floor(q);
+    float2 f = q - c0;
+    float4 l = float4(tex2Dlod(sLevel, float4((c0 + float2(0.5, 0.5)) * gLvS.w, 0, 0)).r,
+                      tex2Dlod(sLevel, float4((c0 + float2(1.5, 0.5)) * gLvS.w, 0, 0)).r,
+                      tex2Dlod(sLevel, float4((c0 + float2(0.5, 1.5)) * gLvS.w, 0, 0)).r,
+                      tex2Dlod(sLevel, float4((c0 + float2(1.5, 1.5)) * gLvS.w, 0, 0)).r);
+    float4 w = float4((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y) * step(-1000.0, l);
+    float inTex = all(c0 >= 0.0) && all(c0 <= 1.0 / gLvS.w - 2.0) ? 1.0 : 0.0;
+    float ws = dot(w, 1.0) * inTex;
+    float lv = ws > 0.001 ? dot(w, l) / ws : -10000.0;
+    return A.z - lv;
+}
+float4 main(I i, float2 vpos : VPOS) : COLOR
+{
+    float4 t = tex2D(sTex, i.uv);
+    float4 m = t * i.col;
+    float3 rgb = gOp.x < 0.5 ? m.rgb : (gOp.x < 1.5 ? t.rgb : i.col.rgb);
+    float  a   = gOp.y < 0.5 ? m.a : (gOp.y < 1.5 ? t.a : i.col.a);
+    float2 uv  = (vpos + 0.5) * gScr.xy;
+    // The point behind this pixel and four 2 pixels round it (2026-10-12, the owner: glints of single pixels): one
+    // point alone let through a splash's edge where it met dry sand or a lit edge behind it.
+    float  h   = AboveWater(uv);
+    h = min(h, AboveWater(uv + float2( 2.0, 0.0) * gScr.xy));
+    h = min(h, AboveWater(uv + float2(-2.0, 0.0) * gScr.xy));
+    h = min(h, AboveWater(uv + float2(0.0,  2.0) * gScr.xy));
+    h = min(h, AboveWater(uv + float2(0.0, -2.0) * gScr.xy));
+    clip(h - 0.1);   // the ground behind it under the water, or the water itself: ours draws the rain there
+    return float4(rgb, a);
+}
+)HLSL";
+
+    IDirect3DPixelShader9* g_rainSplashPs = nullptr;
+    bool                   g_rainSplashFailed = false;
+
+    struct RainSplashSaved
+    {
+        IDirect3DPixelShader9* ps = nullptr;
+        IDirect3DBaseTexture9* tex[3] = {};
+        DWORD samp[3][5] = {};
+        float c[9 * 4] = {};
+    } g_rainSplashSaved;
+
+    constexpr DWORD kRainSplashSamplers[3] = { 12, 13, 14 };
+    constexpr D3DSAMPLERSTATETYPE kRainSplashSampStates[5] = { D3DSAMP_MINFILTER, D3DSAMP_MAGFILTER, D3DSAMP_MIPFILTER,
+                                                              D3DSAMP_ADDRESSU, D3DSAMP_ADDRESSV };
+
+    float StageOp(DWORD op, DWORD arg1, DWORD arg2)
+    {
+        if (op == D3DTOP_SELECTARG1)
+            return (arg1 & D3DTA_SELECTMASK) == D3DTA_TEXTURE ? 1.0f : 2.0f;
+        if (op == D3DTOP_SELECTARG2)
+            return (arg2 & D3DTA_SELECTMASK) == D3DTA_TEXTURE ? 1.0f : 2.0f;
+        return 0.0f;   // MODULATE and the rest: texture x colour
+    }
+}
+
+bool WaterRainSplashBegin(IDirect3DDevice9* dev)
+{
+    IDirect3DTexture9* depth = DepthWorldTexture();
+    if (g_rainSplashFailed || !depth || !g_level || g_levelX == 0x7FFFFFFF || !g_cfg.master || !g_cfg.water.enabled)
+        return false;
+    auto* d = dev->lpVtbl;
+    if (!g_rainSplashPs)
+    {
+        if (OgBlob* code = Compile(kRainSplashPsHlsl, "rainsplash_ps", "ps_3_0"))
+        {
+            d->CreatePixelShader(dev, static_cast<const DWORD*>(code->lpVtbl->GetBufferPointer(code)), &g_rainSplashPs);
+            code->lpVtbl->Release(code);
+        }
+        if (!g_rainSplashPs)
+        {
+            g_rainSplashFailed = true;
+            Log("water: the rain splash shader failed: the game's splashes stay under the water");
+            return false;
+        }
+        Log("water: the rain splash shader is made: the game's splashes under the water are left out");
+    }
+    float cam[3];
+    D3DMATRIX camV, camP, camVP, inv;
+    D3DVIEWPORT9 vp = {};
+    D3DSURFACE_DESC dd = {};
+    if (!ClientCamera(cam) || !(ShadowWorldCamera(camV, camP) || SunCamera(camV, camP)) ||
+        FAILED(d->GetViewport(dev, &vp)) || vp.MaxZ <= vp.MinZ || FAILED(depth->lpVtbl->GetLevelDesc(depth, 0, &dd)))
+        return false;
+    Mul(camV, camP, camVP);
+    if (!Invert(camVP, inv))
+        return false;
+    DWORD cop = 0, ca1 = 0, ca2 = 0, aop = 0, aa1 = 0, aa2 = 0;
+    d->GetTextureStageState(dev, 0, D3DTSS_COLOROP, &cop);
+    d->GetTextureStageState(dev, 0, D3DTSS_COLORARG1, &ca1);
+    d->GetTextureStageState(dev, 0, D3DTSS_COLORARG2, &ca2);
+    d->GetTextureStageState(dev, 0, D3DTSS_ALPHAOP, &aop);
+    d->GetTextureStageState(dev, 0, D3DTSS_ALPHAARG1, &aa1);
+    d->GetTextureStageState(dev, 0, D3DTSS_ALPHAARG2, &aa2);
+
+    RainSplashSaved& sv = g_rainSplashSaved;
+    d->GetPixelShader(dev, &sv.ps);
+    for (int s = 0; s < 3; ++s)
+    {
+        d->GetTexture(dev, kRainSplashSamplers[s], &sv.tex[s]);
+        for (int k = 0; k < 5; ++k)
+            d->GetSamplerState(dev, kRainSplashSamplers[s], kRainSplashSampStates[k], &sv.samp[s][k]);
+    }
+    d->GetPixelShaderConstantF(dev, 0, sv.c, 9);
+
+    float k[9 * 4] = {};
+    for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c)
+            k[r * 4 + c] = inv.m[r][c];
+    k[16] = vp.MinZ; k[17] = 1.0f / (vp.MaxZ - vp.MinZ);
+    k[20] = 1.0f / static_cast<float>(dd.Width); k[21] = 1.0f / static_cast<float>(dd.Height);
+    k[24] = g_levelX * kCell; k[25] = g_levelY * kCell; k[26] = 1.0f / kCell; k[27] = 1.0f / kLevelCells;
+    k[28] = cam[0]; k[29] = cam[1]; k[30] = cam[2];
+    IDirect3DTexture9* under = WaterUnderDepth();
+    D3DSURFACE_DESC ud = {};
+    if (under && (FAILED(under->lpVtbl->GetLevelDesc(under, 0, &ud)) || ud.Width != dd.Width || ud.Height != dd.Height))
+        under = nullptr;   // another size: the level test alone
+    k[32] = StageOp(cop, ca1, ca2); k[33] = StageOp(aop, aa1, aa2); k[34] = under ? 1.0f : 0.0f;
+    d->SetPixelShaderConstantF(dev, 0, k, 9);
+    d->SetTexture(dev, kRainSplashSamplers[0], reinterpret_cast<IDirect3DBaseTexture9*>(depth));
+    d->SetTexture(dev, kRainSplashSamplers[1], reinterpret_cast<IDirect3DBaseTexture9*>(g_level));
+    d->SetTexture(dev, kRainSplashSamplers[2], reinterpret_cast<IDirect3DBaseTexture9*>(under));
+    for (int s = 0; s < 3; ++s)
+    {
+        d->SetSamplerState(dev, kRainSplashSamplers[s], D3DSAMP_MINFILTER, D3DTEXF_POINT);
+        d->SetSamplerState(dev, kRainSplashSamplers[s], D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        d->SetSamplerState(dev, kRainSplashSamplers[s], D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+        d->SetSamplerState(dev, kRainSplashSamplers[s], D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+        d->SetSamplerState(dev, kRainSplashSamplers[s], D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+    }
+    d->SetPixelShader(dev, g_rainSplashPs);
+    if (g_probeOn)
+        Log("water: the rain's splashes through our pixel shader (stage 0: colour op %lu, alpha op %lu; the depth "
+            "before the water %s)", cop, aop, under ? "read" : "not there, the level test alone");
+    return true;
+}
+
+void WaterRainSplashEnd(IDirect3DDevice9* dev)
+{
+    auto* d = dev->lpVtbl;
+    RainSplashSaved& sv = g_rainSplashSaved;
+    d->SetPixelShader(dev, sv.ps);
+    for (int s = 0; s < 3; ++s)
+    {
+        d->SetTexture(dev, kRainSplashSamplers[s], sv.tex[s]);
+        for (int k = 0; k < 5; ++k)
+            d->SetSamplerState(dev, kRainSplashSamplers[s], kRainSplashSampStates[k], sv.samp[s][k]);
+        if (sv.tex[s]) sv.tex[s]->lpVtbl->Release(sv.tex[s]);
+    }
+    d->SetPixelShaderConstantF(dev, 0, sv.c, 9);
+    if (sv.ps) sv.ps->lpVtbl->Release(sv.ps);
+    sv = RainSplashSaved();
+}
+
 bool WaterGameWake(IDirect3DDevice9* dev, const WaterChunk& c)
 {
     auto* d = dev->lpVtbl;
@@ -4899,6 +5227,10 @@ void WaterReset()
     SafeRelease(g_wetPs);
     SafeRelease(g_level);
     g_levelX = g_levelY = 0x7FFFFFFF;
+    SafeRelease(g_splashPs);
+    g_splashFailed = false;
+    SafeRelease(g_rainSplashPs);
+    g_rainSplashFailed = false;
     g_wetFailed = false;
     SafeRelease(g_sceneSurf);
     SafeRelease(g_scene);
@@ -5062,4 +5394,6 @@ void WaterShaderList()
     ShaderPrecompile("water_bodydepth", kBodyDepthPsHlsl, "ps_3_0");
     ShaderPrecompile("wet_vs", kWetVsHlsl, "vs_3_0");
     ShaderPrecompile("wet_ps", kWetPsHlsl, "ps_3_0");
+    ShaderPrecompile("splash_ps", kSplashPsHlsl, "ps_2_0");
+    ShaderPrecompile("rainsplash_ps", kRainSplashPsHlsl, "ps_3_0");
 }

@@ -28,8 +28,8 @@
 //
 // The colours follow the sun: white by day, warm as the sun sets, grey-blue at night (Night Darkness then darkens
 // it with the sky). The shade takes some of the game's fog colour, which the game sets for the zone and the hour.
-// In rain the layer covers the whole sky and darkens, its billows still seen, and no shape forms. The clouds follow
-// the rain over about 12 seconds (the overcast), not at once as the water does.
+// In rain the clouds swell into each other until they cover the sky, thickest and darkest where they meet, and no
+// shape forms. The clouds follow the rain over about 12 seconds (the overcast), not at once as the water does.
 //
 // The draw is ps_3_0 with a vs_3_0, blended premultiplied (ONE, INVSRCALPHA): alpha is lowered in the shade, so some
 // of the sky's colour shows through it. [clouds] debug 1 (Debug View 31) shows the shapes red and the layer blue.
@@ -44,6 +44,7 @@
 #include "client.h"
 #include "cloudshapes.h"
 #include "clouds.h"
+#include "weather.h"
 #include "common.h"
 #include "config.h"
 #include "shadercache.h"
@@ -128,7 +129,8 @@ float4 main(I i) : COLOR
     float b = Read(p, gx, gy, gL1).g;
     float c = Read(p, gx, gy, gL2).b;
     float big = Read(p, gx, gy, gL3).a;
-    float cover = saturate(gSun.w + (big - 0.5) * 0.6);
+    // Over 1 in rain (2026-10-12): the clouds swell past full cover and grow thick where they meet.
+    float cover = max(0.0, gSun.w + (big - 0.5) * 0.6);
     // Soft: the smallest billows out, the contrast the coarser levels lose put back (so the cover holds), and a
     // wider edge.
     float k = 1.0 + soft * 0.6;
@@ -172,9 +174,9 @@ float4 main(I i) : COLOR
         near = max(near, w * smoothstep(-0.05, 0.35, cut + s3.w + (f - 0.5) * 0.12));
     }
     dens *= 1.0 - gQ.y * near;
-    // Rain (2026-10-10, the owner): the whole sky covered, with its billows still seen. Where the noise is low the
-    // cover is thinner and lets a little sky through; where it is high it is thick, and darker (below).
-    dens = lerp(dens, lerp(0.8, 1.0, smoothstep(0.2, 0.7, f)), gQ.w);
+    // Rain (2026-10-12, the owner: the clouds should thicken and flow together, not lie on a dark background): the
+    // cover passes 1 (gSun.w), so each cloud swells into its neighbours and the gaps close last. From 2026-10-10
+    // the density and the thickness were set flat in rain, and the layer read as grey laid behind the clouds.
 
     // Toward the sun across the base: the cloud the light comes through.
     float2 toSun = gSun.xy * 350.0;
@@ -185,8 +187,7 @@ float4 main(I i) : COLOR
     float o = saturate((f2 - (1.0 - cover)) / edge);
     // The thick middle darker: grey bellies and bright thin parts, more so when soft.
     // A shape is shaded as the layer is: its thick middle as the layer's.
-    float thick = max(lerp(saturate((f - (1.0 - cover)) / (edge * 3.0)) * step(0.0001, gSun.w),
-                           smoothstep(0.25, 0.85, f), gQ.w), shapeThick);
+    float thick = max(saturate((f - (1.0 - cover)) / (edge * 3.0)) * step(0.0001, gSun.w), shapeThick);
     float L = (1.0 - lerp(0.35, 0.5, soft) * thick) * (1.0 - 0.40 * o);
 
     float3 col = lerp(gShade.rgb, gLit.rgb, L);
@@ -195,12 +196,16 @@ float4 main(I i) : COLOR
     float hz = saturate(t * gHaze.w);
     hz *= hz;
     col = lerp(col, gHaze.rgb, hz * 0.8);
+    // A rain cloud is dark, darkest where it is thickest (2026-10-12, the owner: darker). After the haze: the horizon's
+    // colour is a light grey in rain, and the deck read paler than the sky behind it.
+    col *= 1.0 - gQ.w * (0.3 + 0.3 * thick);
     // The layer and the shapes joined, each with its own opacity.
     float alpha = (1.0 - (1.0 - dens * gLit.w) * (1.0 - shapeA * gQ.z)) * fade * (1.0 - hz * 0.5);
 
     if (gP.w > 0.0)
         return float4(shapeA * fade, 0.0, dens * fade, 1.0);
-    return float4(col * alpha, alpha * (1.0 - gShade.w * (1.0 - L)));
+    // The shade lets some sky through; a rain cloud does not.
+    return float4(col * alpha, alpha * (1.0 - gShade.w * (1.0 - gQ.w * 0.8) * (1.0 - L)));
 }
 )HLSL";
 
@@ -714,11 +719,18 @@ bool CloudsDraw(IDirect3DDevice9* dev)
     SunDirection(sun);
     float hour = 12.0f;
     const float night = ClientHour(hour) ? NightWeight(hour) : Smooth(0.05f, -0.15f, sun[2]);
-    // The overcast: the rain (water.cpp, from the rain drawn, eased over 0.8 s), followed over about 12 s, so the
-    // sky closes as a shower comes on and does not jump with how much rain is in view. Light rain covers it too.
+    // The overcast: the rain, followed over about 12 s, so the sky closes as a shower comes on and does not jump
+    // with how much rain is in view. Light rain covers it too. The server's weather from its packet (weather.cpp,
+    // 2026-10-12), so the clouds gather as the weather turns, before the drops show, and clear as it ends: rain and
+    // snow, by their grade. Before a packet (the patch not in, or a hot reload), the rain drawn (water.cpp, eased
+    // over 0.8 s), as until 2026-10-12.
     {
         const double t = Now();
-        const float target = std::min(1.0f, std::clamp(WaterRainAmount(), 0.0f, 1.0f) * 2.0f);
+        int wtype = 0;
+        float wgrade = 0.0f;
+        const float amount = WeatherServer(wtype, wgrade) ? (wtype == 1 || wtype == 2 ? wgrade : 0.0f)
+                                                           : WaterRainAmount();
+        const float target = std::min(1.0f, std::clamp(amount, 0.0f, 1.0f) * 2.0f);
         const float ease = g_overcastLast > 0.0 ? static_cast<float>(1.0 - exp(-(t - g_overcastLast) / cl.transitionTime)) : 1.0f;
         g_overcast += (target - g_overcast) * std::min(1.0f, ease);
         g_overcastLast = t;
@@ -733,7 +745,7 @@ bool CloudsDraw(IDirect3DDevice9* dev)
     float lit[3], tmp[3];
     Lerp3(dayLit, sunsetLit, warm, tmp);
     Lerp3(tmp, nightLit, night, lit);
-    const float dim = cl.brightness * (1.0f - 0.35f * rain);
+    const float dim = cl.brightness * (1.0f - 0.5f * rain);   // 0.35 until 2026-10-12 (the owner: darker)
     for (float& v : lit) v *= dim;
     DWORD fogCol = 0;
     float fog[3] = { lit[0] * 0.75f, lit[1] * 0.78f, lit[2] * 0.85f };
@@ -772,7 +784,8 @@ bool CloudsDraw(IDirect3DDevice9* dev)
         layers[l * 4 + 2] = 1.0f / size[l];
         layers[l * 4 + 3] = 0.0f;
     }
-    const float layerCover = cl.cover + (0.97f - cl.cover) * rain;
+    // In rain the cover passes full (2026-10-12): the clouds swell into each other (the shader's cover).
+    const float layerCover = cl.cover + (1.5f - cl.cover) * rain;
 
     if (g_atlas)
         FindShapes(cl, cam, now, wind, rain, view, g_shapes);
