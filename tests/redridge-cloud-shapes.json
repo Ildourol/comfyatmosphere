@@ -152,7 +152,7 @@
             "min": 1
         },
         {
-            "probe": "clouds: [0-9]+ clouds [(][0-9]+ shapes[)]",
+            "probe": "clouds: [0-9]+ shapes of [0-9]+ in the sky",
             "min": 1
         }
     ]

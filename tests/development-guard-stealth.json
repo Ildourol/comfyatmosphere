@@ -318,16 +318,16 @@
             "about": "You, before stealth, in the shade alone (Debug View 5): row 540 crosses your shadow on the ground, at 1152x864 (row 474 at 1280x720). 7 on 2026-10-08, 6 on 2026-10-09",
             "shot": 3,
             "row": 540,
-            "from": 538,
-            "to": 556,
+            "from": 544,
+            "to": 560,
             "meanMax": 60
         },
         {
             "about": "You in stealth, in the shade alone (Debug View 5): row 540, where your shadow lay, is lit. 255 after the fix (2026-10-08); with the player left out of the stealthed units, your shadow stayed",
             "shot": 4,
             "row": 540,
-            "from": 538,
-            "to": 556,
+            "from": 544,
+            "to": 560,
             "mean": 200
         }
     ]
