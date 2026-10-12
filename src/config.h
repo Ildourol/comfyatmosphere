@@ -507,7 +507,7 @@ struct CloudSettings
 struct WaterSettings
 {
     bool  enabled   = true;
-    float foam      = 0.35f;     // 0..1: how white the foam is
+    float foam      = 0.25f;     // 0..1: how white the foam is
     float foamWidth = 1.0f;      // yards of depth: the foam thins out to nothing at this depth
     float edgeLine  = 0.1f;      // 0..1: the thin light line where the water meets the sand (Edge Line)
     float edgeWidth = 0.1f;      // yards along the ground the edge line spans (Edge Line Width)
@@ -528,7 +528,7 @@ struct WaterSettings
     // The surface (2026-10-02): the water drawn by us in place of the game's: its colour by the real depth, the
     // sky in it, the sun's glint, small waves, whitecaps far out.
     float surface   = 1.0f;      // 0..1: how much of our water is drawn over the game's (0 = the game's alone)
-    float clarity   = 1.0f;      // how clear the water is: the light it absorbs is divided by this
+    float clarity   = 0.5f;      // how clear the water is: the light it absorbs is divided by this
     float colour    = 25.0f;     // 0..100: the colour deep water turns, green (0), teal (50) or blue (100)
     // Zone Colour (2026-10-07): the colour deep water turns is the game's own water colour for the zone and the hour,
     // warmed by the sky's glow at dusk, at our brightness, in place of Water Colour.
@@ -552,8 +552,8 @@ struct WaterSettings
     // game's waterfall texture. See NOTES.md.
     bool  foamDrawn = true;      // the drawn foam; off, the game's texture as before (Drawn Foam)
     float foamCell  = 0.9f;      // yards: the size of its blobs (Foam Size)
-    float foamLife  = 3.0f;      // yards out from the moving edge it lasts (Foam Reach)
-    float wakeFoam  = 0.5f;      // 0..1: the drawn foam's splash at a body moving through the water (Wake Foam)
+    float foamLife  = 1.5f;      // yards out from the moving edge it lasts (Foam Reach)
+    float wakeFoam  = 0.25f;     // 0..1: the drawn foam's splash at a body moving through the water (Wake Foam)
     float shipWake  = 0.0f;      // 0 off, or 2..20: a ship's wake, as a body's this many times the size (Ship Wake);
                                  // off by default (the owner, 2026-10-06), 10 is a good size
     float shipWakeForward = 15.0f;  // 0..60 yards: how far ahead of the hull's origin the wake starts
