@@ -1832,24 +1832,15 @@ float4 main(float2 vpos : VPOS) : COLOR
     double g_lastUnitTime = 0.0;
     constexpr float kRingStill = 1.1f;   // yards a second a ring round a unit standing still spreads at
 
-    // The game's own wake (2026-10-02): the V of foam that trails a unit wading or swimming. Measured walking
-    // through the sea off Westfall: after the water the client draws a few batches of particles, fixed-function
-    // (format 0x142: position, colour, one texture), additive (source alpha, one), no depth writes, their
-    // vertices camera-relative with an identity world matrix. Four share one texture (14, 8, 98 and 92
-    // triangles); the V is the two big ones. A batch is taken as the wake when its first vertex sits at a
-    // river's or the sea's surface (the map files) within 6 yards of a unit; its texture is then learnt, and
-    // every draw with it is one, anywhere. [water] gameWake says whether the client still draws them.
-    std::set<void*> g_wakeTex;
-    std::map<void*, unsigned> g_wakeNot;   // textures looked at and not taken, with the frame they were
-    unsigned        g_wakeDraws = 0, g_wakeLast = 0;
-    unsigned        g_frameNo = 0, g_unitsFrame = ~0u;
-    // Where each vertex buffer's memory starts, from the client's last write lock on it (2026-10-12, the owner: no
-    // lock of ours on the client's buffers). A read-only Lock made DXVK wait for the GPU, and a buffer read once from
-    // the CPU was handled differently for the rest of the session (the water's buffers: 3 to 6 frames a second). The
-    // client fills a buffer before it draws from it, so the entry for a buffer being drawn is always its own.
-    std::unordered_map<const void*, const uint8_t*> g_vbMemory;
-    int             g_unitCount = 0;
-    float           g_units[256][3];
+    // The game's own wake (2026-10-02): the V of foam that trails a unit wading or swimming, the ring round one
+    // standing in the water, and the splash where one lands in it. Measured walking through the sea off Westfall:
+    // after the water the client draws a few batches of particles, fixed-function (format 0x142: position, colour,
+    // one texture), additive (source alpha, one), no depth writes. Each is known by its texture's texels
+    // (WaterGameWake). [water] gameWake says whether the client still draws them.
+    struct WakeTexture { UINT width, height; D3DFORMAT format; int kind; };   // kind: an index in kWakeTexels, or -1
+    std::unordered_map<const void*, WakeTexture> g_wakeTex;   // the textures looked at
+    unsigned        g_wakeDraws = 0, g_wakeLast = 0, g_wakeKnown = 0;
+    unsigned        g_frameNo = 0;
     unsigned           g_foamDraws = 0, g_foamLast = 0;
 
     // The probe.
@@ -4786,34 +4777,47 @@ void WaterRainSplashEnd(IDirect3DDevice9* dev)
     sv = RainSplashSaved();
 }
 
-void WaterNoteVertexLock(const void* vb, UINT offset, void* data)
-{
-    if (!vb || !data || (g_vbMemory.size() >= 8192 && !g_vbMemory.count(vb)))
-        return;
-    g_vbMemory[vb] = static_cast<const uint8_t*>(data) - offset;   // the lock's pointer is at its offset
-}
-
 namespace
 {
-    // 12 bytes from the client's buffer memory. Guarded: a mapping DXVK has let go of is a miss, not a crash.
-    bool ReadClientBytes(const uint8_t* at, float out[3])
+    // The game's three textures, by the FNV-1a hash of their top level as the client holds it (2026-10-12). The
+    // files the client names for them (Textures\splash\splash.blp and wake.blp) are in no archive, so the client
+    // makes them, and a probe in Goldshire's pond found the same texels in two sessions, each time in new textures.
+    // Until then a batch was taken as the wake when its first vertex, read from the client's vertex buffer, lay on
+    // the water within 6 yards of a unit, and its texture was learnt: it took a dozen other particles over the
+    // water as well (64 x 64 textures with all their levels), hid them for the session, and read a buffer to do it.
+    struct WakeTexels { unsigned long long hash; UINT width, height; D3DFORMAT format; const char* name; };
+    const WakeTexels kWakeTexels[] = {
+        { 0x7b52ef8466394b80ull, 128, 128, D3DFMT_A1R5G5B5, "ring" },
+        { 0xdcc0a1da94024b67ull, 128, 128, D3DFMT_DXT3,     "V wake" },
+        { 0x0171b41f18a62d0full,  64,  64, D3DFMT_DXT3,     "splash" },
+    };
+
+    // The hash of a texture's top level, read once by a read-only LockRect.
+    bool TexelHash(IDirect3DTexture9* t, const D3DSURFACE_DESC& td, unsigned long long& h)
     {
-        __try
-        {
-            memcpy(out, at, 12);
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER)
-        {
+        const bool dxt1 = td.Format == D3DFMT_DXT1;
+        const bool dxt = dxt1 || td.Format == D3DFMT_DXT3 || td.Format == D3DFMT_DXT5;
+        const UINT rowBytes = dxt ? (td.Width + 3) / 4 * (dxt1 ? 8 : 16) : td.Width * 2;
+        const UINT rows = dxt ? (td.Height + 3) / 4 : td.Height;
+        D3DLOCKED_RECT lr = {};
+        if (FAILED(t->lpVtbl->LockRect(t, 0, &lr, nullptr, D3DLOCK_READONLY)) || !lr.pBits)
             return false;
+        h = 1469598103934665603ull;
+        for (UINT r = 0; r < rows; ++r)
+        {
+            const uint8_t* row = static_cast<const uint8_t*>(lr.pBits) + static_cast<size_t>(r) * lr.Pitch;
+            for (UINT i = 0; i < rowBytes; ++i)
+                h = (h ^ row[i]) * 1099511628211ull;
         }
+        t->lpVtbl->UnlockRect(t, 0);
+        return true;
     }
 }
 
-bool WaterGameWake(IDirect3DDevice9* dev, const WaterChunk& c)
+bool WaterGameWake(IDirect3DDevice9* dev)
 {
     auto* d = dev->lpVtbl;
-    DWORD blend = 0, zwrite = 1, src = 0, dst = 0, fvf = 0;
+    DWORD blend = 0, zwrite = 1, src = 0, dst = 0;
     d->GetRenderState(dev, D3DRS_ALPHABLENDENABLE, &blend);
     if (!blend)
         return false;
@@ -4827,108 +4831,41 @@ bool WaterGameWake(IDirect3DDevice9* dev, const WaterChunk& c)
     if (!tex)
         return false;
     tex->lpVtbl->Release(tex);
-    if (g_wakeTex.count(tex))
+    if (tex->lpVtbl->GetType(tex) != D3DRTYPE_TEXTURE)
+        return false;
+    auto* t = reinterpret_cast<IDirect3DTexture9*>(tex);
+    D3DSURFACE_DESC td = {};
+    if (FAILED(t->lpVtbl->GetLevelDesc(t, 0, &td)))
+        return false;
+    // Each texture is looked at once. A texture freed and another made at its address is looked at again when
+    // its size or format differ.
+    auto it = g_wakeTex.find(tex);
+    if (it == g_wakeTex.end() || it->second.width != td.Width || it->second.height != td.Height ||
+        it->second.format != td.Format)
     {
-        ++g_wakeDraws;
-        return true;
-    }
-    // A texture looked at and not taken is looked at again only after 2 seconds of frames: a fire's
-    // particles would otherwise cost a buffer read every frame.
-    auto seen = g_wakeNot.find(tex);
-    if (seen != g_wakeNot.end() && g_frameNo - seen->second < 120 && !g_probeOn)
-        return false;
-    if (g_wakeTex.size() >= 8 || g_wakeNot.size() > 512)
-        return false;
-    g_wakeNot[tex] = g_frameNo;
-    // The first vertex says where the batch is. Its space is the client's: the particles' world matrix is the
-    // identity and their view has no translation, and still their vertices are not camera-relative (the wake's
-    // came out 30 yards up). So it goes to the screen through the draw's own world, view and projection, and
-    // back through the world camera's.
-    static unsigned told = 0;   // the first 30 batches looked at are logged, with why they were not taken
-    d->GetFVF(dev, &fvf);
-    if ((fvf & D3DFVF_POSITION_MASK) != D3DFVF_XYZ)
-        return false;
-    IDirect3DVertexBuffer9* vb = nullptr;
-    UINT off = 0, stride = 0;
-    float v[3] = {};
-    bool read = false;
-    // From the memory the client wrote the particles to (g_vbMemory), never by a Lock of ours.
-    if (SUCCEEDED(d->GetStreamSource(dev, 0, &vb, &off, &stride)) && vb && stride >= 12)
-    {
-        const auto mem = g_vbMemory.find(vb);
-        D3DVERTEXBUFFER_DESC vd = {};
-        const UINT at = off + static_cast<UINT>(c.baseVertex + static_cast<INT>(c.minIndex)) * stride;
-        if (mem != g_vbMemory.end() && SUCCEEDED(vb->lpVtbl->GetDesc(vb, &vd)) && at + 12 <= vd.Size)
-            read = ReadClientBytes(mem->second + at, v);
-    }
-    if (vb) vb->lpVtbl->Release(vb);
-    float cam[3];
-    D3DMATRIX wv, wvp, camV, camP, camVP, back;
-    Mul(*c.world, *c.view, wv);
-    Mul(wv, *c.proj, wvp);
-    const bool haveCam = (ShadowWorldCamera(camV, camP) || SunCamera(camV, camP));
-    if (haveCam)
-        Mul(camV, camP, camVP);
-    if (!read || !ClientCamera(cam) || !haveCam || !Invert(camVP, back))
-    {
-        if (read ? g_probeOn : ++told <= 30)
-            Log("water: additive batch, texture %p: %s", tex, read ? "no camera" : "its vertices could not be read");
-        return false;
-    }
-    float h[4], r[4];
-    for (int k = 0; k < 4; ++k)
-        h[k] = v[0] * wvp.m[0][k] + v[1] * wvp.m[1][k] + v[2] * wvp.m[2][k] + wvp.m[3][k];
-    for (int k = 0; k < 4; ++k)
-        r[k] = h[0] * back.m[0][k] + h[1] * back.m[1][k] + h[2] * back.m[2][k] + h[3] * back.m[3][k];
-    if (fabsf(r[3]) < 1e-6f)
-        return false;
-    const float p[3] = { r[0] / r[3] + cam[0], r[1] / r[3] + cam[1], r[2] / r[3] + cam[2] };
-    // A river's or the sea's surface, or a building's water (2026-10-05): on a fresh login in Stormwind's canals,
-    // which are a building's, no batch was ever taken, and the game's V and ring showed beside ours.
-    float wz = 0.0f;
-    const bool mapWet = MapWaterHeight(p[0], p[1], wz) && fabsf(p[2] - wz) <= 0.6f;
-    const bool cityWet = !mapWet && CityWaterAt(p[0], p[1], p[2], wz);
-    const bool wet = mapWet || cityWet;
-    float pl[3] = {};
-    ClientPlayer(pl);
-    if (g_probeOn || ++told <= 30)
-        Log("water: additive particles, texture %p, %u triangles, first vertex at (%.1f %.1f %.1f), water there "
-            "%s %.2f; you at (%.1f %.1f %.1f); raw vertex (%.2f %.2f %.2f), camera (%.1f %.1f %.1f), view row 3 "
-            "(%.2f %.2f %.2f)", tex, c.primCount, p[0], p[1], p[2], wet ? "at" : "none", wz, pl[0], pl[1], pl[2],
-            v[0], v[1], v[2], cam[0], cam[1], cam[2], c.view->m[3][0], c.view->m[3][1], c.view->m[3][2]);
-    if (!wet || fabsf(p[2] - wz) > 0.6f)
-        return false;
-    if (g_unitsFrame != g_frameNo)
-    {
-        g_unitsFrame = g_frameNo;
-        g_unitCount = ClientUnits(g_units, 256);
-    }
-    // A batch on the water's grid (2026-10-04): the wake's trail is drawn over the water's cells, and its first
-    // vertex is a cell corner (a multiple of 4.1667 yards), not where the unit is. At 6 yards it was taken only
-    // once someone stood that near a corner, and the game's wake showed for up to a minute after a start.
-    const float kCellYd = 533.33333f / 128.0f;
-    const auto onGrid = [&](float a) {
-        const float m = fabsf(a / kCellYd - roundf(a / kCellYd)) * kCellYd;
-        return m < 0.02f;
-    };
-    // A building's water has its own grid, not the map's: up to the same 15 yards.
-    const float reach = (cityWet || (onGrid(p[0]) && onGrid(p[1]))) && fabsf(p[2] - wz) < 0.1f ? 15.0f : 6.0f;
-    for (int i = 0; i < g_unitCount; ++i)
-    {
-        const float dx = g_units[i][0] - p[0], dy = g_units[i][1] - p[1];
-        if (dx * dx + dy * dy < reach * reach)
+        if (g_wakeTex.size() >= 4096)
+            g_wakeTex.clear();
+        int kind = -1;
+        for (int k = 0; k < static_cast<int>(sizeof(kWakeTexels) / sizeof(kWakeTexels[0])) && kind < 0; ++k)
         {
-            g_wakeTex.insert(tex);
-            g_wakeNot.erase(tex);
-            char info[96];
-            TexInfo(tex, info, sizeof(info));
-            Log("water: the game's wake is drawn with texture %s: particles at (%.1f %.1f %.1f) by a unit, on %s "
-                "at %.1f", info, p[0], p[1], p[2], cityWet ? "a building's water" : "the water", wz);
-            ++g_wakeDraws;
-            return true;
+            const WakeTexels& w = kWakeTexels[k];
+            unsigned long long h = 0;
+            if (td.Width == w.width && td.Height == w.height && td.Format == w.format && TexelHash(t, td, h) &&
+                h == w.hash)
+                kind = k;
+        }
+        it = g_wakeTex.insert_or_assign(tex, WakeTexture{ td.Width, td.Height, td.Format, kind }).first;
+        if (kind >= 0)
+        {
+            ++g_wakeKnown;
+            Log("water: texture %p is the game's %s (%ux%u): %s", tex, kWakeTexels[kind].name, td.Width, td.Height,
+                g_cfg.water.gameWake ? "drawn" : "hidden");
         }
     }
-    return false;
+    if (it->second.kind < 0)
+        return false;
+    ++g_wakeDraws;
+    return true;
 }
 
 float WaterBedFade()
@@ -5170,8 +5107,8 @@ void WaterFrameEnd(IDirect3DDevice9* dev)
                 pl[0], pl[1], pl[2], wet ? "at" : "none", wz, MapGroundHeight(pl[0], pl[1], gz) ? gz : 0.0f,
                 round.c_str());
         }
-        Log("water: the game's wake: %u draws this frame, %u textures learnt, %s ([water] gameWake)", g_wakeDraws,
-            static_cast<unsigned>(g_wakeTex.size()), g_cfg.water.gameWake ? "drawn" : "hidden");
+        Log("water: the game's wake: %u draws this frame, %u textures known, %s ([water] gameWake)", g_wakeDraws,
+            g_wakeKnown, g_cfg.water.gameWake ? "drawn" : "hidden");
     }
     g_wakeLast = g_wakeDraws;
     g_wakeDraws = 0;
@@ -5315,8 +5252,7 @@ void WaterReset()
     g_sceneOk = false;
     g_sceneFailLogged = false;
     g_wakeTex.clear();
-    g_wakeNot.clear();
-    g_vbMemory.clear();
+    g_wakeKnown = 0;
     SafeRelease(g_underSurf);
     SafeRelease(g_under);
     SafeRelease(g_vs);

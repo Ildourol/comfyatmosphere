@@ -3514,3 +3514,16 @@ The first build made the rings and none showed. The shader sizes a ring by how d
 small, waist deep the largest, none under 0.05 yards), and the jumps at the pond's edge in Goldshire landed 0.1 yards
 under. A landing's ring is now placed a yard under the surface, where the size is full. A flag for it in the shader
 ran the water shader out of temp registers (X4505), so the shader is unchanged.
+
+## The game's wake, ring and splash by their texels (2026-10-12)
+
+The lock-free read above was replaced the same day. The client names `Textures\splash\splash.blp` and
+`Textures\splash\wake.blp`, but neither is in any archive (`Textures\WaterPoop02.blp` is: 256 x 256 DXT3 with
+mipmaps, and nothing drawn matched it). A probe wrote each learnt texture's top level to a DDS file with an FNV-1a
+hash of its texels: in Goldshire's pond, the ring (128 x 128 A1R5G5B5, one level, `7b52ef8466394b80`), the V wake
+(128 x 128 DXT3, one level, `dcc0a1da94024b67`) and the splash (64 x 64 DXT3, 7 levels, `0171b41f18a62d0f`). A client
+restart gave the same three hashes, in new textures, so the client makes them the same way each session.
+`WaterGameWake` now hashes the top level of each additive particle texture of a matching size and format once
+(`kWakeTexels`) and hides a match from its first frame. Nothing reads where the particles land, and the client's
+vertex buffers are not read. The old learning had also taken about a dozen other particles over the water (64 x 64
+textures with all their levels) and hidden them for the session.

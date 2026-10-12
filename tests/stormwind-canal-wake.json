@@ -155,7 +155,7 @@
         },
         {
             "about": "The game's own wake and ring are found on a building's water and hidden: only ours show (the last run before 2026-10-05 read 0 draws, 0 textures learnt)",
-            "probe": "^water: the game's wake: [1-9][0-9]* draws this frame, [1-9][0-9]* textures learnt, hidden",
+            "probe": "^water: the game's wake: [1-9][0-9]* draws this frame, [1-9][0-9]* textures known, hidden",
             "min": 1
         }
     ]

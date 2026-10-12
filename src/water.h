@@ -39,12 +39,8 @@ void WaterFlush(IDirect3DDevice9* dev);  // draw the held chunks: at the client'
 // The probe: each water draw of the frame (water), and each other blended fixed-function draw through a
 // pixel shader (not water), before the client's draw. `index` is the draw's place in the frame.
 void WaterProbeDraw(IDirect3DDevice9* dev, const WaterChunk& c, unsigned index, bool water);
-// A fixed-function draw about to be made: the game's own wake on the water (see water.cpp)? `c` carries the
-// draw's buffers and its world matrix.
-bool WaterGameWake(IDirect3DDevice9* dev, const WaterChunk& c);
-// A write lock the client took on a vertex buffer: where its memory starts, so that WaterGameWake reads the
-// particles the client wrote there without a lock of its own.
-void WaterNoteVertexLock(const void* vb, UINT offset, void* data);
+// A fixed-function draw about to be made: the game's own wake, ring or splash on the water (see water.cpp)?
+bool WaterGameWake(IDirect3DDevice9* dev);
 // The game's rain splashes (comfyatmos.cpp knows the draw by its texture): Begin binds a pixel shader that
 // leaves out the ones under the water; true: make the client's draw, then End puts its state back.
 bool WaterSplashBegin(IDirect3DDevice9* dev, bool debug = false);   // debug: Debug View 33's red and green

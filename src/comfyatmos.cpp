@@ -2904,8 +2904,7 @@ namespace
         // the shadows or marked as a body.
         if (!g_vshader && !g_inPass && !g_skyPhase && !g_worldEnded && g_cfg.master && g_cfg.water.enabled)
         {
-            const WaterChunk draw = { prim, bvi, mvi, nv, si, pc, &g_world, &g_viewAll, &g_projAll };
-            if (WaterGameWake(dev, draw) && !g_cfg.water.gameWake)
+            if (WaterGameWake(dev) && !g_cfg.water.gameWake)
                 return S_OK;
             if (pc >= 100)
                 WaterNoteHull(dev, g_world);   // a ship's hull, for its wake (2026-10-06)
@@ -3168,8 +3167,6 @@ namespace
             ShadowNoteBufferWrite(self, offset, size);
         const unsigned long long t = BenchTiming() ? __rdtsc() : 0;
         const HRESULT hr = g_oLockVB(self, offset, size, data, flags);
-        if (SUCCEEDED(hr) && data && !(flags & D3DLOCK_READONLY))
-            WaterNoteVertexLock(self, offset, *data);   // the game's wake is read from here (water.cpp)
         if (t)
             BenchCpuAddTicks(kCpuLocks, __rdtsc() - t);
         return hr;
