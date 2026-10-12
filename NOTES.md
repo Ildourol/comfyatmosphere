@@ -3462,3 +3462,17 @@ the map's ground, the band's level and the water from the map's points) showed t
 130 yards, and the level 1 to 2 yards over the water at 190: the level texture held 64 x 64 cells, 133 yards each way,
 and clamped past its edge. It holds 128 x 128 now (267 yards; `MapWaterLevelGrid` fills it, a tile lookup for each run
 of points), and past its edge there is no band.
+
+## Pyramids in the foam near the shore (2026-10-12)
+
+The owner saw pyramid shapes in our water near the shore, in rain and dry. Debug View 21 (ours off) had none, so
+they were in our pass. View 27 showed foam in shards, and view 23 (the slope the swash uses) showed each of the
+ground's triangles in one flat slope with hard edges. A cell of the ground is 4.2 yards, four triangles to its middle
+point: that is the pyramid.
+
+The bed's slope came from points 8 pixels either side (2026-10-03). With the camera close, 8 pixels lay inside one
+triangle, so each triangle read its own tilt, and the shore foam's reach (depth over slope) jumped at its edges. The
+span is now 2 yards either side, which covers a triangle: 8 pixels at least, an eighth of the screen at most, from the
+surface's yards a pixel (`ypp`). The owner: the pyramids are gone.
+
+The wet pass (the swash and the wet sand) still takes its slope from 8 pixels either side.

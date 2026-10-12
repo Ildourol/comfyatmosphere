@@ -782,10 +782,14 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // on and round the character, every way at once: such a side counts for almost nothing. A weight, not a
     // choice: taking the nearer side flipped where the ground's triangles meet, and the tear came back.
     // Far terrain: from the pixels beside, above the branch (farGrad); the five reads only for the rest (2026-10-11).
+    // 2 yards either side, not 8 pixels (2026-10-12, the owner: pyramids in the foam near the shore, Debug View 23 each of
+    // the ground's triangles in a slope of its own). With the camera close, 8 pixels lay inside one triangle, so each
+    // triangle read its own tilt and the foam's reach jumped at its edges. A cell of the ground is 4.2 yards, four
+    // triangles to its middle point: 2 yards either side spans one. 8 pixels at least, an eighth of the screen at most.
     float2 grad = farGrad;
     [branch] if (!farSlice)
     {
-        float2 o8  = gScr.xy * 8.0;
+        float2 o8  = gScr.xy * clamp(2.0 / max(ypp, 1e-4), 8.0, 0.125 / gScr.y);
         float3 b0  = BedAt(uv);
         float3 xa  = BedAt(uv + float2(o8.x, 0.0)) - b0, xb = b0 - BedAt(uv - float2(o8.x, 0.0));
         float3 ya  = BedAt(uv + float2(0.0, o8.y)) - b0, yb = b0 - BedAt(uv - float2(0.0, o8.y));
