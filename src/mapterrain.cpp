@@ -2077,6 +2077,48 @@ bool MapWaterPointHeight(float x, float y, float& z)
     return true;
 }
 
+void MapWaterLevelGrid(int px0, int py0, int n, unsigned char* out, int pitch)
+{
+    const Tile* tile = nullptr;
+    int tileA = -1000, tileB = -1000;
+    for (int y = 0; y < n; ++y)
+    {
+        float* row = reinterpret_cast<float*>(out + static_cast<size_t>(y) * pitch);
+        for (int x = 0; x < n; ++x)
+        {
+            const float wx = (px0 + x) * kUnit, wy = (py0 + y) * kUnit;
+            const int a = static_cast<int>(floorf(32.0f - (wy + 0.5f * kUnit) / kTile));
+            const int b = static_cast<int>(floorf(32.0f - (wx + 0.5f * kUnit) / kTile));
+            if (a != tileA || b != tileB)
+            {
+                tileA = a;
+                tileB = b;
+                const auto it = g_tiles.find(Key(a, b));
+                tile = it != g_tiles.end() && !it->second.pending && it->second.mesh.waterPts.size() == 129 * 129
+                           ? &it->second : nullptr;
+            }
+            float h = -10000.0f, sea = 0.0f;
+            if (tile)
+            {
+                // The point and the cell at (+x, +y) of it, in this tile's own order (rows and columns along -x, -y).
+                const int ix = static_cast<int>(lroundf((CornerX(b) - wx) / kUnit));
+                const int iy = static_cast<int>(lroundf((CornerY(a) - wy) / kUnit));
+                if (ix >= 0 && iy >= 0 && ix <= 128 && iy <= 128)
+                {
+                    const float w = tile->mesh.waterPts[ix * 129 + iy];
+                    if (w == w)
+                        h = w;
+                    const int cx = ix - 1, cy = iy - 1;   // the cell on the +x, +y side
+                    if (cx >= 0 && cy >= 0 && tile->mesh.sea.size() == 128 * 128)
+                        sea = tile->mesh.sea[cx * 128 + cy] ? 1.0f : 0.0f;
+                }
+            }
+            row[x * 2] = h;
+            row[x * 2 + 1] = sea;
+        }
+    }
+}
+
 bool MapTileHeld(float x, float y)
 {
     const int a = static_cast<int>(floorf(32.0f - y / kTile)), b = static_cast<int>(floorf(32.0f - x / kTile));

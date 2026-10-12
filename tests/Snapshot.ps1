@@ -18,7 +18,10 @@
   .\Snapshot.ps1
 #>
 param(
-    [string]$Client = (Join-Path $env:USERPROFILE 'Desktop\wow-clients\octow - Copy')
+    [string]$Client = (Join-Path $env:USERPROFILE 'Desktop\wow-clients\octow - Copy'),
+    # The map's id, when the log does not name it (2026-10-11): the map line comes from the shadows' probe, and with
+    # the volumetric light and the sun shadows off there is none. 0 Eastern Kingdoms, 1 Kalimdor.
+    [int]$Map = -1
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,10 +42,12 @@ $script = Join-Path $env:TEMP 'comfy-snapshot.txt'
 [IO.File]::WriteAllText($script, "pos snapshot`r`nlook`r`natmos probe`r`nwait 3`r`n")
 $out = & (Join-Path $tool 'Run-Test.ps1') $script -Client $Client 6>&1 | Out-String
 
-$pos = [regex]::Match($out, 'pos\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+snapshot')
+# The ground under you is '-' when the tool cannot read it (2026-10-11).
+$pos = [regex]::Match($out, 'pos\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+|-)\s+snapshot')
 $look = [regex]::Match($out, 'look\s+(-?[\d.]+)\s+(-?[\d.]+)(\s+([\d.]+))?')
 if (-not $pos.Success -or -not $look.Success) { throw "No place or camera from the game:`n$out" }
-$x, $y, $z, $gz = 1..4 | ForEach-Object { [double]$pos.Groups[$_].Value }
+$x, $y, $z = 1..3 | ForEach-Object { [double]$pos.Groups[$_].Value }
+$gz = if ($pos.Groups[4].Value -eq '-') { $z } else { [double]$pos.Groups[4].Value }
 $yaw = [double]$look.Groups[1].Value
 $pitch = [double]$look.Groups[2].Value
 
@@ -68,7 +73,8 @@ $night = $lines | Where-Object { $_ -match '^night: game time (\d+):(\d+)' } | S
 if ($night -match 'game time (\d+):(\d+)') { $hour = [math]::Round([double]$Matches[1] + [double]$Matches[2] / 60, 2) }
 # The map: its name in the log, its id from Map.dbc.
 $mapName = ($lines | Where-Object { $_ -match 'map terrain: map "([^"]+)"' } | Select-Object -Last 1) -replace '.*map terrain: map "([^"]+)".*', '$1'
-$mapId = @{ 'Azeroth' = 0; 'Kalimdor' = 1; 'development' = 451 }[$mapName]
+$mapId = if ($Map -ge 0) { $Map } elseif ($mapName) { @{ 'Azeroth' = 0; 'Kalimdor' = 1; 'development' = 451 }[$mapName] } else { $null }
+if (-not $mapName -and $null -eq $mapId) { throw 'The log names no map (the shadows are off): give it with -Map (0 Eastern Kingdoms, 1 Kalimdor).' }
 if ($null -eq $mapId) {
     $js = "const { Dbc } = require('./lib/dbc.js'); const m = Dbc.open('Map.dbc'); for (let i = 0; i < m.recordCount; i++) if (m.str(i, 1) === '$mapName') console.log(m.uint(i, 0));"
     Push-Location (Join-Path $tool '..\model-browser'); $mapId = & node -e $js; Pop-Location

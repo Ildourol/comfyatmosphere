@@ -3421,5 +3421,10 @@ pixels off that lands on a body.
 **The wet sand on a river.** In Ashenvale (map 79.5, 61.8) the wet band lay above the waterline of a river running
 downhill, with a dry strip under it. The level was each map cell's mean of its four points; it is now the water's
 height at the map's points themselves (`MapWaterPointHeight`, the cells' corners as the client draws them), the nine
-nearest weighed by distance. Still open: from further off the band and the waterline part again, and they line up as
-the owner walks closer.
+nearest weighed by distance. From further off the band still lay well up the far bank, the more the further, and
+lined up as the owner walked closer. The wet probe (the probe now runs the pass once more, compiled with WET_PROBE,
+into a 128 x 72 float target, and logs each sample past 45 yards where the band is drawn: the ground from the depth,
+the map's ground, the band's level and the water from the map's points) showed the depth and the level right within
+130 yards, and the level 1 to 2 yards over the water at 190: the level texture held 64 x 64 cells, 133 yards each way,
+and clamped past its edge. It holds 128 x 128 now (267 yards; `MapWaterLevelGrid` fills it, a tile lookup for each run
+of points), and past its edge there is no band.

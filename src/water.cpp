@@ -1377,9 +1377,17 @@ float3 WetPointAt(float2 uvq)
 }
 float4 main(float2 vpos : VPOS) : COLOR
 {
+#ifdef WET_PROBE
+    // The probe (2026-10-11): one sample for each of 32 x 18 tiles of the screen, into a float target the DLL reads
+    // back: the ground point from the depth and the level this pass uses there (DrawWetSand, WetProbe). 128 x 72.
+    float2 uv  = (vpos + 0.5) / float2(128.0, 72.0);
+#else
     float2 uv  = (vpos + 0.5) * gScr.xy;
+#endif
     float  raw = tex2Dlod(sUnder, float4(uv, 0, 0)).r;
+#ifndef WET_PROBE
     clip(gZ.x + 1.0 / gZ.y - 1e-5 - raw);                            // the sky, and far terrain in a slice of its own
+#endif
     float  d   = (raw - gZ.x) * gZ.y;
     float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
     float4 wp  = ndc.x * gI0 + ndc.y * gI1 + d * gI2 + gI3;
@@ -1393,16 +1401,22 @@ float4 main(float2 vpos : VPOS) : COLOR
     float  lvSum = 0.0, lvW = 0.0, seaW = 0.0;
     const float2 q    = (A.xy - gLv.xy) * gLv.z;             // in cells; the points at whole numbers
     const float2 cell = floor(q + 0.5);                       // the nearest point
+    // Nothing past the texture (2026-10-11): it clamps, and a mound 190 yards off took the level of a point at its edge,
+    // two yards over the water there, and the band lay well up its side (Ashenvale, the owner).
+    const float  inTex = all(cell >= 1.0) && all(cell <= 1.0 / gLv.w - 2.0) ? 1.0 : 0.0;
     [unroll] for (int y = -1; y <= 1; ++y)
     [unroll] for (int x = -1; x <= 1; ++x)
     {
         float2 lc = tex2Dlod(sLevel, float4((cell + float2(x, y) + 0.5) * gLv.w, 0, 0)).rg;
-        float  w  = saturate(1.5 - length(cell + float2(x, y) - q)) * (lc.r > -1000.0 ? 1.0 : 0.0);
+        float  w  = saturate(1.5 - length(cell + float2(x, y) - q)) * (lc.r > -1000.0 ? 1.0 : 0.0) * inTex;
         lvSum += lc.r * w;
         lvW   += w;
         seaW = max(seaW, lc.g);   // the sea if any cell round it is (2026-10-05)
     }
     float  lv  = lvW > 1e-4 ? lvSum / lvW : -10000.0;
+#ifdef WET_PROBE
+    return float4(A, raw > gZ.x + 1.0 / gZ.y - 1e-5 ? -20000.0 : lv);
+#endif
     float  h    = A.z - lv;                                          // yards above the water
     float3 n    = cross(ddx(P), ddy(P));
     // Not a body, a wall or a post: full up to a slope of 60 degrees, none past 72. Until 2026-10-07 none past 32
@@ -1533,7 +1547,7 @@ float4 main(float2 vpos : VPOS) : COLOR
     IDirect3DStateBlock9*   g_wetSb = nullptr;
     IDirect3DIndexBuffer9*  g_gridIb = nullptr;   // all 8 x 8 cells of a water chunk (FullGridDraw)
     bool                    g_gridFailed = false;
-    constexpr int           kLevelCells = 64;
+    constexpr int           kLevelCells = 128;   // 64 until 2026-10-11: past 133 yards the band took the edge's level
     constexpr float         kCell = 1600.0f / 3.0f / 128.0f;   // a map cell: 4.17 yards (mapterrain.cpp)
     int                     g_levelX = 0x7FFFFFFF, g_levelY = 0x7FFFFFFF;   // the first cell, by index
     unsigned                g_levelAge = 0;
@@ -3018,24 +3032,114 @@ namespace
         D3DLOCKED_RECT r = {};
         if (FAILED(g_level->lpVtbl->LockRect(g_level, 0, &r, nullptr, 0)))
             return;
-        for (int y = 0; y < kLevelCells; ++y)
-        {
-            float* row = reinterpret_cast<float*>(static_cast<uint8_t*>(r.pBits) + y * r.Pitch);
-            for (int x = 0; x < kLevelCells; ++x)
-            {
-                // The water's height at each corner of the cells, as the client draws it (2026-10-11): the cells'
-                // means stood up to half a yard over a river running downhill beside its bank (Ashenvale, the owner).
-                float z = 0.0f;
-                const float wx = (cx + x) * kCell, wy = (cy + y) * kCell;
-                row[x * 2]     = MapWaterPointHeight(wx, wy, z) ? z : -10000.0f;
-                row[x * 2 + 1] = MapWaterIsSea(wx + 0.5f * kCell, wy + 0.5f * kCell) ? 1.0f : 0.0f;
-            }
-        }
+        // The water's height at each corner of the cells, as the client draws it (2026-10-11): the cells' means stood
+        // up to half a yard over a river running downhill beside its bank (Ashenvale, the owner).
+        MapWaterLevelGrid(cx, cy, kLevelCells, static_cast<unsigned char*>(r.pBits), r.Pitch);
         g_level->lpVtbl->UnlockRect(g_level, 0);
     }
 
     // The wet sand, once a frame, before the first water draw: every state goes back as it was (a state block),
     // since the client's own draw of the chunk follows at once.
+    // The probe of the wet sand (2026-10-11, the band above a river's waterline in Ashenvale, more so the further off):
+    // the pass again, compiled with WET_PROBE, into a 32 x 18 float target, read back once. Each sample near the
+    // waterline is logged with the ground point the pass makes from the depth, the map's own ground there, the level
+    // the pass uses and the water's height from the map's points, interpolated across the cell as the client draws it.
+    // Within the pass's state; it changes the target, the viewport and the blend, and puts them back.
+    void WetProbe(IDirect3DDevice9* dev, const float (*quad)[3])
+    {
+        static IDirect3DPixelShader9* ps = nullptr;
+        static bool failed = false;
+        auto* d = dev->lpVtbl;
+        if (!ps && !failed)
+        {
+            const char* const defines[] = { "WET_PROBE", "1", nullptr, nullptr };
+            if (OgBlob* code = Compile(kWetPsHlsl, "wet_probe", "ps_3_0", defines))
+            {
+                d->CreatePixelShader(dev, static_cast<const DWORD*>(code->lpVtbl->GetBufferPointer(code)), &ps);
+                code->lpVtbl->Release(code);
+            }
+            failed = !ps;
+        }
+        if (!ps)
+            return;
+        constexpr UINT kW = 128, kH = 72;
+        IDirect3DSurface9* rt = nullptr;
+        IDirect3DSurface9* sys = nullptr;
+        if (FAILED(d->CreateRenderTarget(dev, kW, kH, D3DFMT_A32B32G32R32F, D3DMULTISAMPLE_NONE, 0, FALSE, &rt, nullptr)) ||
+            FAILED(d->CreateOffscreenPlainSurface(dev, kW, kH, D3DFMT_A32B32G32R32F, D3DPOOL_SYSTEMMEM, &sys, nullptr)))
+        {
+            SafeRelease(rt);
+            SafeRelease(sys);
+            Log("water: wet probe: no float target");
+            return;
+        }
+        IDirect3DSurface9* oldRt = nullptr;
+        d->GetRenderTarget(dev, 0, &oldRt);
+        D3DVIEWPORT9 oldVp = {};
+        d->GetViewport(dev, &oldVp);
+        IDirect3DPixelShader9* oldPs = nullptr;
+        d->GetPixelShader(dev, &oldPs);
+        DWORD stencil = 0;
+        d->GetRenderState(dev, D3DRS_STENCILENABLE, &stencil);
+        d->SetRenderTarget(dev, 0, rt);
+        const D3DVIEWPORT9 vp = { 0, 0, kW, kH, 0.0f, 1.0f };
+        d->SetViewport(dev, &vp);
+        d->SetRenderState(dev, D3DRS_ALPHABLENDENABLE, FALSE);
+        d->SetRenderState(dev, D3DRS_COLORWRITEENABLE, 0xF);
+        d->SetRenderState(dev, D3DRS_STENCILENABLE, FALSE);
+        d->SetPixelShader(dev, ps);
+        d->DrawPrimitiveUP(dev, D3DPT_TRIANGLESTRIP, 2, quad, sizeof(quad[0]));
+        d->SetRenderTarget(dev, 0, oldRt);
+        d->SetViewport(dev, &oldVp);
+        d->SetPixelShader(dev, oldPs);
+        d->SetRenderState(dev, D3DRS_STENCILENABLE, stencil);
+        d->SetRenderState(dev, D3DRS_ALPHABLENDENABLE, TRUE);
+        SafeRelease(oldRt);
+        SafeRelease(oldPs);
+        D3DLOCKED_RECT lr = {};
+        int logged = 0;
+        float cam[3] = {};
+        ClientCamera(cam);
+        if (SUCCEEDED(d->GetRenderTargetData(dev, rt, sys)) && SUCCEEDED(sys->lpVtbl->LockRect(sys, &lr, nullptr, D3DLOCK_READONLY)))
+        {
+            Log("water: wet probe: 128 x 72 samples; those over 45 yards off where the band is drawn (0 to 0.6 yards over "
+                "its level): sample, distance, ground from the depth, the map's ground there, the band's level, the water "
+                "from the map's points, height over the band's level and over the water");
+            for (UINT y = 0; y < kH; ++y)
+                for (UINT x = 0; x < kW; ++x)
+                {
+                    const float* s = reinterpret_cast<const float*>(static_cast<const uint8_t*>(lr.pBits) + y * lr.Pitch) + x * 4;
+                    const float ax = s[0], ay = s[1], az = s[2], lv = s[3];
+                    if (!(lv > -1000.0f) || !std::isfinite(az) || az - lv < -0.2f || az - lv > 0.6f ||
+                        std::hypot(ax - cam[0], ay - cam[1]) < 45.0f)
+                        continue;
+                    // The water across the cell from its four points, as the client's two triangles nearly draw it.
+                    const float fx = ax / kCell, fy = ay / kCell;
+                    const float x0 = floorf(fx), y0 = floorf(fy), tx = fx - x0, ty = fy - y0;
+                    float h00, h10, h01, h11, ground = 0.0f;
+                    const bool haveW = MapWaterPointHeight(x0 * kCell, y0 * kCell, h00) &&
+                                       MapWaterPointHeight((x0 + 1) * kCell, y0 * kCell, h10) &&
+                                       MapWaterPointHeight(x0 * kCell, (y0 + 1) * kCell, h01) &&
+                                       MapWaterPointHeight((x0 + 1) * kCell, (y0 + 1) * kCell, h11);
+                    const float wz = haveW ? (h00 * (1 - tx) + h10 * tx) * (1 - ty) + (h01 * (1 - tx) + h11 * tx) * ty : 0.0f;
+                    const bool haveG = MapGroundHeight(ax, ay, ground);
+                    const float dist = std::hypot(ax - cam[0], ay - cam[1]);
+                    char wbuf[32], gbuf[32], hbuf[32];
+                    snprintf(wbuf, sizeof(wbuf), haveW ? "%.2f" : "?", wz);
+                    snprintf(gbuf, sizeof(gbuf), haveG ? "%.2f" : "?", ground);
+                    snprintf(hbuf, sizeof(hbuf), haveW ? "%+.2f" : "?", az - wz);
+                    if (++logged <= 200)
+                        Log("water: wet probe (%2u,%2u) %5.1f yd: depth %.2f, map %s, band level %.2f, water %s; over the "
+                            "band's level %+.2f, over the water %s", x, y, dist, az, gbuf, lv, wbuf, az - lv, hbuf);
+                }
+            sys->lpVtbl->UnlockRect(sys);
+        }
+        else
+            Log("water: wet probe: the target could not be read");
+        SafeRelease(rt);
+        SafeRelease(sys);
+    }
+
     void DrawWetSand(IDirect3DDevice9* dev, const WaterChunk& c)
     {
         const WaterSettings& w = g_cfg.water;
@@ -3132,6 +3236,8 @@ namespace
         d->SetRenderState(dev, D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
         d->SetRenderState(dev, D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
         d->DrawPrimitiveUP(dev, D3DPT_TRIANGLESTRIP, 2, quad, sizeof(quad[0]));
+        if (g_probeOn)
+            WetProbe(dev, quad);
         g_wetSb->lpVtbl->Apply(g_wetSb);
         // The state block puts the client's vertex shader back without going through our SetVertexShader hook,
         // and comfyatmos.cpp's mirror of it (g_vshader) kept ours: every later water chunk of the frame then looked

@@ -84,6 +84,10 @@ bool MapWaterHeight(float x, float y, float& z);
 // The water's surface at the map point nearest (x, y) (2026-10-11): a corner of the cells, 4.17 yards apart, at its
 // own height as the client draws it, not a cell's mean. False where no wet cell has that point. For the wet sand.
 bool MapWaterPointHeight(float x, float y, float& z);
+// A grid of them for the wet sand's level texture (2026-10-11): n x n points, the first at map point (px0, py0) in
+// world units of a cell (x = px0 * cell), rows along +y. Each texel two floats, `pitch` bytes a row: the height
+// (none: -10000) and 1 where a cell at the point (+x, +y) is the sea. One tile lookup for each run of points in it.
+void MapWaterLevelGrid(int px0, int py0, int n, unsigned char* out, int pitch);
 // Whether the tile holding a point has been read (2026-10-11): then MapWaterHeight's false means dry.
 bool MapTileHeld(float x, float y);
 // Whether the water at a point is the sea (the map's MCNK flag 0x8), not a river, a lake or a pond (0x4). False
