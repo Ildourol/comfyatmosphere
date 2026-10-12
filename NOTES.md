@@ -2485,6 +2485,33 @@ drew the world as in air. A wave ahead standing higher than the camera was dropp
 
 A lighter patch with a straight side remains in this view, where the near terrain ends and the water uses the map's
 depth over the far terrain or the sky (Debug View 19). It was there before, hidden by the dry sand.
+
+**A river above the camera (2026-10-11).** Swimming down a river in Ashenvale, the water about 45 yards upstream was
+the game's own pale water, cut off along a straight line across the screen (the owner; snapshot
+`20261011-205020-snapshot.json`). The line was the horizon: the river climbs, and past that line its flat water
+stood higher than the camera, so `clip(-z0)` dropped it as seen from under the water. Now both the water pass and the
+draw over the bodies test the camera against the flat water's own plane at the pixel (`FlatAbove`: the triangle's
+normal from `ddx` and `ddy` of the flat point). For level water this is the same test as before. The depth, the
+slope of the line of sight, the horizon's band and the waves' facing use the plane too, through one scalar (`relN`,
+the point's height over the camera along the plane's normal): with the plane kept as a float3 the shader went past
+its 32 registers. Without them, the water over the camera's height showed the sky at 70% and hardly its colour.
+
+**A river's depth is the map's, not its vertices' (2026-10-11).** Up the same river the water turned darker from
+about 40 yards out, and Zone Colour showed only near the camera (the owner). From 40 yards the map's depth (`gd`)
+takes over from the depth copy, and for a river it was wrong. Measured:
+
+- The MCLQ depth byte is 1.72 a yard at sea and 8.95 in a river or a lake, fitted against the water's height over
+  the MCVT ground on every tile round Auberdine (sea) and Ashenvale (river).
+- The wet sand probe, opened to all samples under the water: the ground from the depth copy and the MCVT ground
+  agree to a few hundredths of a yard, and the river is up to 11 yards deep there. The map's own numbers are right.
+- A debug view of `gd` over the depth copy's depth: about 2.8 in the middle and over 8 near the banks. A river's
+  `uv.y` is 1 from about 3 yards of water on, whatever the depth. At the sea's scale (148) that is 148 yards.
+
+So a river's or a lake's depth comes from the map: each chunk's 81 points (the water's height over the ground) are
+a row of `g_depthTex`, an 81 x 256 R32F texture, kept for each chunk until the map files change (`ChunkDepthRow`).
+The vertex shader reads its point with a vertex texture fetch (s0, `D3DVERTEXTEXTURESAMPLER0`); c253 gives the row.
+The vertex constants end at c255, so 81 values a chunk do not fit as constants. The sea keeps `uv.y x 148`. A point
+the map has no water at, and a chunk whose tile is not loaded, take `uv.y x 28.5`, close near a bank.
 `SeaPoints` keeps its answer for each chunk until `MapFilesVersion` changes. The probe line for each chunk gives the
 number of its points by the sea.
 

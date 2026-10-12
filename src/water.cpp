@@ -57,6 +57,7 @@
 #include <intrin.h>
 #include <array>
 #include <cmath>
+#include <climits>
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -91,6 +92,9 @@ float4 gSs : register(c250);   // 1 / waveScale; 1 for water in a building (no d
 float4 gCellsV : register(c251); // the chunk's wet cells, as the pixel shader's c210 (FullGridDraw)
 float4 gSeaV : register(c252);   // the chunk's 9 x 9 points that a cell of the sea touches: bit row x 9 + column,
                                  // 24 bits a component (SeaPoints)
+float4 gDepthV : register(c253); // x: the chunk's row of the map's depths in sDepthV, (row + 0.5) / rows; below 0 none
+sampler2D sDepthV : register(s0); // the map's depth at each of a chunk's 81 points, a row a chunk (ChunkDepthRow);
+                                  // D3DVERTEXTEXTURESAMPLER0
 // The swell: three long trains of waves, each its own way and length (24, 17 and 11 yards x waveScale),
 // at the speed of waves on deep water. 0 to 1: the surface only ever rises, so the game's flat water under
 // it never shows through a trough.
@@ -127,7 +131,13 @@ float2 SwellSlope(float2 p, float t, float inv)
 struct O { float4 pos : POSITION; float3 rel : TEXCOORD0; float amp : TEXCOORD1; float gd : TEXCOORD2;
            float z0 : TEXCOORD3; float2 cell : TEXCOORD4; };
 // uv.y is the water's depth at the vertex, from the map files: 0.0549 at 8.1 yards and 0.1176 at 17.4 in the
-// probe, depth / 148. The swell lifts only water 2.5 yards deep and more, in full from 6.5: the grid has a
+// probe, depth / 148, at sea. Not in a river or a lake (2026-10-11): there uv.y is 1 from about 3 yards of water
+// on, whatever the depth (a debug view of its ratio to the depth copy's, in Ashenvale). It read as 148 yards, and
+// from 40 yards out, where the map's depth takes over, a river 10 yards deep turned the deep colour, darker than
+// the water in front of it (the owner). There the depth is the map's own: the water's height over the ground at
+// the point (ChunkDepthRow). Without it, uv.y x 28.5: the MCLQ byte is 8.95 a yard in a river, against the sea's
+// 1.72 (fitted on every tile around Auberdine and Ashenvale), and near the bank, where uv.y is below 1, that is
+// close. The swell lifts only water 2.5 yards deep and more, in full from 6.5: the grid has a
 // point every 4.2 yards, and lifted next to a steep bank its triangles stood up over the bank as straight lines
 // (a pond in Tirisfal, 2026-10-02). Nearer the shore the waves are light only.
 O main(float3 p : POSITION, float2 uv : TEXCOORD0)
@@ -159,7 +169,11 @@ O main(float3 p : POSITION, float2 uv : TEXCOORD0)
     const float sc   = floor((si + 0.5) / 24.0);
     const float sb   = sc < 0.5 ? gSeaV.x : sc < 1.5 ? gSeaV.y : sc < 2.5 ? gSeaV.z : gSeaV.w;
     const float seaP = fmod(floor(sb * exp2(-(si - sc * 24.0))), 2.0);
-    float  amp = city || !touchesWet ? 0.0 : gSw.w * lerp(gSs.z, 1.0, seaP) * saturate((uv.y * 148.0 - 2.5) / 4.0);
+    const float2 gp = clamp(g, 0.0, 8.0);
+    const float  md = gDepthV.x >= 0.0 ? tex2Dlod(sDepthV, float4((gp.x * 9.0 + gp.y + 0.5) / 81.0, gDepthV.x, 0, 0)).r
+                                       : -1.0;
+    const float mapDepth = seaP > 0.5 ? uv.y * 148.0 : md >= 0.0 ? md : uv.y * 28.5;
+    float  amp = city || !touchesWet ? 0.0 : gSw.w * lerp(gSs.z, 1.0, seaP) * saturate((mapDepth - 2.5) / 4.0);
     // The open sea settles (2026-10-03): far out, real water reads as flat, and the grid's big triangles of
     // swell were the part that looked wrong. Gone between 80 and 220 yards; the light follows (amp).
     amp *= 1.0 - smoothstep(80.0, 220.0, length(rel));
@@ -172,7 +186,7 @@ O main(float3 p : POSITION, float2 uv : TEXCOORD0)
     o.pos = p.x * gM0 + p.y * gM1 + p.z * gM2 + gM3 + h * gUp;
     o.rel = rel + float3(0.0, 0.0, h);
     o.amp = amp;
-    o.gd  = city ? 3.0 : uv.y * 148.0;   // the water's depth at the vertex, as the map files give it
+    o.gd  = city ? 3.0 : mapDepth;   // the water's depth at the vertex, as the map files give it
     o.z0  = rel.z;          // the flat water's height, camera-relative, before the swell lifts it
     o.cell = p.xy;          // in the chunk: 0 to -33.3 yards, rows along -x, columns along -y
     return o;
@@ -391,12 +405,32 @@ float3 WaveNormal(float2 p, float t, float strength, float2 swell, float dist)
 )HLSL"
     // Split in two: MSVC takes no string literal longer than 16 KB (C2026).
     R"HLSL(
+// The flat water's own plane at this pixel, its normal up: the triangle's, from the screen derivatives of the flat
+// point (rel with z0 for its height). Level water gives (0, 0, 1); a river that climbs leans it back.
+float3 FlatNormal(float3 rel, float z0)
+{
+    const float3 pf = float3(rel.xy, z0);
+    float3 n = cross(ddx(pf), ddy(pf));
+    n = n.z < 0.0 ? -n : n;
+    const float l = length(n);
+    return l > 1e-20 ? n / l : float3(0.0, 0.0, 1.0);
+}
+
 float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2, float z0 : TEXCOORD3,
             float2 cell : TEXCOORD4, float2 vpos : VPOS) : COLOR
 {
     // Seen from under the water: no foam. Under the flat water, not under the surface (2026-10-07): from 15 yards
     // out a wave may stand higher than a swimmer's camera, seen from the front, and was dropped (clip(-rel.z)).
-    clip(-z0);
+    // Under the flat water's own plane, not under its height (2026-10-11): a river that climbs over the camera's
+    // height upstream is still seen from above. clip(-z0) dropped it past the horizon's line, and the game's own
+    // water showed there, about 45 yards up a river in Ashenvale (the owner). Each test below that took the
+    // surface to be level (the depth, the line of sight's slope, the horizon's band, the waves' facing) uses this
+    // plane too: drawn, the water over the camera's height showed the sky at 70% and hardly its colour.
+    // relN, the point's height over the camera along the plane's normal, is all that is kept of it: the plane
+    // itself as a float3 took the shader past its 32 registers.
+    const float3 Np = FlatNormal(rel, z0);
+    clip(dot(Np, -float3(rel.xy, z0)));
+    const float relN = dot(rel, Np);
     // Some chunks of the open sea carry no number for the map's depth (2026-10-08, NaN in a debug view at
     // Stormwind's harbour, about 1200 yards out). The cut below dropped those chunks whole, and the game's own
     // water showed through as pale dashes along the horizon (the owner). They count as deep water.
@@ -412,15 +446,15 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     float  den = (raw - gZ.z) * gZ.w - gZ.x;
     float  zg  = farSlice ? 1e6 : gZ.y / (abs(den) > 1e-9 ? den : -1e-9);         // the bed's view depth
     float  zw  = max(dot(rel, gVz.xyz), 1e-3);                                     // the surface's
-    float  depth = farSlice ? gd : rel.z * (1.0 - zg / zw);                       // yards under the surface
+    float  depth = farSlice ? gd : relN * (1.0 - zg / zw);                        // yards under the surface
     // A wave near the camera's height, seen from the front (2026-10-07): from 15 yards out a wave may stand as high
     // as a swimmer's camera, or higher. Along a line of sight that meets the surface level or rising, the depth above
     // falls to 0, or turns negative, over deep water: the water took the shore's look, and its colour jumped where
     // the surface crossed the camera's height. There the map's depth stands in, with the wave's lift, as it does
     // far out (mapK). Not where something stands in front of the water.
     if (!farSlice && zg > zw)
-        depth = lerp(depth, gd + rel.z - z0, 1.0 - smoothstep(0.02, 0.08, -rel.z / max(length(rel), 1e-3)));
-    else if (!farSlice && rel.z > 0.0)
+        depth = lerp(depth, gd + rel.z - z0, 1.0 - smoothstep(0.02, 0.08, -relN / max(length(rel), 1e-3)));
+    else if (!farSlice && relN > 0.0)
         depth = -1.0;   // nearer than a wave over the camera: in front of it
     const float depthSeen = depth;   // from the depth copy: negative where something stands in front
     // On a body under the water (a character's legs, drawn in a draw of their own, below): it is seen through
@@ -1167,7 +1201,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // Through the water the light is absorbed, red first, along the line of sight's path under the surface,
     // and the water's own colour takes its place.
     // Through far terrain's pixels, the map's depth along the line of sight.
-    float  path = lerp(dist * max(zg / zw - 1.0, 0.0), gd * dist / max(-rel.z, 0.5), mapK);
+    float  path = lerp(dist * max(zg / zw - 1.0, 0.0), gd * dist / max(-relN, 0.5), mapK);
     // A body under the water is covered more than the bed beside it ([water] cover, Underwater Cover): at 0.5
     // three times the water it is seen through, and at least half a yard of it. By the bare distance, legs just under the surface showed in their full
     // colour, as if they stood beside the water rather than in it (2026-10-02).
@@ -1185,7 +1219,8 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     bed = lerp(bed, lum * tint, 0.7 + 0.2 * (1.0 - exp(-2.5 * path)));
     float3 body = bed * T + gDeep.rgb * (1.0 - T);
     // The sky in it: more at a glancing look (Fresnel). The horizon is the game's fog colour.
-    float  cosv = saturate(-dot(N, dir));
+    // The waves' facing leaned with the water's plane: -dot(N + Np - up, dir), with dot(Np, dir) = relN / dist.
+    float  cosv = saturate(-dot(N, dir) + (rel.z - relN) / dist);
     // At most 0.6: with the full 0.98 a low camera saw the far sea as the pale horizon alone, the colour of the
     // sand (2026-10-02). The game's own water keeps its colour to the horizon.
     float  F    = 0.02 + gWave.w * pow(1.0 - cosv, 5.0);
@@ -1193,7 +1228,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // glancing look, and the waves show in it as streaks. Without it the sea was one dark tone up to a hard
     // line under a lighter sky, and read as flat. Only that band: over the whole far sea the full reflection
     // turned it the pale fog colour, as the sand (2026-10-02, the 0.6 above).
-    float  hz   = 1.0 - saturate(-dir.z / 0.035);
+    float  hz   = 1.0 - saturate(-relN / dist / 0.035);
     hz *= hz;
     F = max(F, 0.7 * hz);
     float3 R    = reflect(dir, N);
@@ -1325,7 +1360,11 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     const float2 rc   = clamp(floor(-cell * 0.24), 0.0, 7.0);
     const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
     const float  wet  = fmod(floor(bits * exp2(-(fmod(rc.x, 2.0) * 8.0 + rc.y))), 2.0);
-    clip(min(-z0, wet - 0.5));
+    // Under the flat water's plane, as the water's shader (FlatAbove there).
+    const float3 pf = float3(rel.xy, z0);
+    float3 n = cross(ddx(pf), ddy(pf));
+    n = n.z < 0.0 ? -n : n;
+    clip(min(dot(n, -pf), wet - 0.5));
     return float4(0, 0, 0, 0);
 }
 )HLSL";
@@ -1540,6 +1579,17 @@ float4 main(float2 vpos : VPOS) : COLOR
     bool                    g_noiseFailed = false;
     constexpr DWORD         kNoiseSampler = 9;
     IDirect3DTexture9*      g_leaves = nullptr;     // this frame's foliage mask (bodymask.cpp), not held
+    // The map's depth of the water at each of a chunk's 9 x 9 points (2026-10-11), a row of 81 for each chunk seen:
+    // a river's vertices do not carry it (the vertex shader's notes). Rows are kept for each chunk until the map
+    // files change, the least lately used given up for a new one. Read by the vertex shader (kDepthSampler).
+    IDirect3DTexture9*      g_depthTex = nullptr;
+    bool                    g_depthFailed = false, g_depthBound = false;
+    constexpr int           kDepthRows = 256;
+    constexpr DWORD         kDepthSampler = D3DVERTEXTEXTURESAMPLER0;
+    long long               g_depthKey[kDepthRows];
+    unsigned                g_depthUsed[kDepthRows];
+    std::unordered_map<long long, int> g_depthRow;
+    unsigned                g_depthVersion = ~0u;
 
     IDirect3DVertexShader9* g_wetVs = nullptr;
     IDirect3DPixelShader9*  g_wetPs = nullptr;
@@ -3403,6 +3453,9 @@ namespace
             if (g_boundSamplers & (1u << s))
                 dev->lpVtbl->SetTexture(dev, s, nullptr);
         g_boundSamplers = 0;
+        if (g_depthBound)
+            dev->lpVtbl->SetTexture(dev, kDepthSampler, nullptr);
+        g_depthBound = false;
         g_frameSet = false;
     }
 }
@@ -3566,6 +3619,17 @@ namespace
             BindSampler(dev, kNoiseSampler, g_noise, D3DTEXF_LINEAR, D3DTEXF_NONE, D3DTADDRESS_WRAP);
         if (g_sceneOk)
             BindSampler(dev, kSceneSampler, g_scene, D3DTEXF_LINEAR, D3DTEXF_NONE, D3DTADDRESS_CLAMP);
+        if (g_depthTex)
+        {
+            auto* d = dev->lpVtbl;
+            d->SetTexture(dev, kDepthSampler, reinterpret_cast<IDirect3DBaseTexture9*>(g_depthTex));
+            d->SetSamplerState(dev, kDepthSampler, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+            d->SetSamplerState(dev, kDepthSampler, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+            d->SetSamplerState(dev, kDepthSampler, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+            d->SetSamplerState(dev, kDepthSampler, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+            d->SetSamplerState(dev, kDepthSampler, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+            g_depthBound = true;
+        }
         g_frameSet = true;
     }
 
@@ -3705,7 +3769,7 @@ namespace
         IDirect3DIndexBuffer9*       ib = nullptr;
         IDirect3DVertexDeclaration9* decl = nullptr;
         DWORD                        fvf = 0;
-        float vc[13 * 4];   // c240 to c252, with kAllWet in c251
+        float vc[14 * 4];   // c240 to c253, with kAllWet in c251
         float sw[4];        // c211: the swash, and the shares a lake gets
         float cells[4];     // the wet cells for the sand part's whole grid (c210, c251); kAllWet for the open sea
         bool  haveCells = false;
@@ -3780,6 +3844,78 @@ static bool MapWetCells(float cornerX, float cornerY, float out[4])
     kept[key] = k;
     memcpy(out, k.v, sizeof(k.v));
     return true;
+}
+
+// The chunk's row of the map's depths in g_depthTex, as the vertex shader reads it ((row + 0.5) / rows), or -1: none
+// yet (its tile not loaded) or no texture. A point is the water's height over the ground there; -1 where the map has
+// no water at the point (a dry corner: the vertex shader takes uv.y there).
+static float ChunkDepthRow(IDirect3DDevice9* dev, float cornerX, float cornerY, unsigned frame)
+{
+    constexpr float kChunkSize = 100.0f / 3.0f;
+    if (!g_depthTex && !g_depthFailed)
+    {
+        if (FAILED(dev->lpVtbl->CreateTexture(dev, 81, kDepthRows, 1, 0, D3DFMT_R32F, D3DPOOL_MANAGED, &g_depthTex,
+                                              nullptr)))
+        {
+            g_depthTex = nullptr;
+            g_depthFailed = true;
+            Log("water: the map's depth texture could not be made: a river's depth from its vertices");
+        }
+        g_depthVersion = ~0u;
+    }
+    if (!g_depthTex)
+        return -1.0f;
+    if (MapFilesVersion() != g_depthVersion)
+    {
+        g_depthVersion = MapFilesVersion();
+        g_depthRow.clear();
+        for (int i = 0; i < kDepthRows; ++i)
+        {
+            g_depthKey[i] = LLONG_MIN;
+            g_depthUsed[i] = 0;
+        }
+    }
+    const long long key = (static_cast<long long>(lroundf(cornerX / kChunkSize)) << 32) ^
+                          static_cast<unsigned>(lroundf(cornerY / kChunkSize));
+    const auto it = g_depthRow.find(key);
+    if (it != g_depthRow.end())
+    {
+        g_depthUsed[it->second] = frame;
+        return (it->second + 0.5f) / kDepthRows;
+    }
+    float depth[81];
+    bool any = false;
+    for (int r = 0; r < 9; ++r)
+        for (int c = 0; c < 9; ++c)
+        {
+            const float x = cornerX - r * kCell, y = cornerY - c * kCell;
+            float w = 0.0f, g = 0.0f;
+            const bool have = MapWaterPointHeight(x, y, w) && MapGroundHeight(x, y, g);
+            depth[r * 9 + c] = have ? (std::max)(w - g, 0.0f) : -1.0f;
+            any = any || have;
+        }
+    if (!any)
+        return -1.0f;   // asked again next frame: the tile may still be loading
+    int row = 0;
+    for (int i = 1; i < kDepthRows; ++i)
+        if (g_depthUsed[i] < g_depthUsed[row])
+            row = i;
+    if (g_depthKey[row] != LLONG_MIN)
+        g_depthRow.erase(g_depthKey[row]);
+    RECT rc = { 0, row, 81, row + 1 };
+    D3DLOCKED_RECT lr = {};
+    if (FAILED(g_depthTex->lpVtbl->LockRect(g_depthTex, 0, &lr, &rc, 0)))
+    {
+        g_depthKey[row] = LLONG_MIN;
+        g_depthUsed[row] = 0;
+        return -1.0f;
+    }
+    memcpy(lr.pBits, depth, sizeof(depth));
+    g_depthTex->lpVtbl->UnlockRect(g_depthTex, 0);
+    g_depthKey[row] = key;
+    g_depthUsed[row] = frame;
+    g_depthRow[key] = row;
+    return (row + 0.5f) / kDepthRows;
 }
 
 static bool SeaPoints(float cornerX, float cornerY, float out[4])
@@ -3871,6 +4007,8 @@ void WaterAfterDraw(IDirect3DDevice9* dev, const WaterChunk& c, WaterDrawFn draw
     vc[42] = g_cfg.water.lakeWaves;
     memcpy(vc + 44, kAllWet, sizeof(kAllWet));   // c251: the water part's; the sand part's own grid sets its cells
     const bool sea = !c.city && SeaPoints(p.world.m[3][0] + g_psc[28], p.world.m[3][1] + g_psc[29], vc + 48);
+    // c253: the chunk's row of the map's depths (ChunkDepthRow). Not for the sea, whose vertices carry it.
+    vc[52] = c.city || sea ? -1.0f : ChunkDepthRow(dev, p.world.m[3][0] + g_psc[28], p.world.m[3][1] + g_psc[29], g_frameNo);
 
     // c211, the swash's length along the shore and its speed (2026-10-05): as the wet sand pass's c212.
     // And whether this chunk is the sea (a cell of its own, SeaPoints), and the share a lake gets.
@@ -3967,9 +4105,9 @@ void WaterFlush(IDirect3DDevice9* dev)
     d->SetViewport(dev, &g_runViewport);
     DWORD oldCw = 0xF;
     d->GetRenderState(dev, D3DRS_COLORWRITEENABLE, &oldCw);
-    // The client sets vertex registers up to c255 (the probe, 2026-10-02): its own c240 to c252 go back after.
-    float oldVc[13 * 4];
-    const bool haveVc = SUCCEEDED(d->GetVertexShaderConstantF(dev, kVsReg, oldVc, 13));
+    // The client sets vertex registers up to c255 (the probe, 2026-10-02): its own c240 to c253 go back after.
+    float oldVc[14 * 4];
+    const bool haveVc = SUCCEEDED(d->GetVertexShaderConstantF(dev, kVsReg, oldVc, 14));
     IDirect3DVertexBuffer9* oldVb = nullptr;
     UINT oldOff = 0, oldStride = 0;
     d->GetStreamSource(dev, 0, &oldVb, &oldOff, &oldStride);
@@ -4032,7 +4170,7 @@ void WaterFlush(IDirect3DDevice9* dev)
             curFvf = p.fvf;
             curDecl = p.decl;
         }
-        d->SetVertexShaderConstantF(dev, kVsReg, p.vc, 13);
+        d->SetVertexShaderConstantF(dev, kVsReg, p.vc, 14);
         SetChunkReg(dev, kPsReg + 91, g_c211, p.sw);
     };
     auto drawGame = [&](const PendingChunk& p)
@@ -4179,7 +4317,7 @@ void WaterFlush(IDirect3DDevice9* dev)
         for (int i = 0; i < kStencilCount; ++i)
             d->SetRenderState(dev, kStencil[i], oldSt[i]);
     if (haveVc)
-        d->SetVertexShaderConstantF(dev, kVsReg, oldVc, 13);
+        d->SetVertexShaderConstantF(dev, kVsReg, oldVc, 14);
     d->SetStreamSource(dev, 0, oldVb, oldOff, oldStride);
     d->SetIndices(dev, oldIb);
     if (oldFvf)
@@ -4750,6 +4888,10 @@ void WaterReset()
     g_foamBodyFailed = false;
     SafeRelease(g_noise);
     g_noiseFailed = false;
+    SafeRelease(g_depthTex);
+    g_depthFailed = false;
+    g_depthBound = false;
+    g_depthRow.clear();
     SafeRelease(g_wetSb);
     SafeRelease(g_gridIb);
     g_gridFailed = false;
