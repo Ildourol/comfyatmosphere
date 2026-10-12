@@ -105,6 +105,7 @@ namespace
                 kHotkeys, kWaterZone, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
                 kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing,
                 kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
+                kJumpRipple,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -271,6 +272,8 @@ namespace
         "comfyCloudPuffiness",
         // The Cloud Shapes box (2026-10-11): [clouds] shapesOn.
         "comfyCloudShapesOn",
+        // Jump Ripple (2026-10-12): [water] jumpRipple, as a percentage.
+        "comfyWaterJumpRipple",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -513,6 +516,7 @@ namespace
         case kCloudReshape:   snprintf(out, cap, "%.0f", s.clouds.reshape * 100.0f); break;          // percent
         case kCloudPuffiness: snprintf(out, cap, "%.0f", s.clouds.puffiness * 100.0f); break;        // percent
         case kCloudShapesOn:  snprintf(out, cap, "%d", s.clouds.shapesOn ? 1 : 0); break;
+        case kJumpRipple:     snprintf(out, cap, "%.0f", s.water.jumpRipple * 100.0f); break;         // percent
         case kWaterSwashHeight: snprintf(out, cap, "%.0f", s.water.swashHeight * 100.0f); break; // hundredths of a yard
         case kWaterSwashLength: snprintf(out, cap, "%.0f", s.water.swashLength); break;          // yards
         case kWaterSwashSpeed:  snprintf(out, cap, "%.0f", s.water.swashSpeed * 100.0f); break;  // percent
@@ -667,6 +671,7 @@ namespace
         if (c[kCloudReshape].seen)   s.clouds.reshape = Clamp(c[kCloudReshape].value * 0.01f, 0.0f, 1.0f);
         if (c[kCloudPuffiness].seen) s.clouds.puffiness = Clamp(c[kCloudPuffiness].value * 0.01f, 0.0f, 1.0f);
         if (c[kCloudShapesOn].seen)  s.clouds.shapesOn = c[kCloudShapesOn].value != 0.0f;
+        if (c[kJumpRipple].seen)     s.water.jumpRipple = Clamp(c[kJumpRipple].value * 0.01f, 0.0f, 6.0f);
         if (c[kWaterSwashHeight].seen) s.water.swashHeight = Clamp(c[kWaterSwashHeight].value * 0.01f, 0.0f, 1.0f);
         if (c[kWaterSwashLength].seen) s.water.swashLength = Clamp(c[kWaterSwashLength].value, 5.0f, 200.0f);
         if (c[kWaterSwashSpeed].seen)  s.water.swashSpeed  = Clamp(c[kWaterSwashSpeed].value * 0.01f, 0.1f, 4.0f);

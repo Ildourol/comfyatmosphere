@@ -80,6 +80,7 @@ namespace
         { "water.rippleDepth",   "Standing Ripple Depth" },
         { "water.rippleDepthMoving", "Moving Ripple Depth" },
         { "water.rippleSpread",  "Standing Ripple Spread" },
+        { "water.jumpRipple",    "Jump Ripple" },
         { "water.foamDrawn",     "Drawn Foam" },
         { "water.foamCell",      "Foam Size" },
         { "water.foamLife",      "Foam Reach" },

@@ -3500,3 +3500,17 @@ hook now keeps where each vertex buffer's memory starts, from the client's last 
 (`WaterNoteVertexLock`), and the vertex is read from there, under SEH. The client fills a buffer before it draws from
 it, so the entry for a buffer being drawn is its own. At the first start, 27 batches near the player were read, 1
 missed (no write seen yet).
+
+## A ring where someone lands in the water (2026-10-12, the owner)
+
+A jump into the water makes a ripple. `RingsUpdate` takes a landing as a unit whose feet came down through the
+surface since last frame (`WaterLevelAt`), faster than 4 yards a second; walking down a beach into the water comes
+down at 2.5 at most. The log has `water: a landing in the water at ...` for each. Jumps measured 5.2 to 7.1 yards a
+second down. The ring starts at once, whatever began there before, spreads at 2 yards a second, and its waves are
+Jump Ripple deep (`[water] jumpRipple`, 4; slider 0 to 600) at 8 yards a second, up to 1.5 times that for a harder
+landing.
+
+The first build made the rings and none showed. The shader sizes a ring by how deep the feet were (`sub`: feet alone
+small, waist deep the largest, none under 0.05 yards), and the jumps at the pond's edge in Goldshire landed 0.1 yards
+under. A landing's ring is now placed a yard under the surface, where the size is full. A flag for it in the shader
+ran the water shader out of temp registers (X4505), so the shader is unchanged.

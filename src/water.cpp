@@ -1675,6 +1675,7 @@ float4 main(float2 vpos : VPOS) : COLOR
         float  speed;   // yards a second the ring spreads at
         float  dir[2];  // the way its maker walked; 0 standing still
         float  shift;   // 0..1: shifts the noise that makes it uneven, its own for all its life
+        float  depth;   // the depth of its waves; 0: Standing or Moving Ripple Depth, by its way
     };
     std::vector<Ring> g_rings;
     unsigned g_ringCount = 0;   // rings begun: each new one's shift follows from it
@@ -2081,6 +2082,12 @@ float4 main(float2 vpos : VPOS) : COLOR
     // A unit in the water: under a building's water drawn last frame, or as far as the map files can say,
     // false only where a tile is held and has neither a river nor the sea there. The shader still checks each
     // ripple against the surface it draws (a tile not loaded yet).
+    // The surface of the water at a unit: a building's, or a river's or the sea's from the map files.
+    bool WaterLevelAt(const float p[3], float& wz)
+    {
+        return CityWaterAt(p[0], p[1], p[2], wz) || MapWaterHeight(p[0], p[1], wz);
+    }
+
     bool MaybeInWater(const float p[3])
     {
         float wz = 0.0f, gz = 0.0f;
@@ -2242,7 +2249,8 @@ float4 main(float2 vpos : VPOS) : COLOR
             if (dx * dx + dy * dy > 60.0f * 60.0f || !MaybeInWater(p))
                 continue;
             // How fast it moves: from its place last frame, the nearest within a yard.
-            float speed = 0.0f, way[2] = { 0.0f, 0.0f };
+            float speed = 0.0f, way[2] = { 0.0f, 0.0f }, lastZ = 0.0f;
+            bool  haveLast = false;
             if (dt > 1e-3 && dt < 0.25)
             {
                 float best = 1.0f;
@@ -2253,12 +2261,34 @@ float4 main(float2 vpos : VPOS) : COLOR
                     if (d2 < best)
                     {
                         best = d2;
+                        lastZ = g_lastUnits[j][2];
+                        haveLast = true;
                         speed = sqrtf(d2) / static_cast<float>(dt);
                         const float l = sqrtf(d2);
                         way[0] = l > 1e-4f ? -ex / l : 0.0f;
                         way[1] = l > 1e-4f ? -ey / l : 0.0f;
                     }
                 }
+            }
+            // A landing (2026-10-12, the owner: a jump into the water should make a ripple): the feet came down through
+            // the surface since last frame, faster than 4 yards a second. Walking down a beach into the water comes
+            // down at 2.5 at most. One ring at once, whatever began here before, deeper the harder the landing (Jump
+            // Ripple at 8 yards a second, a jump's), and spreading at 2 yards a second.
+            // Full size however shallow: the shader sizes a ring by how deep the feet were (feet alone small, waist
+            // deep the largest), and a jump at the water's edge, the feet 0.1 yards under, made one too small to see.
+            // So its place is put a yard under the surface, where the shader's size is full.
+            float wz = 0.0f;
+            const float fall = haveLast ? (lastZ - p[2]) / static_cast<float>(dt) : 0.0f;
+            if (g_cfg.water.jumpRipple > 0.0f && fall > 4.0f && WaterLevelAt(p, wz) && lastZ > wz - 0.05f)
+            {
+                if (g_rings.size() >= static_cast<size_t>(kRings))
+                    g_rings.erase(g_rings.begin());   // the oldest
+                const float shift = static_cast<float>(fmod(++g_ringCount * 0.618034, 1.0));
+                const float depth = g_cfg.water.jumpRipple * (std::min)(1.5f, fall / 8.0f);
+                g_rings.push_back({ { p[0], p[1], wz - 1.0f }, now, 2.0f, { 0.0f, 0.0f }, shift, depth });
+                Log("water: a landing in the water at (%.1f %.1f %.1f), %.1f yards a second down: a ring %.2f deep", p[0],
+                    p[1], p[2], fall, depth);
+                continue;
             }
             // A new ring unless one began within a yard of here less than 0.9 s ago: a unit standing still
             // starts one about once a second, a unit walking one each yard. A walker's rings spread at a third
@@ -2285,7 +2315,7 @@ float4 main(float2 vpos : VPOS) : COLOR
                                      (walking ? g_cfg.water.rippleSpreadMoving : g_cfg.water.rippleSpread);
                 const float shift = static_cast<float>(fmod(++g_ringCount * 0.618034, 1.0));
                 g_rings.push_back({ { p[0], p[1], p[2] }, now, spread,
-                                    { walking ? way[0] : 0.0f, walking ? way[1] : 0.0f }, shift });
+                                    { walking ? way[0] : 0.0f, walking ? way[1] : 0.0f }, shift, 0.0f });
             }
         }
         // The wakes: each moving unit in the water extends the trail that ends nearest it, or starts one.
@@ -2405,7 +2435,7 @@ float4 main(float2 vpos : VPOS) : COLOR
                 // The depth of its waves: a ring whose maker walked or swam has a way (2026-10-05).
                 const bool moved = r.dir[0] != 0.0f || r.dir[1] != 0.0f;
                 w[0] = r.dir[0]; w[1] = r.dir[1]; w[2] = r.shift;
-                w[3] = moved ? g_cfg.water.rippleDepthMoving : g_cfg.water.rippleDepth;
+                w[3] = r.depth > 0.0f ? r.depth : moved ? g_cfg.water.rippleDepthMoving : g_cfg.water.rippleDepth;
             }
             else
             {

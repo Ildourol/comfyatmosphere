@@ -72,6 +72,7 @@ COMFYATMOSPHERE_WATER_RIPPLE_DEPTH = "Standing Ripple Depth";
 COMFYATMOSPHERE_WATER_RIPPLE_MOVING = "Moving Ripple Depth";
 COMFYATMOSPHERE_WATER_RIPPLE_SPREAD = "Standing Ripple Spread";
 COMFYATMOSPHERE_WATER_RIPPLE_SPREAD_MOVING = "Moving Ripple Spread";
+COMFYATMOSPHERE_WATER_JUMP_RIPPLE = "Jump Ripple";
 COMFYATMOSPHERE_WATER_FOAM     = "Foam";
 COMFYATMOSPHERE_WATER_FOAM_DRAWN = "Drawn Foam";
 COMFYATMOSPHERE_WATER_FOAM_SIZE = "Foam Size";
@@ -1308,6 +1309,18 @@ local ENTRIES = {
 		numberLabels = 1,
 	},
 	{
+		-- A percentage: comfyatmos.dll divides it by 100 for [water] jumpRipple.
+		name = "COMFYATMOSPHERE_WATER_JUMP_RIPPLE",
+		desc = "How deep the ring is where anyone lands in the water from a jump or a fall. A harder landing makes a deeper one. 0 is none.",
+		type = "slider",
+		cvar = "comfyWaterJumpRipple",
+		dependency = { "comfyWater", "1" },
+		minval = 0,
+		maxval = 600,
+		step = 25,
+		numberLabels = 1,
+	},
+	{
 		-- A percentage: comfyatmos.dll divides it by 100 for [water] cover.
 		name = "COMFYATMOSPHERE_WATER_COVER",
 		desc = "How much the water hides a character standing in it. 0 shows the legs as clear as the sand beside them.",
@@ -1946,7 +1959,7 @@ local WINDOW_SECTIONS = {
 	{ "Color", { "comfyColor", "comfyDaySaturation", "comfyNightSaturation" } },
 	{ "Grass", { "comfyGrass", "comfyGrassWind", "comfyGrassSpeed", "comfyGrassWaveLength", "comfyGrassWindDir",
 	             "comfyGrassLean", "comfyGrassParting", "comfyGrassPartingRadius", "frillDensity" } },
-	{ "Water", { "comfyWater", "comfyWaterColour", "comfyWaterZone", "comfyWaterSunset", "comfyWaterBright", "comfyWaterClarity", "comfyWaterReflect", "comfyWaterBend", "comfyWaterCover", "comfyWaterFoam", "comfyWaterFoamDrawn", "comfyWaterFoamSize", "comfyWaterFoamReach", "comfyWaterFoamEdge", "comfyWaterWakeFoam", "comfyWaterShipWake", "comfyWaterShipForward", "comfyWaterShipDepth", "comfyWaterLakeSwash", "comfyWaterLakeFoam", "comfyWaterLakeWaves", "comfyWaterRain", "comfyWaterObjectFoam", "comfyWaterObjectFoamWidth", "comfyWaterOpenFoam", "comfyWaterOpenFoamAmount", "comfyWaterSwash", "comfyWaterSwashHeight", "comfyWaterSwashLength", "comfyWaterSwashSpeed", "comfyWaterWetSand", "comfyWaterWake", "comfyWaterRippleDepth", "comfyWaterRippleMoving", "comfyWaterRippleSpread", "comfyWaterRippleSpreadMoving",
+	{ "Water", { "comfyWater", "comfyWaterColour", "comfyWaterZone", "comfyWaterSunset", "comfyWaterBright", "comfyWaterClarity", "comfyWaterReflect", "comfyWaterBend", "comfyWaterCover", "comfyWaterFoam", "comfyWaterFoamDrawn", "comfyWaterFoamSize", "comfyWaterFoamReach", "comfyWaterFoamEdge", "comfyWaterWakeFoam", "comfyWaterShipWake", "comfyWaterShipForward", "comfyWaterShipDepth", "comfyWaterLakeSwash", "comfyWaterLakeFoam", "comfyWaterLakeWaves", "comfyWaterRain", "comfyWaterObjectFoam", "comfyWaterObjectFoamWidth", "comfyWaterOpenFoam", "comfyWaterOpenFoamAmount", "comfyWaterSwash", "comfyWaterSwashHeight", "comfyWaterSwashLength", "comfyWaterSwashSpeed", "comfyWaterWetSand", "comfyWaterWake", "comfyWaterRippleDepth", "comfyWaterRippleMoving", "comfyWaterRippleSpread", "comfyWaterRippleSpreadMoving", "comfyWaterJumpRipple",
 	             "comfyWaterEdge", "comfyWaterEdgeWidth",
 	             "comfyWaterGlint", "comfyWaterMoonGlint", "comfyWaterGlintSize",
 	             "comfyWaveHeight",
