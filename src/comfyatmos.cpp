@@ -3168,6 +3168,8 @@ namespace
             ShadowNoteBufferWrite(self, offset, size);
         const unsigned long long t = BenchTiming() ? __rdtsc() : 0;
         const HRESULT hr = g_oLockVB(self, offset, size, data, flags);
+        if (SUCCEEDED(hr) && data && !(flags & D3DLOCK_READONLY))
+            WaterNoteVertexLock(self, offset, *data);   // the game's wake is read from here (water.cpp)
         if (t)
             BenchCpuAddTicks(kCpuLocks, __rdtsc() - t);
         return hr;

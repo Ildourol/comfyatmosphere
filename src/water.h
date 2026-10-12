@@ -42,6 +42,9 @@ void WaterProbeDraw(IDirect3DDevice9* dev, const WaterChunk& c, unsigned index, 
 // A fixed-function draw about to be made: the game's own wake on the water (see water.cpp)? `c` carries the
 // draw's buffers and its world matrix.
 bool WaterGameWake(IDirect3DDevice9* dev, const WaterChunk& c);
+// A write lock the client took on a vertex buffer: where its memory starts, so that WaterGameWake reads the
+// particles the client wrote there without a lock of its own.
+void WaterNoteVertexLock(const void* vb, UINT offset, void* data);
 // The game's rain splashes (comfyatmos.cpp knows the draw by its texture): Begin binds a pixel shader that
 // leaves out the ones under the water; true: make the client's draw, then End puts its state back.
 bool WaterSplashBegin(IDirect3DDevice9* dev, bool debug = false);   // debug: Debug View 33's red and green

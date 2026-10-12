@@ -3476,3 +3476,27 @@ span is now 2 yards either side, which covers a triangle: 8 pixels at least, an 
 surface's yards a pixel (`ypp`). The owner: the pyramids are gone.
 
 The wet pass (the swash and the wet sand) still takes its slope from 8 pixels either side.
+
+## The foam round objects moved with the camera (2026-10-12)
+
+The owner: the foam round a log in the water did not stay in place, but followed where the camera looked. The search
+for an object (twelve points round each water pixel) spread its points on the screen, by the larger of the two axes'
+yards a pixel. Across a slanted view a pixel covers fewer yards than along it, so the search reached less far to the
+sides than ahead, and that shape turned with the camera. Each point is now a fixed way and distance across the water
+(Object Foam Width), put on the screen through the surface's change across a pixel (`pxX`, `pxY`, outside the branch):
+an eighth of the screen at most. What the screen hides still has no foam: the far side of an object is not seen.
+
+## Foam and clarity defaults (2026-10-12, the owner)
+
+The foam was too bright overall. From the owner's sliders: `foam` 0.25 (was 0.35), `foamLife` 1.5 yards (was 3),
+`wakeFoam` 0.25 (was 0.5); `foamEdge` stays 0.6. Water Clarity 50: `clarity` 0.5 (was 1).
+
+## The game's wake without a lock (2026-10-12)
+
+`WaterGameWake` read the first vertex of each candidate batch by a read-only Lock of the client's vertex buffer. Such
+a lock made DXVK wait for the GPU, and a buffer read once from the CPU was handled differently for the rest of the
+session (the water's buffers, 2026-10-11: 3 to 6 frames a second). The map files hold no particles. The buffer Lock
+hook now keeps where each vertex buffer's memory starts, from the client's last write lock on it
+(`WaterNoteVertexLock`), and the vertex is read from there, under SEH. The client fills a buffer before it draws from
+it, so the entry for a buffer being drawn is its own. At the first start, 27 batches near the player were read, 1
+missed (no write seen yet).

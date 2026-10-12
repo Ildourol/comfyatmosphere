@@ -656,12 +656,19 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     float  ypp  = max(length(ddx(rel)), length(ddy(rel)));
     // For far terrain, the bed's slope from the pixels beside (see grad below).
     float2 farGrad = 0.0;
+    // Pixels on the screen for a yard of the world's x (pxX) and of its y (pxY), for the foam round objects.
+    float2 pxX = float2(1.0, 0.0) / max(ypp, 1e-4), pxY = float2(0.0, 1.0) / max(ypp, 1e-4);
     {
         const float dF = depth - (rel.z - z0) * (1.0 - mapK);   // depthF, below
         float2 gx = ddx(rel.xy), gy = ddy(rel.xy);
         float  ex = ddx(dF), ey = ddy(dF);
         float  det = gx.x * gy.y - gx.y * gy.x;
         farGrad = abs(det) > 1e-8 ? float2(ex * gy.y - gx.y * ey, gx.x * ey - gy.x * ex) / det : float2(0, 0);
+        if (abs(det) > 1e-8)
+        {
+            pxX = float2(gy.y, -gx.y) / det;
+            pxY = float2(-gy.x, gx.x) / det;
+        }
     }
     // Whether the ground the line of sight meets lies flat (the lip, below).
     float  flat;
@@ -696,11 +703,19 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // pixel on the screen, out to Object Foam Width in yards, are rebuilt from the depth under the water (BedAt);
     // one rising out of the water, not the ground and not foliage, is something standing through the surface,
     // and the foam is the more the nearer it is. It works from what the screen shows: the water behind an object is hidden by
-    // it anyway. Yards a pixel from the surface's own change across it, taken outside the branch.
+    // it anyway.
+    // The points lie round the pixel in the world, not on the screen (2026-10-12, the owner: the foam round a log moved
+    // with the camera). Spread on the screen by the larger of the two axes' yards a pixel, they reached less far across
+    // a slanted view than along it, and that shape turned with the camera. Each point is now a fixed way and distance
+    // across the water, put on the screen through the surface's own change across a pixel (pxX, pxY), taken outside
+    // the branch; an eighth of the screen at most.
     float objF = 0.0;
     [branch] if (gFD.x > 0.5 && gBright.z > 0.0 && gFog.w > 0.5 && !farSlice && !onBody && dist < 60.0)
     {
-        float  rPix = gBright.w / max(ypp, 1e-4);
+        float2 ax = pxX * gBright.w, ay = pxY * gBright.w;
+        const float pxK = min(1.0, 0.125 / gScr.y / max(max(length(ax), length(ay)), 1e-4));
+        ax *= pxK;
+        ay *= pxK;
         // Eight ways at the full width, and the four diagonals at half of it.
         float2 offs[12] = { float2(1, 0), float2(0.7071, 0.7071), float2(0, 1), float2(-0.7071, 0.7071),
                             float2(-1, 0), float2(-0.7071, -0.7071), float2(0, -1), float2(0.7071, -0.7071),
@@ -708,10 +723,11 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
                             float2(0.3536, -0.3536) };
         [unroll] for (int oi = 0; oi < 12; ++oi)
         {
-            float3 P  = BedAt(uv + offs[oi] * rPix * gScr.xy);   // uvO below
+            float2 pix = offs[oi].x * ax + offs[oi].y * ay;
+            float2 uvO = uv + pix * gScr.xy;
+            float3 P  = BedAt(uvO);
             float  dzO = P.z - rel.z;
             float  dxy = length(P.xy - rel.xy);
-            float2 uvO = uv + offs[oi] * rPix * gScr.xy;
             // Not foliage (the owner): reeds and grass in the shallows are no objects to foam round. Nor a player or
             // a creature (2026-10-06, the owner: foam round a character standing still); its wake makes its foam. Not the ground
             // either: the shoreline has the shore's foam, and taken for an object it drew a second line (the owner).
@@ -730,7 +746,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
                 // The mask is resolved from the anti-aliasing's samples: a pixel half on a body's edge read 0.48 and
                 // passed, while the depth copy held the body there, and the edge read as an object rising out of the
                 // water.
-                const float2 step = offs[oi] * 1.5 * gScr.xy;
+                const float2 step = pix / max(length(pix), 1e-4) * 1.5 * gScr.xy;
                 const float  mb = max(max(tex2Dlod(sLeaves, float4(uvO + step, 0, 0)).b,
                                           tex2Dlod(sLeaves, float4(uvO - step, 0, 0)).b), mk.y);
                 at *= mk.x > 0.5 || mb > 0.25 ? 0.0 : 1.0;
@@ -1826,6 +1842,11 @@ float4 main(float2 vpos : VPOS) : COLOR
     std::map<void*, unsigned> g_wakeNot;   // textures looked at and not taken, with the frame they were
     unsigned        g_wakeDraws = 0, g_wakeLast = 0;
     unsigned        g_frameNo = 0, g_unitsFrame = ~0u;
+    // Where each vertex buffer's memory starts, from the client's last write lock on it (2026-10-12, the owner: no
+    // lock of ours on the client's buffers). A read-only Lock made DXVK wait for the GPU, and a buffer read once from
+    // the CPU was handled differently for the rest of the session (the water's buffers: 3 to 6 frames a second). The
+    // client fills a buffer before it draws from it, so the entry for a buffer being drawn is always its own.
+    std::unordered_map<const void*, const uint8_t*> g_vbMemory;
     int             g_unitCount = 0;
     float           g_units[256][3];
     unsigned           g_foamDraws = 0, g_foamLast = 0;
@@ -4735,6 +4756,30 @@ void WaterRainSplashEnd(IDirect3DDevice9* dev)
     sv = RainSplashSaved();
 }
 
+void WaterNoteVertexLock(const void* vb, UINT offset, void* data)
+{
+    if (!vb || !data || (g_vbMemory.size() >= 8192 && !g_vbMemory.count(vb)))
+        return;
+    g_vbMemory[vb] = static_cast<const uint8_t*>(data) - offset;   // the lock's pointer is at its offset
+}
+
+namespace
+{
+    // 12 bytes from the client's buffer memory. Guarded: a mapping DXVK has let go of is a miss, not a crash.
+    bool ReadClientBytes(const uint8_t* at, float out[3])
+    {
+        __try
+        {
+            memcpy(out, at, 12);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return false;
+        }
+    }
+}
+
 bool WaterGameWake(IDirect3DDevice9* dev, const WaterChunk& c)
 {
     auto* d = dev->lpVtbl;
@@ -4777,16 +4822,14 @@ bool WaterGameWake(IDirect3DDevice9* dev, const WaterChunk& c)
     UINT off = 0, stride = 0;
     float v[3] = {};
     bool read = false;
+    // From the memory the client wrote the particles to (g_vbMemory), never by a Lock of ours.
     if (SUCCEEDED(d->GetStreamSource(dev, 0, &vb, &off, &stride)) && vb && stride >= 12)
     {
-        void* ptr = nullptr;
-        const UINT first = static_cast<UINT>(c.baseVertex + static_cast<INT>(c.minIndex));
-        if (SUCCEEDED(vb->lpVtbl->Lock(vb, off + first * stride, 12, &ptr, D3DLOCK_READONLY)) && ptr)
-        {
-            memcpy(v, ptr, 12);
-            vb->lpVtbl->Unlock(vb);
-            read = true;
-        }
+        const auto mem = g_vbMemory.find(vb);
+        D3DVERTEXBUFFER_DESC vd = {};
+        const UINT at = off + static_cast<UINT>(c.baseVertex + static_cast<INT>(c.minIndex)) * stride;
+        if (mem != g_vbMemory.end() && SUCCEEDED(vb->lpVtbl->GetDesc(vb, &vd)) && at + 12 <= vd.Size)
+            read = ReadClientBytes(mem->second + at, v);
     }
     if (vb) vb->lpVtbl->Release(vb);
     float cam[3];
@@ -5243,6 +5286,7 @@ void WaterReset()
     g_sceneFailLogged = false;
     g_wakeTex.clear();
     g_wakeNot.clear();
+    g_vbMemory.clear();
     SafeRelease(g_underSurf);
     SafeRelease(g_under);
     SafeRelease(g_vs);
