@@ -1,11 +1,11 @@
--- Adds the comfyatmosphere controls to the options window, on pages of their own: Video -> Atmosphere, and
--- the clouds' controls on Video -> Clouds under it (2026-10-10, the owner: the clouds in a setting of their own).
+-- Adds the comfyatmosphere controls to the options window, on a page of their own: Video -> Atmosphere. The
+-- clouds' controls are on it too (2026-10-11, the owner); from 2026-10-10 they had a Clouds page under it.
 --
 -- This client's options panel is data-driven, as the ComfyGrass addon describes: GameOptions is a global
 -- table, and OptionsFrame.lua builds each page from it (both in patch-9.mpq). An entry with `options` is
 -- a page in the list on the left, and one without is a heading (Video, Sound, Interface). So each page is
 -- one entry, put after Shaders, and each control is one table entry with a cvar. The list shows 18 rows
--- and the client uses 15, so the two pages fit without scrolling the list. Until 2026-09-29 the controls
+-- and the client uses 15, so the page fits without scrolling the list. Until 2026-09-29 the controls
 -- were added to the Shaders page.
 --
 -- The panel calls SetCVar while a slider moves, and comfyatmos.dll reads the CVars a few times a second, so
@@ -27,7 +27,6 @@
 -- still follows comfyatmos.ini, and the addon keeps no copy of its own.
 
 COMFYATMOSPHERE_CATEGORY       = "Atmosphere";
-COMFYATMOSPHERE_CLOUDS_PAGE    = "Clouds";
 COMFYATMOSPHERE_MASTER         = "Atmosphere Effects";
 COMFYATMOSPHERE_VOLUME         = "Volumetric Light";
 COMFYATMOSPHERE_VOLUME_STRENGTH = "Volumetric Light Strength";
@@ -181,7 +180,7 @@ local ENTRIES = {
 		-- Every effect at once. The panel can make a control depend on one CVar only, and the others
 		-- depend on their own boxes, so they stay movable while this is off; they do nothing then.
 		name = "COMFYATMOSPHERE_MASTER",
-		desc = "All the effects on this page and the Clouds page at once. Off, the game looks as it does without the mod.",
+		desc = "All the effects on this page at once. Off, the game looks as it does without the mod.",
 		type = "checkbutton",
 		cvar = "comfyAtmosphere",
 	},
@@ -1888,21 +1887,13 @@ local function AddControls()
 
 	for index, category in ipairs(GameOptions) do
 		if category.name == PIXEL_SHADERS and category.options then
-			-- The clouds' controls (comfyClouds, comfyCloud*) on a page of their own, the rest on Atmosphere.
-			local options, clouds = {}, {};
+			local options = {};
 			for _, option in ipairs(ENTRIES) do
 				if HasCVar(option.cvar) then
-					if string.find(option.cvar, "^comfyCloud") then
-						table.insert(clouds, option);
-					else
-						table.insert(options, option);
-					end
+					table.insert(options, option);
 				end
 			end
 			table.insert(GameOptions, index + 1, { name = COMFYATMOSPHERE_CATEGORY, options = options });
-			if table.getn(clouds) > 0 then
-				table.insert(GameOptions, index + 2, { name = COMFYATMOSPHERE_CLOUDS_PAGE, options = clouds });
-			end
 			-- The panel draws its list of pages once, as it loads, which is before this.
 			if OptionsFrame_UpdateCategories then
 				OptionsFrame_UpdateCategories();
