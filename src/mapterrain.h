@@ -11,6 +11,10 @@
 // Once per map redraw, on the render thread: ask for the tiles within `reach` yards of `player` (across
 // the ground), take in those the loader has finished, and drop those left far behind.
 void MapTerrainUpdate(IDirect3DDevice9* dev, const float player[3], float reach, float fullReach);
+// How many times MapTerrainUpdate has run (2026-10-11): the water updates the map itself, for its ground alone, on a
+// frame the shadows did not (WaterFrameEnd). The game's wake and the water's wet cells read the map's water, and
+// with the volumetric light and the sun shadows off nothing read the tiles.
+unsigned MapTerrainUpdates();
 // Whether the ground at this point comes from the files: the client's own draw of it is then not needed.
 bool MapTerrainCovers(float x, float y);
 // Draw every tile that can reach the map into the bound depth target. absToClip: absolute world -> the
@@ -77,6 +81,11 @@ bool MapFloorHeight(float x, float y, float below, float& z);
 bool MapGroundHeight(float x, float y, float& z);
 // The surface of a river or the sea at a point (the map files' MCLQ); false where dry or no tile is held.
 bool MapWaterHeight(float x, float y, float& z);
+// The water's surface at the map point nearest (x, y) (2026-10-11): a corner of the cells, 4.17 yards apart, at its
+// own height as the client draws it, not a cell's mean. False where no wet cell has that point. For the wet sand.
+bool MapWaterPointHeight(float x, float y, float& z);
+// Whether the tile holding a point has been read (2026-10-11): then MapWaterHeight's false means dry.
+bool MapTileHeld(float x, float y);
 // Whether the water at a point is the sea (the map's MCNK flag 0x8), not a river, a lake or a pond (0x4). False
 // where dry or no tile is held.
 bool MapWaterIsSea(float x, float y);

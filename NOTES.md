@@ -3343,3 +3343,83 @@ slider turns it redder than the glow (more saturation, red up and blue down by u
 found no change past about 150%. The reflection grows to 0.35 at full sunset.
 
 Measured in the probe: Stormwind's sea read 0.033 0.198 0.245; the swamp's lake read 0.461 0.373 0.076.
+
+## Performance: the water at 2560x1440 (2026-10-11)
+
+The owner stood on the beach at Auberdine, looking out to sea: 150 to 200 frames a second with the water off, about
+40 with it on, and worse while the camera turned. Their client runs at 2560x1440 with 2x anti-aliasing, 3.7 times the
+pixels of the test client's 1152x864, and the sea filled half the screen. Test: `tests/auberdine-water-performance.json`.
+
+**How it was measured.** At the owner's place, in the running client, with wow-test-tool scripts of `atmos framelog`
+in rounds (each variant once a round, three rounds), reading the frame log's GPU span of the water (from its first
+chunk to the world's end). The GPU is held at 735 MHz by its power limit, and one round can be twice as fast as the
+next while it warms: only variants of the same round are compared. Turning: the turn key held through the log, the
+same way for every variant. Switches: `[water] debugSkip` 16, our draws through a pixel shader of one colour (what the
+draws cost without the shader's body); 32, the sand part without its classifying draw. The frame log also gives the
+client's own buffer locks a frame. Early returns in the shader timed its stages, but fxc turned a return near the top
+into a flag and a select at the end (the whole shader still ran), and it moves work a return does not use past it.
+
+**Where it went.** The span was 18 to 19 ms: 6 ms up to the bed's slope, the rest the foam's noise and the ripples'
+loop. With one-colour shaders our draws still took 4.8 ms. Anti-aliasing off saved 13%: the shader does not run per
+sample. The shader was 3,600 instructions and 82 texture reads.
+
+**What was done.**
+
+1. *Work where its result is 0* (the picture is the same). The cell lace (18 hashes and sines) and the soft noise run
+   only where the lip, the shore waves or a ripple can show; the shore waves within 9 yards of the waterline; the
+   game's foam texture only in the old style; the open water's shapes only on a crest within 90 yards; the foam field
+   within 100 yards, and in the sand part only under 1.2 yards of water; the wake loop only on kept pixels; the swell's
+   slope only where the swell is not 0; the bed's five reads only off the far terrain; the mask round objects only for
+   a point that counts. The foam field is read once, not twice.
+2. *The ripples.* fxc reads `gRing[i]` as a chain of 16 selects, and the loop did 25 instructions a ring before its
+   distance test: 4 to 5 ms. A test of a few instructions comes first now, and gReach.w carries, in steps of 32, how
+   far from the camera the furthest ring reaches: a pixel past it skips the loop.
+3. *The value noise* reads a lattice texture (`MakeNoise`, Hash1 at 256 x 256 points, L8, on s9) once, filtered, at
+   the point eased by smoothstep: the same noise as four hashes, repeating every 256 cells.
+4. *The draws held and drawn together* (`WaterFlush`). Each of the 539 chunks drew its four parts right after the
+   client's own draw: about 2,700 changes of pipeline a frame. A chunk is recorded at its draw (constants, wet cells,
+   buffers) and each part is drawn for every chunk in a row, at the client's first draw that is not water, a render
+   target change, the world's end, or before the client writes a buffer a held chunk reads (below). The span went
+   from 15.3 to 9.3 ms, the one-colour floor from 4.8 to 3.3 ms.
+5. *The sand part's classifying draw.* The sand part covers every chunk's whole grid to keep a thin strip at the
+   waterline. The water shader compiled with `WATER_CLASSIFY` (172 instructions, it returns after the keep test) marks
+   the kept pixels in stencil bit 0x02 first, and the sand part runs only there: 0.7 ms.
+
+Standing at the owner's place: 85 to 90 frames a second (from 40).
+
+**Turning.** While the camera turns, the client writes each chunk coming into view into its shared water vertex and
+index buffers (about 110 a frame; none standing still), each write a small lock at a fresh offset (flags 0x800). Held
+chunks drawn after such a write flickered, with frames up to 330 ms, even where the write missed their own part of the
+buffer. So the held chunks are drawn before every such write (`WaterPendingUses`, the lock hooks). Moving held chunks
+into buffers of ours instead was tried and dropped: it needs a copy of the client's buffers, and reading them is what
+stuttered (below).
+
+**Never read the client's water buffers.** A chunk's wet cells were read from the client's index buffer with a
+read-only lock, kept until the buffer was written again. Turning, every chunk was read again, each lock waited for the
+GPU (frames of 60 to 76 ms), and once the game's buffers had been read the game stuttered while turning with the water
+off as well. One read-only lock of the 2.9 MB vertex buffer left a whole session at 3 to 6 frames a second. The wet
+cells come from the map files now (`MapWetCells`: the MCLQ's cells, wet unless their flags' low four bits are 0x0F,
+the same cells the client leaves out of its strip; the probe found them equal), and a chunk on a tile not yet read is
+drawn over the client's own strip. Turning at the owner's place: 70 to 75 frames a second, the slowest frames 18 to
+24 ms; 135 with the water off.
+
+**The map with the shadows off.** The map tiles were read only by the shadows' pipeline, so with the volumetric light
+and the sun shadows off (the owner's settings) nothing used the map: no wet cells, no ripples or wake round units, and
+the game's own wake never found (it is told by the map's water under it). The water reads the tiles itself now, for
+their ground alone within 700 yards, on a frame the shadows did not (`MapTerrainUpdates`).
+
+**Bodies without the shadows' cache.** With the map read, a character standing in the water showed a pale copy of its
+outline (the owner). Debug View 32 (new) colours each foam by its source: the shore red, round objects green, the wake
+blue, open water yellow, the lip and the ripples white. It was the foam round objects: the body mask marks units from
+the shadows' cache, which is not kept with the shadows off. Now `ShadowIsUnitDraw` falls back on what the client draws:
+a buffer holding as many vertices as a view of the model a unit within 100 yards wears, and up to 8 small models drawn
+straight after one (its weapon, helmet, shoulders). The mask is resolved from the anti-aliasing's samples, so a pixel
+half on a body's edge read 0.48: the mask counts from a quarter of a pixel's cover now, the object foam also checks 1.5
+pixels either way along its line, the shore foam within 1.5 pixels round, and the bed's slope leaves out a side 8
+pixels off that lands on a body.
+
+**The wet sand on a river.** In Ashenvale (map 79.5, 61.8) the wet band lay above the waterline of a river running
+downhill, with a dry strip under it. The level was each map cell's mean of its four points; it is now the water's
+height at the map's points themselves (`MapWaterPointHeight`, the cells' corners as the client draws them), the nine
+nearest weighed by distance. Still open: from further off the band and the waterline part again, and they line up as
+the owner walks closer.

@@ -117,6 +117,8 @@ namespace
         std::vector<float>     vLow;            // the same, never above the client's coarse mesh ([shadow] terrainLow)
         std::vector<float>     grid;            // 129 x 129 outer heights, rows along -x (NaN: no chunk)
         std::vector<float>     water;           // 128 x 128 cells: the water's surface (NaN: dry)
+        std::vector<float>     waterPts;        // 129 x 129 points: the water's surface at each point a wet cell
+                                                // has (NaN: none), as the client draws it (2026-10-11)
         std::vector<uint8_t>   sea;             // 128 x 128 cells: 1 where that water is the sea (MCNK 0x8), 0 a
                                                 // river, a lake or a pond (0x4)
         std::vector<uint16_t>  idx;
@@ -652,6 +654,7 @@ namespace
         m.wmos.clear();
         m.grid.assign(129 * 129, NAN);
         m.water.assign(128 * 128, NAN);
+        m.waterPts.assign(129 * 129, NAN);
         m.sea.assign(128 * 128, 0);
         m.minZ = 1e9f;
         m.maxZ = -1e9f;
@@ -706,6 +709,14 @@ namespace
                                     const bool inRange = std::isfinite(z) && z >= range[0] - 0.5f && z <= range[1] + 0.5f;
                                     m.water[gx * 128 + gy] = inRange ? z : range[1];
                                     m.sea[gx * 128 + gy] = (flags & 0x08) ? 1 : 0;
+                                    // The cell's four points as they are, for the wet sand's level (2026-10-11).
+                                    for (int k = 0; k < 4; ++k)
+                                    {
+                                        const int pr = r + k / 2, pc = c + k % 2;
+                                        const float pz = pointZ(pr, pc);
+                                        if (std::isfinite(pz) && pz >= range[0] - 0.5f && pz <= range[1] + 0.5f)
+                                            m.waterPts[(gx0 + pr) * 129 + gy0 + pc] = pz;
+                                    }
                                 }
                             }
                     }
@@ -1459,8 +1470,12 @@ namespace
     }
 }
 
+namespace { unsigned g_mapUpdates = 0; }
+unsigned MapTerrainUpdates() { return g_mapUpdates; }
+
 void MapTerrainUpdate(IDirect3DDevice9* dev, const float player[3], float reach, float fullReach)
 {
+    ++g_mapUpdates;
     if (reach <= 0.0f)
     {
         if (!g_tiles.empty() || !g_models.empty() || !g_texs.empty())
@@ -2044,6 +2059,29 @@ bool MapGroundHeight(float x, float y, float& z)
         return false;
     z = (h00 * (1 - ty) + h01 * ty) * (1 - tx) + (h10 * (1 - ty) + h11 * ty) * tx;
     return true;
+}
+
+bool MapWaterPointHeight(float x, float y, float& z)
+{
+    const int a = static_cast<int>(floorf(32.0f - y / kTile)), b = static_cast<int>(floorf(32.0f - x / kTile));
+    auto it = g_tiles.find(Key(a, b));
+    if (it == g_tiles.end() || it->second.pending || it->second.mesh.waterPts.size() != 129 * 129)
+        return false;
+    const int ix = static_cast<int>(lroundf((CornerX(b) - x) / kUnit)), iy = static_cast<int>(lroundf((CornerY(a) - y) / kUnit));
+    if (ix < 0 || iy < 0 || ix > 128 || iy > 128)
+        return false;
+    const float w = it->second.mesh.waterPts[ix * 129 + iy];
+    if (!(w == w))
+        return false;
+    z = w;
+    return true;
+}
+
+bool MapTileHeld(float x, float y)
+{
+    const int a = static_cast<int>(floorf(32.0f - y / kTile)), b = static_cast<int>(floorf(32.0f - x / kTile));
+    const auto it = g_tiles.find(Key(a, b));
+    return it != g_tiles.end() && !it->second.pending;
 }
 
 bool MapWaterHeight(float x, float y, float& z)

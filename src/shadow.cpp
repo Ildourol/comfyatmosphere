@@ -5014,16 +5014,70 @@ bool ShadowIsStealthedUnitDraw(IDirect3DDevice9* dev)
     return AttachedToStealthed(verts, p);
 }
 
+// Without the cache (2026-10-11): with the volumetric light and the sun shadows off the cache is not kept, so no unit
+// was a body, and the water's foam round objects outlined a character standing in the water (the owner, Auberdine,
+// Debug View 32). Then a draw is a unit's by what it draws alone (as UnitModelNear, without the place): its buffer
+// holds as many vertices as a view of the model a unit within 100 yards wears, as its display or its mount. The
+// views worn are gathered ten times a second.
+static bool WornViewNearby(UINT verts)
+{
+    static std::unordered_set<uint32_t> worn;
+    static double last = -1.0;
+    const double now = Now();
+    if (now - last > 0.1)
+    {
+        last = now;
+        worn.clear();
+        static ClientUnit list[512];
+        const int n = ClientUnitList(list, 512);
+        float me[3];
+        const bool haveMe = ClientPlayer(me);
+        for (int i = 0; i < n; ++i)
+        {
+            if (haveMe)
+            {
+                const float dx = list[i].pos[0] - me[0], dy = list[i].pos[1] - me[1];
+                if (dx * dx + dy * dy > 100.0f * 100.0f)
+                    continue;
+            }
+            for (const unsigned display : { list[i].display, list[i].mount })
+                if (display)
+                    if (const std::vector<uint32_t>* views = MapCreatureModelViews(display))
+                        worn.insert(views->begin(), views->end());
+        }
+    }
+    return verts && worn.count(verts) != 0;
+}
+
 bool ShadowIsUnitDraw(IDirect3DDevice9* dev)
 {
+    // Without the cache: a unit's attachments (its weapons, helmet, shoulders) are item models, not views of its
+    // model, and the client draws them right after the unit's own model. So a small model drawn straight after a
+    // unit's counts as the unit's (the owner: the staff on a character's back had the foam round objects). At most 8
+    // of them, so a run of small doodads drawn after the last unit is not taken.
+    static int afterUnit = 0;
     IDirect3DVertexShader9* vs = nullptr;
     dev->lpVtbl->GetVertexShader(dev, &vs);
     if (!vs)
+    {
+        afterUnit = 0;
         return false;
+    }
     IDirect3DVertexBuffer9* vb = nullptr;
     UINT offset = 0, stride = 0;
     dev->lpVtbl->GetStreamSource(dev, 0, &vb, &offset, &stride);
     bool unit = vb && !g_unitModels.empty() && g_unitModels.count(ModelKey(vb, vs)) != 0;
+    if (vb && g_unitModels.empty() && stride)
+    {
+        D3DVERTEXBUFFER_DESC d = {};
+        if (SUCCEEDED(vb->lpVtbl->GetDesc(vb, &d)))
+        {
+            const UINT verts = d.Size / stride;
+            const bool own = WornViewNearby(verts);
+            unit = own || (afterUnit > 0 && verts < 6000);
+            afterUnit = own ? 8 : unit ? afterUnit - 1 : 0;
+        }
+    }
     SafeRelease(vb);
     SafeRelease(vs);
     // A mount is the cache's by what it draws (UnitModelNear, 2026-10-04), so the 3-yard rule for the player's

@@ -685,8 +685,11 @@ namespace
             Log("framelog: shadow CPU split, ms a frame: %s", split.c_str());
             Log("framelog: the water's CPU a frame: %.2f ms reading the wet cells, %.2f ms issuing our draws over the "
                 "chunks, %.2f ms the rest", g_flParts[kCpuWaterCells] * k, g_flParts[kCpuWaterDraws] * k,
-                (g_flParts[kCpuWater] - g_flParts[kCpuWaterCells] - g_flParts[kCpuWaterDraws]) * k);
+                (std::max)(0.0, static_cast<double>(g_flParts[kCpuWater]) - g_flParts[kCpuWaterCells] -
+                                    g_flParts[kCpuWaterDraws]) * k);
             Log("framelog: the grass's CPU a frame: %.2f ms, its draws included", g_flParts[kCpuGrass] * k);
+            Log("framelog: the client's buffer locks a frame: %.2f ms, the driver's waits in them included",
+                g_flParts[kCpuLocks] * k);
             if (g_flGpuFrames)
             {
                 const double gf = 1.0 / g_flGpuFrames;

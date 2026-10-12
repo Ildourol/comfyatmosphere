@@ -1927,9 +1927,20 @@ namespace
         if (ps)  ps->lpVtbl->Release(ps);
     }
 
+    // The water's held chunks (water.cpp): drawn now, as a pass of ours, if any are held and this is not a pass.
+    void FlushWater(IDirect3DDevice9* dev)
+    {
+        if (g_inPass || !WaterPending())
+            return;
+        g_inPass = true;
+        WaterFlush(dev);
+        g_inPass = false;
+    }
+
     HRESULT STDMETHODCALLTYPE hkSetRenderTarget(IDirect3DDevice9* dev, DWORD idx, IDirect3DSurface9* s)
     {
         CheckDevice(dev);
+        FlushWater(dev);
         // With Full Screen Glow the world is drawn into its own render target, and the first switch away
         // from it, still under the world's perspective projection, is where the world ends.
         if (idx == 0 && !g_inPass && !g_worldEnded && g_lastPersp &&
@@ -1950,6 +1961,7 @@ namespace
                                             IDirect3DSurface9* dst, const RECT* dr, D3DTEXTUREFILTERTYPE f)
     {
         CheckDevice(dev);
+        FlushWater(dev);
         if (g_probe.active && !g_inPass)
             Log("  [draw %4u] StretchRect     %p -> %p", g_probe.draws, src, dst);
         // With anti-aliasing on, Full Screen Glow cannot draw the world into its texture: a texture cannot be
@@ -2316,6 +2328,7 @@ namespace
     HRESULT STDMETHODCALLTYPE hkDrawPrimitive(IDirect3DDevice9* dev, D3DPRIMITIVETYPE prim, UINT sv, UINT pc)
     {
         HookTimer timer;
+        FlushWater(dev);
         if (HiddenTexture(dev, pc))
             return S_OK;
         if (!g_inPass)
@@ -2559,6 +2572,13 @@ namespace
                                                      UINT mvi, UINT nv, UINT si, UINT pc)
     {
         HookTimer timer;
+        // The water's held chunks (water.cpp, WaterFlush): drawn before the first draw after them that is not water.
+        if (!g_inPass && WaterPending())
+        {
+            const LiquidKind lk = WaterKind(dev, nv);
+            if (lk != kWater && lk != kCityWater)
+                FlushWater(dev);
+        }
         if (HiddenTexture(dev, pc))
             return S_OK;
         if (!g_inPass && g_rainDrawFrame == g_frame)
@@ -2721,6 +2741,7 @@ namespace
     HRESULT STDMETHODCALLTYPE hkDrawPrimitiveUP(IDirect3DDevice9* dev, D3DPRIMITIVETYPE prim, UINT pc,
                                                 const void* data, UINT stride)
     {
+        FlushWater(dev);
         NoteOrder(dev, "UP", pc, VertsForPrims(prim, pc));
         if (WaterProbing() && !g_inPass && !g_worldEnded && !g_skyPhase)
             WaterProbeTexture(dev, "UP", VertsForPrims(prim, pc), pc, g_frameDraws, false);
@@ -2734,6 +2755,7 @@ namespace
                                                        UINT nv, UINT pc, const void* idx, D3DFORMAT fmt,
                                                        const void* data, UINT stride)
     {
+        FlushWater(dev);
         NoteOrder(dev, "IndexedUP", pc, nv);
         if (WaterProbing() && !g_inPass && !g_worldEnded && !g_skyPhase)
             WaterProbeTexture(dev, "IndexedUP", nv, pc, g_frameDraws, false);
@@ -2818,18 +2840,44 @@ namespace
     LockVBFn g_oLockVB = nullptr;
     LockIBFn g_oLockIB = nullptr;
 
+    // A write into a buffer a held water chunk reads (water.cpp, WaterPendingUses): the held chunks are drawn first.
+    // Turning the camera, the client writes the chunks coming into view into its shared water buffers.
+    template <typename Buffer> void FlushWaterBefore(Buffer* self, DWORD flags)
+    {
+        if ((flags & D3DLOCK_READONLY) || g_inPass || !WaterPending() || !WaterPendingUses(self))
+            return;
+        IDirect3DDevice9* dev = nullptr;
+        if (SUCCEEDED(self->lpVtbl->GetDevice(self, &dev)) && dev)
+        {
+            // Drawn first whatever the range (2026-10-11): with the held chunks drawn after a write to another part of
+            // the buffer, the water flickered and the frame took up to 330 ms while the camera turned.
+            FlushWater(dev);
+            dev->lpVtbl->Release(dev);
+        }
+    }
+
     HRESULT STDMETHODCALLTYPE hkLockVB(IDirect3DVertexBuffer9* self, UINT offset, UINT size, void** data, DWORD flags)
     {
+        FlushWaterBefore(self, flags);
         if (!(flags & D3DLOCK_READONLY))
             ShadowNoteBufferWrite(self, offset, size);
-        return g_oLockVB(self, offset, size, data, flags);
+        const unsigned long long t = BenchTiming() ? __rdtsc() : 0;
+        const HRESULT hr = g_oLockVB(self, offset, size, data, flags);
+        if (t)
+            BenchCpuAddTicks(kCpuLocks, __rdtsc() - t);
+        return hr;
     }
 
     HRESULT STDMETHODCALLTYPE hkLockIB(IDirect3DIndexBuffer9* self, UINT offset, UINT size, void** data, DWORD flags)
     {
+        FlushWaterBefore(self, flags);
         if (!(flags & D3DLOCK_READONLY))
             ShadowNoteBufferWrite(self, offset, size);
-        return g_oLockIB(self, offset, size, data, flags);
+        const unsigned long long t = BenchTiming() ? __rdtsc() : 0;
+        const HRESULT hr = g_oLockIB(self, offset, size, data, flags);
+        if (t)
+            BenchCpuAddTicks(kCpuLocks, __rdtsc() - t);
+        return hr;
     }
 
     void PatchBufferVtables(IDirect3DDevice9* dev)

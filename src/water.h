@@ -27,8 +27,15 @@ bool WaterHidesGame();
 bool WaterTextureIsWater(IDirect3DDevice9* dev);
 // A pixel shader of one flat colour, for the debug view of the game's own liquid: red for water, magenta else.
 IDirect3DPixelShader9* WaterFlatShader(IDirect3DDevice9* dev, bool water);
-// After it: the foam over it. `draw` is the device's DrawIndexedPrimitive below our hook.
+// After it: the chunk is held for the foam over it, drawn with the rest of the run by WaterFlush (2026-10-11).
+// `draw` is the device's DrawIndexedPrimitive below our hook.
 void WaterAfterDraw(IDirect3DDevice9* dev, const WaterChunk& c, WaterDrawFn draw);
+bool WaterPending();                     // chunks are held
+// A held chunk reads this vertex or index buffer (2026-10-11): the client is about to write it, and the held chunks are
+// drawn first. Turning the camera, the client writes the chunks coming into view into its shared water buffers in the
+// middle of the run, and held chunks drawn after such a write flickered, with frames of up to 330 ms.
+bool WaterPendingUses(const void* buffer);
+void WaterFlush(IDirect3DDevice9* dev);  // draw the held chunks: at the client's next draw that is not water
 // The probe: each water draw of the frame (water), and each other blended fixed-function draw through a
 // pixel shader (not water), before the client's draw. `index` is the draw's place in the frame.
 void WaterProbeDraw(IDirect3DDevice9* dev, const WaterChunk& c, unsigned index, bool water);

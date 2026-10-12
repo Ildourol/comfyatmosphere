@@ -311,6 +311,7 @@ namespace
         { "water: the depth under it (0 to 256 yards, blue to red, a line at 1, 2, 4, 8 ... 256; hatched: the map's depth)", 0, 0, 0, 0, 0, 10 },
         { "grass: the bend (black still, white the tips; blue where it comes from the texture)", 0, 0, 0, 0, 0, 0, 1 },
         { "clouds: the shapes (red), the layer (blue)", 0, 0, 0, 0, 0, 0, 0, 1 },
+        { "water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)", 0, 0, 0, 0, 0, 11 },
     };
     constexpr int kDebugViewCount = sizeof(kDebugViews) / sizeof(kDebugViews[0]);
     int g_debugViewLogged = -1;
