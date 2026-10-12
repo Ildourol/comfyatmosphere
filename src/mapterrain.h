@@ -77,6 +77,11 @@ bool MapIndoors(const float p[3], char* why = nullptr, size_t whySize = 0);
 // The highest floor of a building from the files at (x, y) that is not above `below`: for the fog's ground
 // under the terrain (Ironforge, the Undercity, a mine). False where no building has one.
 bool MapFloorHeight(float x, float y, float below, float& z);
+// The surface of the water of the building placed at `origin` (the translation of the client's draw of its water),
+// at (x, y), from its liquid in the files (2026-10-12), for a point `z` from 3 yards under it to 1 yard over it. False where the
+// building is not held (the map tiles in full: the shadows read them) or has no water there.
+bool MapBuildingWaterAt(const float origin[3], float x, float y, float z, float& wz);
+void MapBuildingWaterLog(const float origin[3], float x, float y);   // for the probe: why MapBuildingWaterAt says no
 // The ground's height from the tiles loaded, at a point; false where no tile is held.
 bool MapGroundHeight(float x, float y, float& z);
 // The surface of a river or the sea at a point (the map files' MCLQ); false where dry or no tile is held.

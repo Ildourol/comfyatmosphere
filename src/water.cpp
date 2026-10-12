@@ -1680,40 +1680,23 @@ float4 main(float2 vpos : VPOS) : COLOR
     std::vector<Ring> g_rings;
     unsigned g_ringCount = 0;   // rings begun: each new one's shift follows from it
 
-    // A building's water (2026-10-04): the canals of Stormwind are a WMO's liquid, which the map files do not
-    // hold, so no swimmer there started a ripple or a wake. Each such draw gives its surface: the vertices its
-    // triangles use, in the world, and their bounds. Only those: the draw's vertex range holds the unused
-    // corners too, and its highest vertex lay 7.5 yards over Stormwind's canal. The ripples of a frame are
-    // begun at its first water draw, before the buildings' water is drawn, so they read the last frame's.
-    struct CityWater { float lo[3], hi[3]; size_t first, count; };
-    std::vector<CityWater> g_cityNow, g_cityLast;
-    std::vector<std::array<float, 3>> g_cityPtsNow, g_cityPtsLast;
-    constexpr size_t kCityWaters = 64, kCityPts = 16384;
+    // A building's water (2026-10-04): the canals of Stormwind are a WMO's liquid, which the map tiles do not
+    // hold, so no swimmer there started a ripple or a wake. Each draw of it gives the building's place (its world
+    // matrix's translation), and the surface comes from the building's liquid in the files (MapBuildingWaterAt,
+    // 2026-10-12). Until then each draw's vertices were read from the client's buffers by a read-only lock, every
+    // frame: at a lake in Grand Moo Canyon (8 draws) that took the test client from 187 frames a second with the
+    // water off to 16 with it on; 175 without the lock.
+    // The ripples of a frame are begun at its first water draw, before the buildings' water is drawn, so they
+    // take the last frame's places.
+    std::vector<std::array<float, 3>> g_cityNow, g_cityLast;
+    constexpr size_t kCityWaters = 16;
 
-    // The height of a building's water at (x, y): its nearest used vertex within 4 yards (the liquid's grid is
-    // 4.17 yards), among the draws whose bounds hold the point and reach from 3 yards under `z` to over it.
     bool CityWaterAt(float x, float y, float z, float& wz)
     {
-        float best = 4.0f * 4.0f;
-        bool found = false;
-        for (const CityWater& w : g_cityLast)
-        {
-            if (x < w.lo[0] - 4.0f || x > w.hi[0] + 4.0f || y < w.lo[1] - 4.0f || y > w.hi[1] + 4.0f ||
-                z > w.hi[2] || z < w.lo[2] - 3.0f)
-                continue;
-            for (size_t i = w.first; i < w.first + w.count; ++i)
-            {
-                const auto& q = g_cityPtsLast[i];
-                const float d2 = (q[0] - x) * (q[0] - x) + (q[1] - y) * (q[1] - y);
-                if (d2 < best)
-                {
-                    best = d2;
-                    wz = q[2];
-                    found = true;
-                }
-            }
-        }
-        return found;
+        for (const auto& o : g_cityLast)
+            if (MapBuildingWaterAt(o.data(), x, y, z, wz))
+                return true;
+        return false;
     }
 
     // The wakes (2026-10-02): the recent path of each unit moving through the water. A unit is followed from
@@ -1763,7 +1746,8 @@ float4 main(float2 vpos : VPOS) : COLOR
     bool   g_haveGameWater = false, g_haveGameSky = false, g_gameWaterSea = true;
     float  g_easedWater[3] = {}, g_easedSky[3] = {}, g_easedGlow[3] = {};
     bool   g_easedWaterSet = false, g_easedSkySet = false;
-    double g_rampRead = 0.0, g_zoneEased = 0.0;
+    double g_rampRead = 0.0, g_zoneEased = 0.0, g_mapChecked = 0.0;
+    char   g_rampMap[64] = {};   // the map the game's water colour was read on
 
     // The game's water ramp, on stage 0 of its water draw: 8 x 64 A8R8G8B8 in the managed pool, row 0 shallow and
     // row 63 deep, a straight line between them (the probe of 2026-10-07). The sea's rows run alpha 0xBF to 0xFF, a
@@ -1810,6 +1794,19 @@ float4 main(float2 vpos : VPOS) : COLOR
         const double now = Now();
         const float dt = static_cast<float>((std::min)((std::max)(now - g_zoneEased, 0.0), 1.0));
         g_zoneEased = now;
+        // A new map forgets the colour read (2026-10-12): a building's water (Stormwind's canals) does not draw with
+        // the ramp, so after Grand Moo Canyon the canals kept the canyon's red-brown until a lake came into view.
+        if (now >= g_mapChecked)
+        {
+            g_mapChecked = now + 0.25;
+            char map[64] = {};
+            if (ClientMapName(map, sizeof(map)) && strcmp(map, g_rampMap) != 0)
+            {
+                if (g_rampMap[0])
+                    g_haveGameWater = g_easedWaterSet = false;
+                strcpy_s(g_rampMap, map);
+            }
+        }
         const float f = 1.0f - expf(-dt / 0.5f);
         const auto ease = [f](float* eased, bool& set, const float* target) {
             for (int i = 0; i < 3; ++i)
@@ -2536,18 +2533,21 @@ float4 main(float2 vpos : VPOS) : COLOR
             if (g_probeOn)
             {
                 Log("water: wakes: %d trails held, %d drawn", static_cast<int>(g_trails.size()), used);
-                Log("water: ripples: %d held; %d draws of a building's water last frame",
+                Log("water: ripples: %d held; %d buildings' water drawn last frame",
                     static_cast<int>(g_rings.size()), static_cast<int>(g_cityLast.size()));
-                for (const CityWater& w : g_cityLast)
-                    Log("    a building's water: %u vertices used, height %.2f to %.2f, x %.1f to %.1f, y %.1f to %.1f",
-                        static_cast<unsigned>(w.count), w.lo[2], w.hi[2], w.lo[0], w.hi[0], w.lo[1], w.hi[1]);
+                for (const auto& o : g_cityLast)
+                    Log("    a building's water, the building at (%.2f %.2f %.2f)", o[0], o[1], o[2]);
                 float pl[3], wz = 0.0f;
                 if (ClientPlayer(pl))
                 {
                     if (CityWaterAt(pl[0], pl[1], pl[2], wz))
                         Log("water: a building's water at %.2f under you, at %.2f", wz, pl[2]);
                     else
-                        Log("water: no building's water within 4 yards of you, at %.2f", pl[2]);
+                    {
+                        Log("water: no building's water under you in the files, at %.2f", pl[2]);
+                        for (const auto& o : g_cityLast)
+                            MapBuildingWaterLog(o.data(), pl[0], pl[1]);
+                    }
                 }
             }
         }
@@ -3680,78 +3680,16 @@ namespace
         g_frameSet = true;
     }
 
-    // A building's water draw: its surface for the next frame's ripples and wakes (MaybeInWater). Its indices
-    // and vertices are read each frame: a building's water is a few
-    // draws of some hundreds of vertices.
-    void NoteCityWater(IDirect3DDevice9* dev, const WaterChunk& c)
+    // A building's water draw: the building's place, for the next frame's ripples and wakes (CityWaterAt).
+    void NoteCityWater(const WaterChunk& c)
     {
-        if (g_cityNow.size() >= kCityWaters || !c.numVertices || c.numVertices > 4096 ||
-            (c.prim != D3DPT_TRIANGLESTRIP && c.prim != D3DPT_TRIANGLELIST))
-            return;
-        auto* d = dev->lpVtbl;
-        // The vertices the triangles use.
-        std::vector<uint8_t> used(c.numVertices, 0);
-        {
-            IDirect3DIndexBuffer9* ib = nullptr;
-            if (FAILED(d->GetIndices(dev, &ib)) || !ib)
+        const D3DMATRIX& m = *c.world;
+        const std::array<float, 3> o = { m.m[3][0] + g_psc[28], m.m[3][1] + g_psc[29], m.m[3][2] + g_psc[30] };
+        for (const auto& k : g_cityNow)
+            if (fabsf(k[0] - o[0]) < 0.5f && fabsf(k[1] - o[1]) < 0.5f && fabsf(k[2] - o[2]) < 0.5f)
                 return;
-            D3DINDEXBUFFER_DESC desc = {};
-            ib->lpVtbl->GetDesc(ib, &desc);
-            const UINT isz = desc.Format == D3DFMT_INDEX32 ? 4 : 2;
-            const UINT n = c.prim == D3DPT_TRIANGLESTRIP ? c.primCount + 2 : c.primCount * 3;
-            void* ip = nullptr;
-            if (FAILED(ib->lpVtbl->Lock(ib, c.startIndex * isz, n * isz, &ip, D3DLOCK_READONLY)) || !ip)
-            {
-                ib->lpVtbl->Release(ib);
-                return;
-            }
-            for (UINT i = 0; i < n; ++i)
-            {
-                uint32_t v;
-                if (isz == 4) memcpy(&v, static_cast<const uint8_t*>(ip) + i * 4, 4);
-                else { uint16_t h; memcpy(&h, static_cast<const uint8_t*>(ip) + i * 2, 2); v = h; }
-                const int k = static_cast<int>(v) - static_cast<int>(c.minIndex);
-                if (k >= 0 && k < static_cast<int>(c.numVertices))
-                    used[k] = 1;
-            }
-            ib->lpVtbl->Unlock(ib);
-            ib->lpVtbl->Release(ib);
-        }
-        IDirect3DVertexBuffer9* vb = nullptr;
-        UINT off = 0, stride = 0;
-        if (FAILED(d->GetStreamSource(dev, 0, &vb, &off, &stride)) || !vb)
-            return;
-        void* ptr = nullptr;
-        const UINT first = static_cast<UINT>(c.baseVertex + static_cast<INT>(c.minIndex));
-        if (stride >= 12 &&
-            SUCCEEDED(vb->lpVtbl->Lock(vb, off + first * stride, c.numVertices * stride, &ptr, D3DLOCK_READONLY)) && ptr)
-        {
-            // Camera-relative through the draw's world matrix, then the camera's place (FrameConstants).
-            const D3DMATRIX& m = *c.world;
-            CityWater w = { { 1e9f, 1e9f, 1e9f }, { -1e9f, -1e9f, -1e9f }, g_cityPtsNow.size(), 0 };
-            for (UINT i = 0; i < c.numVertices && g_cityPtsNow.size() < kCityPts; ++i)
-            {
-                if (!used[i])
-                    continue;
-                float v[3];
-                memcpy(v, static_cast<const uint8_t*>(ptr) + i * stride, 12);
-                const std::array<float, 3> q = {
-                    v[0] * m.m[0][0] + v[1] * m.m[1][0] + v[2] * m.m[2][0] + m.m[3][0] + g_psc[28],
-                    v[0] * m.m[0][1] + v[1] * m.m[1][1] + v[2] * m.m[2][1] + m.m[3][1] + g_psc[29],
-                    v[0] * m.m[0][2] + v[1] * m.m[1][2] + v[2] * m.m[2][2] + m.m[3][2] + g_psc[30] };
-                for (int a = 0; a < 3; ++a)
-                {
-                    w.lo[a] = (std::min)(w.lo[a], q[a]);
-                    w.hi[a] = (std::max)(w.hi[a], q[a]);
-                }
-                g_cityPtsNow.push_back(q);
-                ++w.count;
-            }
-            vb->lpVtbl->Unlock(vb);
-            if (w.count)
-                g_cityNow.push_back(w);
-        }
-        vb->lpVtbl->Release(vb);
+        if (g_cityNow.size() < kCityWaters)
+            g_cityNow.push_back(o);
     }
 
     // A part of the water's CPU time (2026-10-06), while the bench or the frame log runs.
@@ -4009,7 +3947,7 @@ void WaterAfterDraw(IDirect3DDevice9* dev, const WaterChunk& c, WaterDrawFn draw
     if (!g_copyOk || !WaterWanted() || g_cfg.water.debug == 6)
         return;
     if (c.city)
-        NoteCityWater(dev, c);
+        NoteCityWater(c);
 
     auto* d = dev->lpVtbl;
     PendingChunk p;
@@ -5114,8 +5052,6 @@ void WaterFrameEnd(IDirect3DDevice9* dev)
     g_wakeDraws = 0;
     g_cityLast.swap(g_cityNow);
     g_cityNow.clear();
-    g_cityPtsLast.swap(g_cityPtsNow);
-    g_cityPtsNow.clear();
     ++g_frameNo;
     g_foamLast = g_foamDraws;
     g_foamDraws = 0;
@@ -5222,8 +5158,6 @@ void WaterReset()
     g_movingShips.clear();
     g_cityNow.clear();
     g_cityLast.clear();
-    g_cityPtsNow.clear();
-    g_cityPtsLast.clear();
     SafeRelease(g_foamTex);
     g_foamTexState = 0;
     SafeRelease(g_foamBody);

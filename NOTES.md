@@ -3527,3 +3527,32 @@ restart gave the same three hashes, in new textures, so the client makes them th
 (`kWakeTexels`) and hides a match from its first frame. Nothing reads where the particles land, and the client's
 vertex buffers are not read. The old learning had also taken about a dozen other particles over the water (64 x 64
 textures with all their levels) and hidden them for the session.
+
+## A building's water from the files (2026-10-12, the owner)
+
+At a lake in Grand Moo Canyon (map 820, `MooCanyon`), the owner's live client (v0.12.0, 8x anti-aliasing) ran at
+20 frames a second with the water on and 120 with it off. The lake is the liquid of the dungeon's building
+(`GRANDMOOCANYON.WMO`), about 780 by 230 yards, at 147.82, drawn in 8 draws of 700 to 2300 vertices.
+`NoteCityWater` read each draw's indices and vertices by a read-only lock of the client's buffers, every frame, for
+the ripples and wakes on a building's water. That is the lock the section on never reading the client's water
+buffers warns of. Stormwind's canals are a few small draws, so it cost little there. In the test client at the
+owner's place (`tests/moo-canyon-water-performance.json`, three rounds): 15.7 frames a second with the water on and
+187 with it off; without the lock, 175 and 182.
+
+The surface now comes from the building's liquid in the files. `WmoLoad` reads each group's MLIQ: a 30-byte header
+(vertex and tile counts, the corner in the building's own space, a material), 8 bytes a vertex with the height at
++4, rows along +x, then a flag byte for each tile (low four bits 0x0F: no liquid; bits 0 and 1 the kind, 2 and 3
+magma and slime). `MapBuildingWaterAt` turns a point into the building's space and takes the height from the tile's
+two triangles, as the core's `WmoLiquid::GetLiquidHeight`. A draw of a building's water gives only the building's
+place (its world matrix's translation), which picks the placement. The heights agree with what the buffers gave:
+147.82 at the lake, 95.47 in Stormwind's canal.
+
+What it costs: the building must be loaded from the files. Stormwind took about 40 seconds after a teleport, so
+`stormwind-canal-wake` waits 45 s before it swims. With the sun shadows off the buildings are not loaded, and a
+building's water has no ripples or wakes. Twice, on a fresh client start straight into Stormwind, the loader read one
+tile and then nothing for over a minute, with the build before this change as well; not found yet.
+
+**The red canals.** The water's zone colour is read from the game's ramp texture on its terrain water draws
+(`ReadGameRamp`). A building's water does not draw with it, so after Grand Moo Canyon the canals kept the canyon's
+red-brown (0.529 0.349 0.259; in the morning the same place read the sea's green). The colour read is now forgotten
+when the map changes (`ZoneColours`), and the water falls back to its own deep colour until a ramp is read again.

@@ -27,6 +27,7 @@ namespace
 
     constexpr uint32_t kMOHD = 0x4D4F4844, kMOMT = 0x4D4F4D54, kMOGP = 0x4D4F4750;
     constexpr uint32_t kMOPY = 0x4D4F5059, kMOVI = 0x4D4F5649, kMOVT = 0x4D4F5654, kMOTX = 0x4D4F5458;
+    constexpr uint32_t kMLIQ = 0x4D4C4951;
 
     // glass: the materials whose texture is a lamp's glass; the centre of each triangle drawn with one goes into
     // glassPts (see LampsInGeometry).
@@ -77,6 +78,27 @@ namespace
                 if (t == kMOPY) { mopy = &d[s + 8]; nTri = n / 2; }
                 if (t == kMOVI) { movi = &d[s + 8]; nIdx = n / 2; }
                 if (t == kMOVT) { movt = &d[s + 8]; nVert = n / 12; }
+                // The liquid: a 30-byte header (vertex and tile counts, the corner, a material), 8 bytes a vertex
+                // (the height at +4), then a byte a tile.
+                if (t == kMLIQ && n >= 30)
+                {
+                    int32_t c[4];
+                    memcpy(c, &d[s + 8], 16);
+                    const size_t verts = static_cast<size_t>(c[0]) * c[1], tiles = static_cast<size_t>(c[2]) * c[3];
+                    if (c[0] >= 2 && c[1] >= 2 && c[0] <= 1024 && c[1] <= 1024 && c[2] == c[0] - 1 &&
+                        c[3] == c[1] - 1 && 30 + verts * 8 + tiles <= n)
+                    {
+                        WmoLiquid l;
+                        l.xv = c[0];
+                        l.yv = c[1];
+                        memcpy(l.corner, &d[s + 8 + 16], 12);
+                        l.height.resize(verts);
+                        for (size_t i = 0; i < verts; ++i)
+                            memcpy(&l.height[i], &d[s + 8 + 30 + i * 8 + 4], 4);
+                        l.flags.assign(&d[s + 8 + 30 + verts * 8], &d[s + 8 + 30 + verts * 8] + tiles);
+                        out.liquids.push_back(std::move(l));
+                    }
+                }
                 s += 8 + static_cast<size_t>(n);
             }
             if (!movi || !movt || !mopy)

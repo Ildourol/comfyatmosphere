@@ -35,6 +35,19 @@ struct WmoSpan
     float    lo[3] = {}, hi[3] = {};
 };
 
+// A group's liquid (MLIQ, 2026-10-12), in the building's own space: xv x yv heights, kTile yards apart from the
+// corner, rows along +x (as the core's WmoLiquid reads them), and a flag byte for each of the (xv - 1) x (yv - 1)
+// tiles: low four bits 0x0F, no liquid there; bits 0-1 the kind (0 water, 1 ocean, 2 magma, 3 slime). For the
+// ripples and wakes on a building's water (water.cpp, CityWaterAt), which read the client's buffers before.
+struct WmoLiquid
+{
+    static constexpr float kTile = 533.33333f / 128.0f;
+    int                  xv = 0, yv = 0;
+    float                corner[3] = {};
+    std::vector<float>   height;
+    std::vector<uint8_t> flags;
+};
+
 struct WmoMesh
 {
     std::vector<float>    v;     // x y z in the building's own space
@@ -48,6 +61,7 @@ struct WmoMesh
                                                   // for the ceiling over a point (MapIndoors)
     std::vector<WmoLight> lights;          // its candles, torches and fires (MODD, by name)
     WmoFloors             floors;
+    std::vector<WmoLiquid> liquids;        // its groups' liquids
 };
 
 struct M2Model;

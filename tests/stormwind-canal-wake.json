@@ -1,6 +1,6 @@
 {
     "name": "stormwind-canal-wake",
-    "about": "Swimming along a canal inside Stormwind, the camera looking down from above. No ripple and no wake showed round the swimmer (2026-10-04, the owner). The canal is a building's water, which the map files do not hold. Shots in the normal view and in Debug View 20 (ripples red and green, the wake blue).",
+    "about": "Swimming along a canal inside Stormwind, the camera looking down from above. No ripple and no wake showed round the swimmer (2026-10-04, the owner). The canal is a building's water, which the map tiles do not hold: its surface comes from the city's building in the files (2026-10-12), so the test waits 45 s at the start for Stormwind to load. Shots in the normal view and in Debug View 20 (ripples red and green, the wake blue).",
     "config": {
         "character": 1,
         "flight": false,
@@ -94,7 +94,7 @@
     },
     "steps": [
         {
-            "wait": 2
+            "wait": 45
         },
         {
             "jump": 3

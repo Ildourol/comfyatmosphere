@@ -194,6 +194,7 @@ namespace
         std::vector<std::vector<float>> indoorTris;        // and their triangles, for the ceiling test
         std::vector<WmoLight>   lights;                    // its lights, own space: kept too
         WmoFloors               floors;                    // its floors, own space: kept too (MapFloorHeight)
+        std::vector<WmoLiquid>  liquids;                   // its liquids, own space: kept too (MapBuildingWaterAt)
         std::vector<WmoSpan>    spans;                     // each group's triangles and box: kept too (Buried)
         bool                    used = true;
     };
@@ -1810,6 +1811,7 @@ void MapTerrainUpdate(IDirect3DDevice9* dev, const float player[3], float reach,
             m.indoorTris = std::move(m.mesh.indoorTris);
             m.lights = m.mesh.lights;
             m.floors = std::move(m.mesh.floors);
+            m.liquids = std::move(m.mesh.liquids);
             m.spans = std::move(m.mesh.spans);
             memcpy(m.hi, m.mesh.hi, 12);
             m.mesh  = WmoMesh();   // on the GPU now; read again after a device change
@@ -2039,6 +2041,79 @@ bool MapFloorHeight(float x, float y, float below, float& z)
         }
     }
     return found;
+}
+
+bool MapBuildingWaterAt(const float origin[3], float x, float y, float z, float& wz)
+{
+    bool found = false;
+    for (const Inst& i : g_insts)
+    {
+        if (i.m->state != Model::kReady || i.m->liquids.empty() || fabsf(i.p->pos[0] - origin[0]) > 1.0f ||
+            fabsf(i.p->pos[1] - origin[1]) > 1.0f || fabsf(i.p->pos[2] - origin[2]) > 1.0f)
+            continue;
+        if (i.p->rot[2][2] < 0.999f)
+            continue;   // tilted: its own z is not the world's
+        // Into the building's own space, as in MapFloorHeight.
+        const float d[2] = { x - i.p->pos[0], y - i.p->pos[1] };
+        const float qx = d[0] * i.p->rot[0][0] + d[1] * i.p->rot[0][1];
+        const float qy = d[0] * i.p->rot[1][0] + d[1] * i.p->rot[1][1];
+        for (const WmoLiquid& l : i.m->liquids)
+        {
+            const float fx = (qx - l.corner[0]) / WmoLiquid::kTile, fy = (qy - l.corner[1]) / WmoLiquid::kTile;
+            if (fx < 0.0f || fy < 0.0f || fx >= l.xv - 1 || fy >= l.yv - 1)
+                continue;
+            const int tx = static_cast<int>(fx), ty = static_cast<int>(fy);
+            const uint8_t f = l.flags[static_cast<size_t>(ty) * (l.xv - 1) + tx];
+            if ((f & 0x0F) == 0x0F || (f & 0x03) >= 2)
+                continue;   // no liquid there, or magma or slime
+            // The tile as two triangles, as the core's WmoLiquid::GetLiquidHeight.
+            const float dx = fx - tx, dy = fy - ty;
+            const float* h = &l.height[static_cast<size_t>(ty) * l.xv + tx];
+            const float* h1 = h + l.xv;
+            const float own = dx > dy ? h[0] + dx * (h[1] - h[0]) + dy * (h1[1] - h[1])
+                                      : h[0] + dx * (h1[1] - h1[0]) + dy * (h1[0] - h[0]);
+            const float w = own + i.p->pos[2];
+            // From 3 yards under the surface to 1 over it; of two levels, the nearer.
+            if (z > w - 3.0f && z < w + 1.0f && (!found || fabsf(w - z) < fabsf(wz - z)))
+            {
+                wz = w;
+                found = true;
+            }
+        }
+    }
+    return found;
+}
+
+void MapBuildingWaterLog(const float origin[3], float x, float y)
+{
+    bool any = false;
+    for (const Inst& i : g_insts)
+    {
+        if (fabsf(i.p->pos[0] - origin[0]) > 1.0f || fabsf(i.p->pos[1] - origin[1]) > 1.0f ||
+            fabsf(i.p->pos[2] - origin[2]) > 1.0f)
+            continue;
+        any = true;
+        const float d[2] = { x - i.p->pos[0], y - i.p->pos[1] };
+        const float qx = d[0] * i.p->rot[0][0] + d[1] * i.p->rot[0][1];
+        const float qy = d[0] * i.p->rot[1][0] + d[1] * i.p->rot[1][1];
+        Log("water: the building %s, state %d, upright %.3f, %u liquids; you at (%.1f %.1f) in its own space",
+            i.p->name.c_str(), static_cast<int>(i.m->state), i.p->rot[2][2], static_cast<unsigned>(i.m->liquids.size()),
+            qx, qy);
+        for (const WmoLiquid& l : i.m->liquids)
+        {
+            const float fx = (qx - l.corner[0]) / WmoLiquid::kTile, fy = (qy - l.corner[1]) / WmoLiquid::kTile;
+            const bool in = fx >= 0.0f && fy >= 0.0f && fx < l.xv - 1 && fy < l.yv - 1;
+            if (!in && fabsf(fx) > 200.0f && fabsf(fy) > 200.0f)
+                continue;
+            Log("    liquid %dx%d from (%.1f %.1f %.1f): tile (%.1f %.1f)%s%s", l.xv, l.yv, l.corner[0], l.corner[1],
+                l.corner[2], fx, fy, in ? ", flags 0x" : "", in ? "" : ", outside");
+            if (in)
+                Log("    flags %02X, height %.2f", l.flags[static_cast<size_t>(fy) * (l.xv - 1) + static_cast<size_t>(fx)],
+                    l.height[static_cast<size_t>(fy) * l.xv + static_cast<size_t>(fx)] + i.p->pos[2]);
+        }
+    }
+    if (!any)
+        Log("water: no building from the files at (%.2f %.2f %.2f)", origin[0], origin[1], origin[2]);
 }
 
 bool MapGroundHeight(float x, float y, float& z)
