@@ -1445,9 +1445,8 @@ float4 gFilm2 : register(c209);    // 1 / the foam texture's size in yards, 1 wi
 float4 gFoamW : register(c211);    // as the water pass: 1 / foamWidth, 1 / foamReach, foamSpeed; the swash's
                                    // highest climb (yards of height)
 float4 gSwashW : register(c212);   // the swash: 30 / its length along the shore (yards), its speed (radians a
-                                   // second); z the share of the sea's swash a lake, a pond or a river gets (Lake
-                                   // Swash); then
-                                   // second), as the water pass's gSwash
+                                   // second), as the water pass's gSwash; z the share of the sea's swash a lake, a
+                                   // pond or a river gets (Lake Swash); w the wet sand's reach in yards
 sampler2D sFoamW : register(s12);  // the game's foam texture (WATERFOAMLOOP2.blp)
 sampler2D sSceneW : register(s14); // the screen before this pass (when gFilm3.z is 1)
 // The camera-relative point the depth under the water shows at a place on the screen.
@@ -1518,6 +1517,9 @@ float4 main(float2 vpos : VPOS) : COLOR
     // darkens only its share of the pixel's height; on a pixel across an edge, the rock's and the water's, the
     // heights in it jump, and it fades too.
     wet *= saturate(top * 0.75 / max(max(abs(ddx(P).z), abs(ddy(P).z)), 1e-4));
+    // Less with the distance (2026-10-13, the owner: less noticeable far off): full to half of Wet Sand Distance,
+    // none at it. Until then it ran to the edge of the level texture, some 266 yards out, and stopped there.
+    wet *= 1.0 - smoothstep(0.5 * gSwashW.w, gSwashW.w, length(P));
     if (gScr.z > 2.5 && gScr.z < 3.5)
         return float4(wet.xxx, 1.0);                                 // debug 3: the wet sand alone
     float wa = wet * gZ.z;
@@ -3287,6 +3289,7 @@ namespace
         k[44] = 1.0f / w.foamWidth; k[45] = 1.0f / w.foamReach; k[46] = w.foamSpeed; k[47] = w.swashHeight;
         k[48] = 30.0f / w.swashLength; k[49] = 0.55f * w.swashSpeed;   // c212: as the water pass's c211
         k[50] = w.lakeSwash;   // c212.z
+        k[51] = w.wetSandReach;   // c212.w
 
         auto* d = dev->lpVtbl;
         IDirect3DVertexShader9* oldVs = nullptr;

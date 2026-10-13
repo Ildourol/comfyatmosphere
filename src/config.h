@@ -529,6 +529,8 @@ struct WaterSettings
     float jumpRipple = 4.0f;     // 0..6: how deep the ring is where someone lands in the water from a jump or a fall,
                                  // for a landing at 8 yards a second (Jump Ripple); 0 is none
     float wetSand   = 0.2f;      // 0..1: how much darker the sand is where the water reaches (Wet Sand)
+    float wetSandReach = 250.0f; // yards: the wet sand fades out over the second half of this distance from the
+                                 // camera (Wet Sand Distance, 2026-10-13)
     // The surface (2026-10-02): the water drawn by us in place of the game's: its colour by the real depth, the
     // sky in it, the sun's glint, small waves, whitecaps far out.
     float surface   = 1.0f;      // 0..1: how much of our water is drawn over the game's (0 = the game's alone)

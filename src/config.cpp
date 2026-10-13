@@ -273,6 +273,7 @@ void LoadSettings(const wchar_t* ini)
     s.water.rippleSpreadMoving = Clamp(GetF(kWater, L"rippleSpreadMoving", s.water.rippleSpreadMoving, ini), 0.1f, 3.0f);
     s.water.jumpRipple = Clamp(GetF(kWater, L"jumpRipple", s.water.jumpRipple, ini), 0.0f, 6.0f);
     s.water.wetSand     = Clamp(GetF(kWater, L"wetSand",   s.water.wetSand,   ini), 0.0f, 1.0f);
+    s.water.wetSandReach = Clamp(GetF(kWater, L"wetSandReach", s.water.wetSandReach, ini), 20.0f, 300.0f);
     s.water.surface     = Clamp(GetF(kWater, L"surface",   s.water.surface,   ini), 0.0f, 1.0f);
     s.water.clarity     = Clamp(GetF(kWater, L"clarity",   s.water.clarity,   ini), 0.1f, 10.0f);
     s.water.colour      = Clamp(GetF(kWater, L"colour",    s.water.colour,    ini), 0.0f, 100.0f);
