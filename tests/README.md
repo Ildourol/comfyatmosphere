@@ -34,8 +34,8 @@ steps in the game.
    .\Run-Tests.ps1 -Accept                # and take this run's screenshots and recordings as the expected ones
    ```
 
-The runner restarts the test client and logs in once, unless `-NoLogin` is given, and runs every test in that one session. It logs in again only for a test that wants another character, and casts flight when a test's `flight` differs from the state it is in. A run ends with flight off and the camera behind the character. It sends `/atmos reset` before and after each test,
-and puts every CVar it set back as it was, so a test leaves no values behind. It clears the weather at each
+The runner restarts the test client and logs in once, unless `-NoLogin` is given, and runs every test in that one session. It logs in again only for a test that wants another character, and casts flight when a test's `flight` differs from the state it is in. A run ends with flight off where the character is. At the start of each test it sends `/atmos reset`
+and puts every CVar the test before set back as it was. It does the same once at the end of the run (also when the run stops on an error) and before each login, so a run leaves no values behind. It clears the weather at each
 test's start (`.wchange 0 0`), and turns GM mode on first (`.gm on`), so a hostile creature leaves the character alone. With comfytest.dll in the client (wow-test-tool's `dll\`) a run needs no mouse or
 keyboard, and the game may stay behind other windows; without it, do not touch the mouse or keyboard while a test
 runs. The result, the script it ran, the probe and the screenshots go to `results\`, which git ignores.

@@ -24,11 +24,12 @@
     hour        the time of day, 0..24 (2026-10-07): /atmos time.hour, with time.enabled 1, for this test only.
                 Without it the sky shows whatever hour the client had (a lighthouse test ran by day)
     ini         { "section.key": value, ... }: comfyatmos.ini values for this test, by /atmos. /atmos reset runs
-                before and after, so nothing stays set
+                before each test and once at the end of the run (2026-10-10), so nothing stays set
     debugView   the Debug View to show (the comfyDebugView control)
     cvars       { "name": value, ... }: the Atmosphere page's controls, which /atmos refuses. Every CVar a test
-                sets, by cvars, debugView or a cvar step, goes back to its value before at the end (ComfyTest's
-                cvarsback): the game saves them in Config.wtf
+                sets, by cvars, debugView or a cvar step, goes back to its value before the run (ComfyTest's
+                cvarsback) at the start of the next test, before a login and at the end of the run: the game
+                saves them in Config.wtf
 
   Steps, one key each:
     wait <s>, hop { to, heading, step, pause }, fly <yards>, flyFor <seconds>, back <yards>, turn <degrees> (to the left, by face), probe, screenshot, target <name>, clearTarget,
@@ -152,475 +153,492 @@ if (Test-Path $cvarsSrc) {
 # shown in that client alone (ComfyTest's say).
 function Say([string]$what) { "say $what" }
 
-foreach ($file in $files) {
-    if (-not (Test-Path $file)) { throw "No test $file" }
-    $t = Get-Content $file -Raw | ConvertFrom-Json
-    $cfg = $t.config
-    $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
-    Write-Host "=== $($t.name) ==="
-
-    $slot = if ($cfg.character) { [int]$cfg.character } else { 1 }
-    $restarted = $false
-    if ($cfg.restart) {
-        # A fresh start (2026-10-06, load-performance): to the start first, so the world the client loads at the
-        # sign-in is the same each run, then the client closed and started again. A client not signed in yet signs in
-        # first (2026-10-06): it signed in where the last test had left the character, and the test's own move to the
-        # start then loaded a second world inside the 90 s measured (a frame of 3.6 s).
-        if ($cfg.start -and -not $NoLogin -and $null -eq $loggedAs) {
-            & (Join-Path $tool 'Login.ps1') -Restart -Character $slot -Client $Client -Width $Width -Height $Height
-            $loggedAs = $slot
-        }
-        if ($cfg.start) {
-            $go = Join-Path $resultsDir "$stamp-$($t.name)-before.script.txt"
-            [IO.File]::WriteAllText($go, (@('flight off', "chat .go xyz $($cfg.start.x) $($cfg.start.y) $($cfg.start.z) $($cfg.start.map)",
-                "arrive $($cfg.start.x) $($cfg.start.y) $($cfg.start.z)", 'wait 2') -join "`r`n") + "`r`n")
-            & (Join-Path $tool 'Run-Test.ps1') $go -Client $Client 6>&1 | Out-Null
-        }
-        & (Join-Path $tool 'Login.ps1') -Restart -Character $slot -Client $Client -Width $Width -Height $Height
-        $loggedAs = $slot
-        $restarted = $true
-    }
-    elseif (-not $NoLogin -and $loggedAs -ne $slot) {
-        # The run's first login keeps a client already in the world (2026-10-09): closing and starting it again cost
-        # 30 s. Another character's test restarts it.
-        if ($null -eq $loggedAs) { & (Join-Path $tool 'Login.ps1') -Character $slot -Client $Client -Width $Width -Height $Height }
-        else { & (Join-Path $tool 'Login.ps1') -Restart -Character $slot -Client $Client -Width $Width -Height $Height }
-        $loggedAs = $slot
-    }
-
-    # The config and the steps into a wow-test-tool script.
-    $speed = if ($cfg.flySpeed) { [double]$cfg.flySpeed } else { 7.0 }
-    $lines = @("# $($t.name), made by Run-Tests.ps1 from $([IO.Path]::GetFileName($file))")
-    $lines += Say "$($t.name): starting"
-    # GM mode on first (the owner, 2026-10-05): a hostile creature, summoned or near the start, leaves the
-    # character alone.
-    $lines += 'chat .gm on'
-    $lines += 'wait 0.5'
-    # comfyatmos's values: none left from before, then this test's. Before any move (2026-10-09, the owner): set
-    # at the start, the sun changed once at login and again there.
-    $lines += Say 'setting the snapshot: the sun and the controls'
-    $lines += 'atmos reset'
-    if ($cfg.sun) {
-        $lines += 'atmos sun.fixed 1'
-        $lines += "atmos sun.azimuth $($cfg.sun.azimuth)"
-        $lines += "atmos sun.elevation $($cfg.sun.elevation)"
-    }
-    if ($cfg.ini) {
-        foreach ($p in $cfg.ini.PSObject.Properties) { $lines += "atmos $($p.Name) $($p.Value)" }
-    }
-    # The hour: the test's, or 12:00 (2026-10-08). Without one the game lit the world by the clock, and a run at
-    # 22:26 came out at night beside expected shots taken by day; config.sun turns only the shadows' sun.
-    $hour = if ($null -ne $cfg.hour) { [double]$cfg.hour } else { 12.0 }
-    $lines += 'atmos time.enabled 1'
-    $lines += "atmos time.hour $($hour.ToString([Globalization.CultureInfo]::InvariantCulture))"
-    if ($cfg.cvars) {
-        foreach ($p in $cfg.cvars.PSObject.Properties) { $lines += "cvar $($p.Name) $($p.Value)" }
-    }
-    if ($null -ne $cfg.debugView) { $lines += "cvar comfyDebugView $($cfg.debugView)" }
-    # Flight first, then the start: a start in the air holds only with flight on. The character must be on the
-    # ground when flight goes on, or it can stick in the air (the owner, 2026-10-03): wow-test-tool's ground waits
-    # until its height has stayed on the map files' ground for half a second. flight on and flight off read the
-    # state and cast only when it is the other way, and ground unlessflying does not wait when flight is on.
-    if ($cfg.flight) {
-        $lines += Say 'flight on'
-        # To the start first (2026-10-04): the test before may leave the character swimming, where the ground
-        # wait never ends. From a start in the air it falls to the ground under it; a GM takes no harm.
-        # Or to flightFrom, on land, when the start is over deep water (2026-10-06).
-        $f = if ($cfg.flightFrom) { $cfg.flightFrom } else { $cfg.start }
-        if ($f) { $lines += "chat .go xyz $($f.x) $($f.y) $($f.z) $($cfg.start.map)"; $lines += "arrive $($f.x) $($f.y) $($f.z)" }
-        $lines += 'hold W 0.15'   # a character left in the air with flight off falls only once it moves (0.5 s until 2026-10-09)
-        $lines += 'ground 60 unlessflying'; $lines += 'flight on'
-    }
-    else {
-        $lines += Say 'flight off'
-        $lines += 'flight off'
-    }
-    # Creatures the test needs (2026-10-04): summoned where each stands (.npc summon puts it at the player), on the
-    # start's map, before the start. Each is deleted after the steps (below). Only a creature with no world
-    # spawn: the delete goes by its name.
-    if ($cfg.summon) {
-        foreach ($u in $cfg.summon) {
-            $lines += "chat .go xyz $($u.x) $($u.y) $($u.z) $($cfg.start.map)"
-            $lines += "arrive $($u.x) $($u.y) $($u.z)"
-            $lines += "chat .npc summon $($u.entry)"
-            $lines += 'wait 1'
-        }
-    }
-    if ($cfg.start) {
-        $s = $cfg.start
-        $lines += Say 'going to the start'
-        $lines += "chat .go xyz $($s.x) $($s.y) $($s.z) $($s.map)"
-        # Until the character is there, then 1 s (2026-10-05): it was 5 s every time, and the tool's arrive line
-        # notes the place, so the pos line after it went too. Without comfytest.dll, arrive waits 5 s.
-        $lines += "arrive $($s.x) $($s.y) $($s.z)"
-        # The character's heading (2026-10-04): .go xyz keeps the old one. Turned by right-drags, the camera
-        # with it (2026-10-05): the camera turned alone and a right-click did not bring the character after it.
-        if ($null -ne $s.facing) { $lines += "heading $($s.facing)" }
-    }
-    if (-not $cfg.start) { $lines += 'wait 1.2'; $lines += 'pos start' }   # the place comes from comfyStats, up to a second old
-    # No weather (the owner, 2026-10-05): rain or snow changes the light and the fog from run to run. The
-    # weather is the zone's, so it is cleared here, at the start.
-    $lines += Say 'clearing the weather'
-    $lines += 'chat .wchange 0 0'
-    # The camera by a number (the owner, 2026-10-03): 0 first person, 1 to 9 that many notches of the mouse wheel
-    # back out from it, 10 all the way out. "zoomed" is 0 and "far" is 10. By the wheel since 2026-10-04: zoom out
-    # (CameraZoomOut) went all the way out whatever its number, so every test before then ran at 10. A notch: 1
-    # put the camera 2.5 yards back, 2 at 3.4, 4 at 5.3.
-    # Or by yards (cameraDistance, 2026-10-04): as far back as the owner had it, from a snapshot.
-    # Or the camera's own distance (cameraZoom, 2026-10-05), the field the wheel moves, set exactly by
-    # comfytest.dll: close in, camdist was a notch off.
-    if ($null -ne $cfg.cameraZoom -or $null -ne $cfg.cameraDistance -or $null -ne $cfg.camera) { $lines += Say 'moving the camera' }
-    # All the way in first (2026-10-07): the game keeps a distance of its own that its zoom sets, and each frame
-    # puts the camera there, or nearer where the ground is in the way. After a test 11 yards out, a slope behind
-    # the camera held it at 3.8 yards whatever camzoom wrote, and the next test's first person never came. Zoomed
-    # in, the game's distance is 0, and the one written holds wherever nothing pulls the camera in.
-    if ($null -ne $cfg.cameraZoom) { $lines += 'zoom -30'; $lines += 'zoomed'; $lines += "camzoom $($cfg.cameraZoom)" }
-    elseif ($null -ne $cfg.cameraDistance) { $lines += "camdist $($cfg.cameraDistance)" }
-    elseif ($null -ne $cfg.camera) {
-        $cam = if ($cfg.camera -eq 'zoomed') { 0 } elseif ($cfg.camera -eq 'far') { 10 } else { [int]$cfg.camera }
-        $lines += 'zoom -30'
-        if ($cam -ge 10) { $lines += 'zoom 30' } elseif ($cam -gt 0) { $lines += 'zoomed'; $lines += "wheel $cam" }
-    }
-    # hop: .go xyz along a line from the start at the start's height, in steps (2026-10-03). Exact where turning
-    # and flight speed were not. $along is how far along the line the last hop left the character.
-    $along = 0.0
-    # What each screenshot shows, for the page: the Debug View at the time.
-    $view = if ($null -ne $cfg.debugView) { [int]$cfg.debugView } else { 0 }
-    $shotViews = @()
-    $recViews = @(); $recLabels = @()
-    $nShot = 0; $nRec = 0; $nProbe = 0
-    $zoomAgain = $false   # the camera's distance written again at the first face (below)
-    foreach ($st in $t.steps) {
-        $p = $st.PSObject.Properties | Select-Object -First 1
-        $v = $p.Value
-        switch ($p.Name) {
-            'face'       { $lines += Say "facing $($v.heading)$(if ($null -ne $v.pitch) { ", pitch $($v.pitch)" })" }
-            'hop'        { $lines += Say "hopping to $($v.to) yards" }
-            'fly'        { $lines += Say "flying $v yards" }
-            'flyFor'     { $lines += Say "flying for $v s" }
-            'back'       { $lines += Say "backing $v yards" }
-            'turn'       { $lines += Say "turning $v degrees" }
-            'probe'      { $nProbe++; $lines += Say "probe $nProbe" }
-            'screenshot' { $nShot++; $lines += Say "screenshot $nShot" }
-            'record'     {
-                $nRec++
-                $secs = if ($null -ne $v.seconds) { $v.seconds } else { $v }
-                $lines += Say "recording $nRec, $secs s$(if ($v.label) { ": $($v.label)" })"
-            }
-            'cvar'       { $lines += Say "control: $v" }
-            'atmos'      { $lines += Say "/atmos $v" }
-            'chat'       { $lines += Say "chat: $v" }
-            'target'     { $lines += Say "targeting $v" }
-            'camera'     { $lines += Say 'moving the camera' }
-            'cameraZoom' { $lines += Say "the camera $v yards back" }
-            'jump'       { $lines += Say 'jumping' }
-        }
-        switch ($p.Name) {
-            'wait'       { $lines += "wait $v" }
-            'jump'       { for ($j = 0; $j -lt [int]$v; $j++) { $lines += 'jump'; $lines += 'wait 1.2' } }   # in the water, it brings a swimmer up to the surface
-            'down'       { $lines += "down $v" }   # hold a key until its up step: the steps between run while it is held
-            'up'         { $lines += "up $v" }
-            'fly'        { $lines += ('hold W {0:0.##}' -f ([double]$v / $speed)); $lines += 'wait 1.2'; $lines += "pos after fly $v" }
-            'hop'        {
-                if (-not $cfg.start) { throw "$($t.name): hop needs a start" }
-                $h = [double]$v.heading * [math]::PI / 180.0
-                $stepLen = if ($v.step) { [double]$v.step } else { 10.0 }
-                $pause = if ($null -ne $v.pause) { [double]$v.pause } else { 0.001 }   # 0.3 until 2026-10-09 (the owner: a move can take 1 ms)
-                $to = [double]$v.to
-                $dir = if ($to -ge $along) { 1.0 } else { -1.0 }
-                while ([math]::Abs($to - $along) -gt 0.01) {
-                    $along += $dir * [math]::Min($stepLen, [math]::Abs($to - $along))
-                    $x = [double]$cfg.start.x + [math]::Cos($h) * $along
-                    $y = [double]$cfg.start.y + [math]::Sin($h) * $along
-                    $lines += ('chat .go xyz {0:0.0} {1:0.0} {2:0.0} {3}' -f $x, $y, [double]$cfg.start.z, $cfg.start.map)
-                    $lines += "wait $pause"
-                }
-                # 0.3 s for the last .go to land (2026-10-09): 1.2 s was for comfyStats' pos, up to a second old;
-                # wow-test-tool reads the place at once by comfytest.dll now.
-                $lines += 'wait 0.3'; $lines += "pos after hop to $to"
-            }
-            'flyFor'     { $lines += "hold W $v"; $lines += 'wait 1.2'; $lines += "pos after flying $v s" }   # seconds, not yards: two legs of the same time cover the same ground
-            'back'       { $lines += ('hold S {0:0.##}' -f ([double]$v / ($speed * 0.64))); $lines += 'wait 1.2'; $lines += "pos after back $v" }   # backing up is 64% of the speed
-            'turn'       { $lines += "turnby $v"; $lines += 'wait 1.2'; $lines += "pos after turn $v" }   # to the left; by face, not Ctrl+Shift+F, which broke the camera (2026-10-05)
-            'pos'        { $lines += 'wait 1.2'; $lines += 'pos' }
-            'face'       {   # the character and the camera, checked against comfyStats: right-drags turn, wow-test-tool tilts
-                $lines += "heading $($v.heading)"; if ($null -ne $v.pitch) { $lines += "pitch $($v.pitch)$(if ($v.leftDrag) { ' left' })" }
-                # The distance again at the first face (2026-10-07): written before it, at the last test's pitch, the
-                # camera met the water or the ground, and the game took it in to its own distance, 0 after the
-                # zoom in above. A snapshot's own pitch is clear: the owner's camera stood there.
-                if ($null -ne $cfg.cameraZoom -and -not $zoomAgain) { $zoomAgain = $true; $lines += "camzoom $($cfg.cameraZoom)" }
-            }
-            'probe'      { $lines += 'atmos probe' }
-            'screenshot' { $shotViews += $view; $lines += 'ui hide'; $lines += 'wait 0.05'; $lines += 'screenshot'; $lines += 'ui show' }   # without the UI, then the UI back (Alt+Z without comfytest.dll)
-            'record'     {   # a video, without the UI as a screenshot: { seconds, label } or the seconds alone
-                $secs = if ($null -ne $v.seconds) { [double]$v.seconds } else { [double]$v }
-                $recLabels += $(if ($v.label) { $v.label } else { '' })
-                $recViews += $view
-                # With start (2026-10-05), the steps after it run while it records, until recordWait: to record a
-                # change those steps make, such as a stealth aura going on.
-                if ($v.start) { $lines += 'ui hide'; $lines += 'wait 0.2'; $lines += "record $secs start" }
-                else { $lines += 'ui hide'; $lines += 'wait 0.2'; $lines += "record $secs"; $lines += 'ui show' }
-            }
-            'recordWait' { $lines += 'recordwait'; $lines += 'ui show' }
-            'atmos'      { $lines += "atmos $v" }
-            'cvar'       { $lines += "cvar $v"; if ("$v" -match '^comfyDebugView\s+(\d+)') { $view = [int]$Matches[1] } }
-            'chat'       { $lines += "chat $v" }
-            'gameFront'  { $lines += 'front' }   # the game to the front, for a frame log: behind other windows it holds 60 fps (2026-10-06)
-            'gameBack'   { $lines += 'back' }    # the focus back to the window that had it (not 'back', which walks backwards)
-            'go'         {   # another place within the test (2026-10-06): .go xyz, then until the character is there
-                $map = if ($null -ne $v.map) { $v.map } elseif ($cfg.start) { $cfg.start.map } else { 0 }
-                $lines += "chat .go xyz $($v.x) $($v.y) $($v.z) $map"
-                $lines += "arrive $($v.x) $($v.y) $($v.z)"
-                if ($null -ne $v.facing) { $lines += "heading $($v.facing)" }
-            }
-            'type'       { $lines += "type $v" }
-            'target'      { $lines += "target $v" }   # the unit with that exact name, as /target (ComfyTest)
-            'clearTarget' { $lines += 'cleartarget' }
-            'camera'     {   # the camera's distance partway through, as config.camera: 0 first person, 1 to 9 notches out, 10 all the way
-                $lines += 'zoom -30'
-                if ([int]$v -ge 10) { $lines += 'zoom 30' } elseif ([int]$v -gt 0) { $lines += 'zoomed'; $lines += "wheel $([int]$v)" }
-            }   # typed into the chat box as a player types: a slash command (/target Pinto)
-            'cameraZoom' {   # the camera's own distance partway through, as config.cameraZoom (2026-10-08)
-                $lines += 'zoom -30'; $lines += 'zoomed'; $lines += "camzoom $v"
-            }
-            default      { throw "$($t.name): unknown step '$($p.Name)'" }
-        }
-    }
-    # The summoned creatures go again: each selected by its name and deleted. .npc delete takes a world spawn out
-    # of the database for good, so it is sent only when the selection has exactly that name.
-    if ($cfg.summon) {
-        foreach ($u in $cfg.summon) {
-            $lines += "target $($u.name)"
-            $lines += 'wait 0.5'
-            $lines += "npcdelete $($u.name)"
-            $lines += 'wait 0.5'
-        }
-        $lines += 'cleartarget'
-    }
-    # Put back what the test set.
-    $lines += Say "$($t.name): putting the controls back"
-    $lines += 'cvarsback'
-    $lines += 'atmos reset'
-    $script = Join-Path $resultsDir "$stamp-$($t.name).script.txt"
-    [IO.File]::WriteAllText($script, ($lines -join "`r`n") + "`r`n")
-
-
-    $log = ClientLog
-    $logStart = if ($restarted) { 0 } elseif (Test-Path $log) { @(Get-Content $log).Count } else { 0 }
-    $started = Get-Date
-    $runOut = & (Join-Path $tool 'Run-Test.ps1') $script -Client $Client -Timing:$Timing 6>&1 | Out-String
-    if ($Timing) { $runOut -split "`r?`n" | Where-Object { $_ -like 'time *' } | ForEach-Object { Write-Host "  $_" } }
-    $positions = @($runOut -split "`r?`n" | Where-Object { $_ -match '^(pos|arrive|face|heading|pitch) ' })
-    $warnings = @($runOut -split "`r?`n" | Where-Object { $_ -match '^error ' })
-
-    # The last probe of this run: from its header to the next report or the end. The frame it logs comes
-    # before the header (2026-10-04: the water's lines), and before that the probe's own start: from its
-    # "--- probe:" line (the see-through counts), or else its "begin frame" line.
-    $new = if (Test-Path $log) { @(Get-Content $log | Select-Object -Skip $logStart) } else { @() }
-    $heads = @(for ($i = 0; $i -lt $new.Count; $i++) { if ($new[$i] -match '^=== client report \((F12|/atmos probe)\) ===') { $i } })
-    # Each probe of the run (2026-10-04): a check reads the last unless it names one (probeAt, from 1). A probe's
-    # lines end at the next probe's own start, or its report.
-    $probes = @()
-    foreach ($hd in $heads) {
-        $from = $hd
-        $begin = -1
-        for ($i = $from - 1; $i -ge 0 -and $new[$i] -notmatch '^=== (end of )?client report'; $i--) {
-            if ($new[$i] -match '^--- probe: ') { $begin = $i; break }
-            if ($begin -lt 0 -and $new[$i] -match '^--- begin frame \d+ capture ---') { $begin = $i }
-        }
-        if ($begin -ge 0) { $from = $begin }
-        $to = $new.Count
-        for ($i = $hd + 1; $i -lt $new.Count; $i++) { if ($new[$i] -match '^=== client report|^--- probe: ') { $to = $i; break } }
-        $probes += ,@($new[$from..($to - 1)])
-    }
-    $probe = if ($probes.Count) { $probes[-1] } else { @() }
-
-    # Every screenshot of the run, in order: a test can take one in each debug view.
-    $shots = @(Get-ChildItem (Join-Path $Client 'Screenshots') -File -ErrorAction SilentlyContinue |
-               Where-Object { $_.LastWriteTime -ge $started } | Sort-Object LastWriteTime)
-
-    $results = @()
-    $checks = @()   # for the page: each check, whether it passed, and the screenshot it read (0: the probe)
-    $pass = $true
-    # A test that flies needs flight on (2026-10-07): far-terrain-cache ran on the ground for days and passed, with
-    # "error flight on" only a warning. Now it is a check of its own.
-    if ($cfg.flight) {
-        $flightError = @($warnings | Where-Object { $_ -match '^error flight on' }) | Select-Object -First 1
-        $ok = -not $flightError
-        $results += ('{0}  Flight on for the test{1}' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $(if ($ok) { '' } else { ": $flightError" }))
-        $checks += [pscustomobject]@{ ok = $ok; about = 'Flight on for the test'; got = $(if ($ok) { 'flight on' } else { $flightError }); shot = 0 }
-        if (-not $ok) { $pass = $false }
-    }
-    foreach ($e in $t.expect) {
-        if ($null -ne $e.log) {
-            # A number from the log (2026-10-06, the performance tests): the nth or the last match in this run.
-            $ms = @($new | ForEach-Object { $m = [regex]::Match($_, $e.log); if ($m.Success) { $m } })
-            $k = if ($null -ne $e.at) { [int]$e.at } else { $ms.Count }
-            if ($k -lt 1 -or $k -gt $ms.Count) {
-                $results += "FAIL  no line $k for: $($e.about) ($($ms.Count) found)"
-                $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = "no line $k in the log ($($ms.Count) found)"; shot = 0 }
-                $pass = $false; continue
-            }
-            $value = [double]::Parse($ms[$k - 1].Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture)
-            $unit = if ($e.unit) { " $($e.unit)" } else { '' }
-            $ok = ($null -eq $e.max -or $value -le [double]$e.max) -and ($null -eq $e.min -or $value -ge [double]$e.min)
-            $want = @()
-            if ($null -ne $e.max) { $want += "at most $($e.max)$unit" }
-            if ($null -ne $e.min) { $want += "at least $($e.min)$unit" }
-            $wantText = if ($want.Count) { " ($($want -join ' and '))" } else { ' (recorded only)' }
-            if (-not $ok) { $pass = $false }
-            $results += ('{0}  {1}: {2}{3}{4}' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $value, $unit, $wantText)
-            $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('{0}{1}{2}' -f $value, $unit, $wantText); shot = 0 }
-            if ($e.metric) {
-                $metrics += [pscustomobject]@{ stamp = $stamp; test = $t.name; metric = $e.metric; value = $value
-                    unit = "$($e.unit)"; max = $e.max; min = $e.min; ok = $ok; version = (DllVersion) }
-            }
-            continue
-        }
-        if ($null -ne $e.shot -and $null -ne $e.box) {
-            # A box of a screenshot (2026-10-04): how much of it jumps from one pixel to the next. Counting
-            # half-grey pixels missed speckle that came as hard black and white dots.
-            $n = [int]$e.shot
-            if ($n -lt 1 -or $n -gt $shots.Count) { $results += "FAIL  no screenshot $n ($($shots.Count) taken): $($e.about)"; $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = "no screenshot $n ($($shots.Count) taken)"; shot = 0 }; $pass = $false; continue }
-            Add-Type -AssemblyName System.Drawing
-            $bmp = [Drawing.Bitmap]::FromFile($shots[$n - 1].FullName)
-            $jumps = 0; $warm = 0; $count = 0
-            try {
-                for ($y = [int]$e.box[1]; $y -le [int]$e.box[3] -and $y -lt $bmp.Height; $y += 2) {
-                    for ($x = [int]$e.box[0]; $x -lt [int]$e.box[2] -and $x + 1 -lt $bmp.Width; $x++) {
-                        $p = $bmp.GetPixel($x, $y); $q = $bmp.GetPixel($x + 1, $y)
-                        if ([Math]::Abs(($p.R + $p.G + $p.B) - ($q.R + $q.G + $q.B)) / 3 -gt 60) { $jumps++ }
-                        if ($p.R -gt $p.G) { $warm++ }
-                        $count++
-                    }
-                }
-            }
-            finally { $bmp.Dispose() }
-            if ($null -ne $e.warmMax) {
-                # Ground seen through the water (2026-10-07): a gap in the surface shows brown in the blue-green sea.
-                $share = if ($count) { [Math]::Round(100 * $warm / $count, 1) } else { 0 }
-                $ok = $share -le [double]$e.warmMax
-                if (-not $ok) { $pass = $false }
-                $got = '{0}% of the box is redder than green (at most {1}%)' -f $share, $e.warmMax
-                $results += ('{0}  {1}: {2}' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $got)
-                $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = $got; shot = $n }
-                continue
-            }
-            $share = if ($count) { [int](100 * $jumps / $count) } else { 0 }
-            $ok = $share -le [int]$e.jumpMax
-            if (-not $ok) { $pass = $false }
-            $results += ('{0}  {1}: {2}% of the box jumps from one pixel to the next (at most {3}%)' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $share, $e.jumpMax)
-            $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('{0}% of the box jumps from one pixel to the next (at most {1}%)' -f $share, $e.jumpMax); shot = $n }
-            continue
-        }
-        if ($null -ne $e.shot) {
-            # A row of a screenshot (2026-10-04): the Debug View 5 shot is one grey where the shade is even, and
-            # a strip of shade that should not be there shows as a dip.
-            $n = [int]$e.shot
-            if ($n -lt 1 -or $n -gt $shots.Count) { $results += "FAIL  no screenshot $n ($($shots.Count) taken): $($e.about)"; $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = "no screenshot $n ($($shots.Count) taken)"; shot = 0 }; $pass = $false; continue }
-            Add-Type -AssemblyName System.Drawing
-            $bmp = [Drawing.Bitmap]::FromFile($shots[$n - 1].FullName)
-            $low = 255; $at = -1; $sum = 0; $count = 0
-            try {
-                for ($x = [int]$e.from; $x -le [int]$e.to -and $x -lt $bmp.Width; $x += 4) {
-                    $c = $bmp.GetPixel($x, [int]$e.row)
-                    $l = [int](($c.R + $c.G + $c.B) / 3)
-                    if ($l -lt $low) { $low = $l; $at = $x }
-                    $sum += $l; $count++
-                }
-            }
-            finally { $bmp.Dispose() }
-            $avg = if ($count) { [int]($sum / $count) } else { 0 }
-            # meanMax (2026-10-04): the most the average may be, for a row that must stay in shade.
-            $ok = ($null -eq $e.min -or $low -ge [int]$e.min) -and ($null -eq $e.mean -or $avg -ge [int]$e.mean) -and
-                  ($null -eq $e.meanMax -or $avg -le [int]$e.meanMax)
-            $wantAvg = @()
-            if ($null -ne $e.mean) { $wantAvg += "at least $($e.mean)" }
-            if ($null -ne $e.meanMax) { $wantAvg += "at most $($e.meanMax)" }
-            $wantAvg = if ($wantAvg.Count) { $wantAvg -join ' and ' } else { 'any' }
-            if (-not $ok) { $pass = $false }
-            $results += ('{0}  {1}: row {2} averages {3}, its darkest pixel {4} at column {5} (wanted: average {6}, darkest {7})' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $e.row, $avg, $low, $at, $wantAvg, $(if ($null -ne $e.min) { "at least $($e.min)" } else { 'any' }))
-            $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('row {0} averages {1}, its darkest pixel {2} at column {3} (wanted: average {4}, darkest {5})' -f $e.row, $avg, $low, $at, $wantAvg, $(if ($null -ne $e.min) { "at least $($e.min)" } else { 'any' })); shot = $n }
-            continue
-        }
-        if (-not $heads.Count) { $results += "FAIL  no probe in the log: $($e.about)"; $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = 'no probe in the log'; shot = 0 }; $pass = $false; continue }
-        $slice = $probe
-        if ($null -ne $e.probeAt) {
-            $k = [int]$e.probeAt
-            $slice = if ($k -ge 1 -and $k -le $probes.Count) { $probes[$k - 1] } else { @() }
-        }
-        $hits = @($slice | Where-Object { $_ -match $e.probe })
-        $ok = $true
-        if ($null -ne $e.max -and $hits.Count -gt [int]$e.max) { $ok = $false }
-        if ($null -ne $e.min -and $hits.Count -lt [int]$e.min) { $ok = $false }
-        if (-not $ok) { $pass = $false }
-        $results += ('{0}  {1}: {2} line(s) match' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $hits.Count)
-        $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('{0} line(s) of the probe match' -f $hits.Count); shot = 0 }
-        $results += @($hits | Select-Object -First 10 | ForEach-Object { "        $_" })
-    }
-
-    $shotCopies = @()
-    for ($i = 0; $i -lt $shots.Count; $i++) {
-        $suffix = if ($shots.Count -gt 1) { "-$($i + 1)" } else { '' }
-        $copy = Join-Path $resultsDir "$stamp-$($t.name)$suffix$($shots[$i].Extension)"
-        Copy-Item $shots[$i].FullName $copy
-        $shotCopies += $copy
-    }
-    # Every recording of the run (2026-10-05), with its sheet of frames: the step record.
-    $recs = @(Get-ChildItem (Join-Path $Client 'Recordings') -Filter *.mp4 -File -ErrorAction SilentlyContinue |
-              Where-Object { $_.LastWriteTime -ge $started } | Sort-Object LastWriteTime)
-    $recCopies = @()
-    for ($i = 0; $i -lt $recs.Count; $i++) {
-        $copy = Join-Path $resultsDir "$stamp-$($t.name)-rec$($i + 1).mp4"
-        Copy-Item $recs[$i].FullName $copy
-        $sheet = $recs[$i].FullName -replace '\.mp4$', '-sheet.jpg'
-        if (Test-Path $sheet) { Copy-Item $sheet ($copy -replace '\.mp4$', '-sheet.jpg') }
-        $recCopies += $copy
-    }
-
-    $verdict = if ($pass) { 'PASS' } else { 'FAIL' }
-    $report = @("$verdict  $($t.name)  ($stamp)") + $results
-    if ($positions.Count) { $report += 'where the character was:'; $report += @($positions | ForEach-Object { "        $_" }) }
-    if ($warnings.Count) { $report += 'errors from the game:'; $report += @($warnings | ForEach-Object { "        $_" }) }
-    if ($shotCopies.Count) { $report += @($shotCopies | ForEach-Object { "screenshot: $_" }) } else { $report += 'screenshot: none taken' }
-    $report += @($recCopies | ForEach-Object { "recording: $_" })
-    $text = $report -join "`r`n"
-    Write-Host $text
-    [IO.File]::WriteAllText((Join-Path $resultsDir "$stamp-$($t.name).txt"), $text + "`r`n`r`n" + ($probe -join "`r`n") + "`r`n")
-    $summary += "$verdict  $($t.name)"
-    if ($Accept -and $shotCopies.Count) {
-        New-Item -ItemType Directory -Force $expectedDir | Out-Null
-        for ($i = 0; $i -lt $shotCopies.Count; $i++) {
-            Copy-Item $shotCopies[$i] (Join-Path $expectedDir "$($t.name)-$($i + 1)$([IO.Path]::GetExtension($shotCopies[$i]))") -Force
-        }
-    }
-    # The recordings too (2026-10-05): expected\<test>-rec<n>.mp4, played beside this run's on the page.
-    if ($Accept -and $recCopies.Count) {
-        New-Item -ItemType Directory -Force $expectedDir | Out-Null
-        for ($i = 0; $i -lt $recCopies.Count; $i++) {
-            Copy-Item $recCopies[$i] (Join-Path $expectedDir "$($t.name)-rec$($i + 1).mp4") -Force
-        }
-    }
-    $record = [pscustomobject]@{
-        name = $t.name; about = $t.about; pass = $pass; stamp = $stamp; checks = $checks
-        positions = $positions; warnings = $warnings; shots = $shotCopies; views = $shotViews
-        recordings = $recCopies; recViews = $recViews; recLabels = $recLabels; version = (DllVersion)
-    }
-    $records += $record
-    # Each test's result on its own (2026-10-06, the owner): Build-Latest.ps1 makes one page of every test's latest,
-    # whichever run it came from.
-    [IO.File]::WriteAllText((Join-Path $resultsDir "$stamp-$($t.name).record.json"), (ConvertTo-Json -InputObject $record -Depth 5),
-                            (New-Object Text.UTF8Encoding $false))
+# The controls and the /atmos values go back at the start of each test and once at the end of the run, not after
+# each test as well (the owner, 2026-10-10). A login loses ComfyTest's record of each CVar's value before, and the
+# game keeps the CVars in Config.wtf, so they also go back before each login. $dirty: a test has run since then.
+$dirty = $false
+function PutBack {
+    if (-not $script:dirty) { return }
+    $f = Join-Path $resultsDir "$((Get-Date).ToString('yyyyMMdd-HHmmss'))-putback.script.txt"
+    [IO.File]::WriteAllText($f, (@('say putting the controls back', 'cvarsback', 'atmos reset') -join "`r`n") + "`r`n")
+    & (Join-Path $tool 'Run-Test.ps1') $f -Client $Client 6>&1 | Out-Null
+    $script:dirty = $false
 }
 
-# The end (2026-10-09, the owner): no move, only flight off where the character is, and the settings back as they
-# were. Each test's own script ends with cvarsback and atmos reset. Until then the end went back to the last test's
-# flightFrom, turned the camera back, and stepped forward to fall: 5 s. A test that starts finds its own way to the
-# start (flightFrom or the start first), so one left swimming starts as well.
-$end = @('say flight off', 'flight off still', 'cvarsback', 'atmos reset', 'say done')
-$script = Join-Path $resultsDir "$((Get-Date).ToString('yyyyMMdd-HHmmss'))-end.script.txt"
-[IO.File]::WriteAllText($script, ($end -join "`r`n") + "`r`n")
-& (Join-Path $tool 'Run-Test.ps1') $script -Client $Client 6>&1 | Out-Null
+try {
+    foreach ($file in $files) {
+        if (-not (Test-Path $file)) { throw "No test $file" }
+        $t = Get-Content $file -Raw | ConvertFrom-Json
+        $cfg = $t.config
+        $stamp = (Get-Date).ToString('yyyyMMdd-HHmmss')
+        Write-Host "=== $($t.name) ==="
+
+        $slot = if ($cfg.character) { [int]$cfg.character } else { 1 }
+        $restarted = $false
+        if ($cfg.restart) {
+            # A fresh start (2026-10-06, load-performance): to the start first, so the world the client loads at the
+            # sign-in is the same each run, then the client closed and started again. A client not signed in yet signs in
+            # first (2026-10-06): it signed in where the last test had left the character, and the test's own move to the
+            # start then loaded a second world inside the 90 s measured (a frame of 3.6 s).
+            if ($cfg.start -and -not $NoLogin -and $null -eq $loggedAs) {
+                PutBack
+                & (Join-Path $tool 'Login.ps1') -Restart -Character $slot -Client $Client -Width $Width -Height $Height
+                $loggedAs = $slot
+            }
+            if ($cfg.start) {
+                $go = Join-Path $resultsDir "$stamp-$($t.name)-before.script.txt"
+                [IO.File]::WriteAllText($go, (@('flight off', "chat .go xyz $($cfg.start.x) $($cfg.start.y) $($cfg.start.z) $($cfg.start.map)",
+                    "arrive $($cfg.start.x) $($cfg.start.y) $($cfg.start.z)", 'wait 2') -join "`r`n") + "`r`n")
+                & (Join-Path $tool 'Run-Test.ps1') $go -Client $Client 6>&1 | Out-Null
+            }
+            PutBack
+            & (Join-Path $tool 'Login.ps1') -Restart -Character $slot -Client $Client -Width $Width -Height $Height
+            $loggedAs = $slot
+            $restarted = $true
+        }
+        elseif (-not $NoLogin -and $loggedAs -ne $slot) {
+            # The run's first login keeps a client already in the world (2026-10-09): closing and starting it again cost
+            # 30 s. Another character's test restarts it.
+            if ($null -eq $loggedAs) { & (Join-Path $tool 'Login.ps1') -Character $slot -Client $Client -Width $Width -Height $Height }
+            else { PutBack; & (Join-Path $tool 'Login.ps1') -Restart -Character $slot -Client $Client -Width $Width -Height $Height }
+            $loggedAs = $slot
+        }
+
+        # The config and the steps into a wow-test-tool script.
+        $speed = if ($cfg.flySpeed) { [double]$cfg.flySpeed } else { 7.0 }
+        $lines = @("# $($t.name), made by Run-Tests.ps1 from $([IO.Path]::GetFileName($file))")
+        $lines += Say "$($t.name): starting"
+        # GM mode on first (the owner, 2026-10-05): a hostile creature, summoned or near the start, leaves the
+        # character alone.
+        $lines += 'chat .gm on'
+        $lines += 'wait 0.5'
+        # comfyatmos's values and the controls: none left from the test before, then this test's. Before any move
+        # (2026-10-09, the owner): set at the start, the sun changed once at login and again there.
+        $lines += Say 'setting the snapshot: the sun and the controls'
+        $lines += 'cvarsback'
+        $lines += 'atmos reset'
+        if ($cfg.sun) {
+            $lines += 'atmos sun.fixed 1'
+            $lines += "atmos sun.azimuth $($cfg.sun.azimuth)"
+            $lines += "atmos sun.elevation $($cfg.sun.elevation)"
+        }
+        if ($cfg.ini) {
+            foreach ($p in $cfg.ini.PSObject.Properties) { $lines += "atmos $($p.Name) $($p.Value)" }
+        }
+        # The hour: the test's, or 12:00 (2026-10-08). Without one the game lit the world by the clock, and a run at
+        # 22:26 came out at night beside expected shots taken by day; config.sun turns only the shadows' sun.
+        $hour = if ($null -ne $cfg.hour) { [double]$cfg.hour } else { 12.0 }
+        $lines += 'atmos time.enabled 1'
+        $lines += "atmos time.hour $($hour.ToString([Globalization.CultureInfo]::InvariantCulture))"
+        if ($cfg.cvars) {
+            foreach ($p in $cfg.cvars.PSObject.Properties) { $lines += "cvar $($p.Name) $($p.Value)" }
+        }
+        if ($null -ne $cfg.debugView) { $lines += "cvar comfyDebugView $($cfg.debugView)" }
+        # Flight first, then the start: a start in the air holds only with flight on. The character must be on the
+        # ground when flight goes on, or it can stick in the air (the owner, 2026-10-03): wow-test-tool's ground waits
+        # until its height has stayed on the map files' ground for half a second. flight on and flight off read the
+        # state and cast only when it is the other way, and ground unlessflying does not wait when flight is on.
+        if ($cfg.flight) {
+            $lines += Say 'flight on'
+            # To the start first (2026-10-04): the test before may leave the character swimming, where the ground
+            # wait never ends. From a start in the air it falls to the ground under it; a GM takes no harm.
+            # Or to flightFrom, on land, when the start is over deep water (2026-10-06).
+            $f = if ($cfg.flightFrom) { $cfg.flightFrom } else { $cfg.start }
+            if ($f) { $lines += "chat .go xyz $($f.x) $($f.y) $($f.z) $($cfg.start.map)"; $lines += "arrive $($f.x) $($f.y) $($f.z)" }
+            $lines += 'hold W 0.15'   # a character left in the air with flight off falls only once it moves (0.5 s until 2026-10-09)
+            $lines += 'ground 60 unlessflying'; $lines += 'flight on'
+        }
+        else {
+            $lines += Say 'flight off'
+            $lines += 'flight off'
+        }
+        # Creatures the test needs (2026-10-04): summoned where each stands (.npc summon puts it at the player), on the
+        # start's map, before the start. Each is deleted after the steps (below). Only a creature with no world
+        # spawn: the delete goes by its name.
+        if ($cfg.summon) {
+            foreach ($u in $cfg.summon) {
+                $lines += "chat .go xyz $($u.x) $($u.y) $($u.z) $($cfg.start.map)"
+                $lines += "arrive $($u.x) $($u.y) $($u.z)"
+                $lines += "chat .npc summon $($u.entry)"
+                $lines += 'wait 1'
+            }
+        }
+        if ($cfg.start) {
+            $s = $cfg.start
+            $lines += Say 'going to the start'
+            $lines += "chat .go xyz $($s.x) $($s.y) $($s.z) $($s.map)"
+            # Until the character is there, then 1 s (2026-10-05): it was 5 s every time, and the tool's arrive line
+            # notes the place, so the pos line after it went too. Without comfytest.dll, arrive waits 5 s.
+            $lines += "arrive $($s.x) $($s.y) $($s.z)"
+            # The character's heading (2026-10-04): .go xyz keeps the old one. Turned by right-drags, the camera
+            # with it (2026-10-05): the camera turned alone and a right-click did not bring the character after it.
+            if ($null -ne $s.facing) { $lines += "heading $($s.facing)" }
+        }
+        if (-not $cfg.start) { $lines += 'wait 1.2'; $lines += 'pos start' }   # the place comes from comfyStats, up to a second old
+        # No weather (the owner, 2026-10-05): rain or snow changes the light and the fog from run to run. The
+        # weather is the zone's, so it is cleared here, at the start.
+        $lines += Say 'clearing the weather'
+        $lines += 'chat .wchange 0 0'
+        # The camera by a number (the owner, 2026-10-03): 0 first person, 1 to 9 that many notches of the mouse wheel
+        # back out from it, 10 all the way out. "zoomed" is 0 and "far" is 10. By the wheel since 2026-10-04: zoom out
+        # (CameraZoomOut) went all the way out whatever its number, so every test before then ran at 10. A notch: 1
+        # put the camera 2.5 yards back, 2 at 3.4, 4 at 5.3.
+        # Or by yards (cameraDistance, 2026-10-04): as far back as the owner had it, from a snapshot.
+        # Or the camera's own distance (cameraZoom, 2026-10-05), the field the wheel moves, set exactly by
+        # comfytest.dll: close in, camdist was a notch off.
+        if ($null -ne $cfg.cameraZoom -or $null -ne $cfg.cameraDistance -or $null -ne $cfg.camera) { $lines += Say 'moving the camera' }
+        # All the way in first (2026-10-07): the game keeps a distance of its own that its zoom sets, and each frame
+        # puts the camera there, or nearer where the ground is in the way. After a test 11 yards out, a slope behind
+        # the camera held it at 3.8 yards whatever camzoom wrote, and the next test's first person never came. Zoomed
+        # in, the game's distance is 0, and the one written holds wherever nothing pulls the camera in.
+        if ($null -ne $cfg.cameraZoom) { $lines += 'zoom -30'; $lines += 'zoomed'; $lines += "camzoom $($cfg.cameraZoom)" }
+        elseif ($null -ne $cfg.cameraDistance) { $lines += "camdist $($cfg.cameraDistance)" }
+        elseif ($null -ne $cfg.camera) {
+            $cam = if ($cfg.camera -eq 'zoomed') { 0 } elseif ($cfg.camera -eq 'far') { 10 } else { [int]$cfg.camera }
+            $lines += 'zoom -30'
+            if ($cam -ge 10) { $lines += 'zoom 30' } elseif ($cam -gt 0) { $lines += 'zoomed'; $lines += "wheel $cam" }
+        }
+        # hop: .go xyz along a line from the start at the start's height, in steps (2026-10-03). Exact where turning
+        # and flight speed were not. $along is how far along the line the last hop left the character.
+        $along = 0.0
+        # What each screenshot shows, for the page: the Debug View at the time.
+        $view = if ($null -ne $cfg.debugView) { [int]$cfg.debugView } else { 0 }
+        $shotViews = @()
+        $recViews = @(); $recLabels = @()
+        $nShot = 0; $nRec = 0; $nProbe = 0
+        $zoomAgain = $false   # the camera's distance written again at the first face (below)
+        foreach ($st in $t.steps) {
+            $p = $st.PSObject.Properties | Select-Object -First 1
+            $v = $p.Value
+            switch ($p.Name) {
+                'face'       { $lines += Say "facing $($v.heading)$(if ($null -ne $v.pitch) { ", pitch $($v.pitch)" })" }
+                'hop'        { $lines += Say "hopping to $($v.to) yards" }
+                'fly'        { $lines += Say "flying $v yards" }
+                'flyFor'     { $lines += Say "flying for $v s" }
+                'back'       { $lines += Say "backing $v yards" }
+                'turn'       { $lines += Say "turning $v degrees" }
+                'probe'      { $nProbe++; $lines += Say "probe $nProbe" }
+                'screenshot' { $nShot++; $lines += Say "screenshot $nShot" }
+                'record'     {
+                    $nRec++
+                    $secs = if ($null -ne $v.seconds) { $v.seconds } else { $v }
+                    $lines += Say "recording $nRec, $secs s$(if ($v.label) { ": $($v.label)" })"
+                }
+                'cvar'       { $lines += Say "control: $v" }
+                'atmos'      { $lines += Say "/atmos $v" }
+                'chat'       { $lines += Say "chat: $v" }
+                'target'     { $lines += Say "targeting $v" }
+                'camera'     { $lines += Say 'moving the camera' }
+                'cameraZoom' { $lines += Say "the camera $v yards back" }
+                'jump'       { $lines += Say 'jumping' }
+            }
+            switch ($p.Name) {
+                'wait'       { $lines += "wait $v" }
+                'jump'       { for ($j = 0; $j -lt [int]$v; $j++) { $lines += 'jump'; $lines += 'wait 1.2' } }   # in the water, it brings a swimmer up to the surface
+                'down'       { $lines += "down $v" }   # hold a key until its up step: the steps between run while it is held
+                'up'         { $lines += "up $v" }
+                'fly'        { $lines += ('hold W {0:0.##}' -f ([double]$v / $speed)); $lines += 'wait 1.2'; $lines += "pos after fly $v" }
+                'hop'        {
+                    if (-not $cfg.start) { throw "$($t.name): hop needs a start" }
+                    $h = [double]$v.heading * [math]::PI / 180.0
+                    $stepLen = if ($v.step) { [double]$v.step } else { 10.0 }
+                    $pause = if ($null -ne $v.pause) { [double]$v.pause } else { 0.001 }   # 0.3 until 2026-10-09 (the owner: a move can take 1 ms)
+                    $to = [double]$v.to
+                    $dir = if ($to -ge $along) { 1.0 } else { -1.0 }
+                    while ([math]::Abs($to - $along) -gt 0.01) {
+                        $along += $dir * [math]::Min($stepLen, [math]::Abs($to - $along))
+                        $x = [double]$cfg.start.x + [math]::Cos($h) * $along
+                        $y = [double]$cfg.start.y + [math]::Sin($h) * $along
+                        $lines += ('chat .go xyz {0:0.0} {1:0.0} {2:0.0} {3}' -f $x, $y, [double]$cfg.start.z, $cfg.start.map)
+                        $lines += "wait $pause"
+                    }
+                    # 0.3 s for the last .go to land (2026-10-09): 1.2 s was for comfyStats' pos, up to a second old;
+                    # wow-test-tool reads the place at once by comfytest.dll now.
+                    $lines += 'wait 0.3'; $lines += "pos after hop to $to"
+                }
+                'flyFor'     { $lines += "hold W $v"; $lines += 'wait 1.2'; $lines += "pos after flying $v s" }   # seconds, not yards: two legs of the same time cover the same ground
+                'back'       { $lines += ('hold S {0:0.##}' -f ([double]$v / ($speed * 0.64))); $lines += 'wait 1.2'; $lines += "pos after back $v" }   # backing up is 64% of the speed
+                'turn'       { $lines += "turnby $v"; $lines += 'wait 1.2'; $lines += "pos after turn $v" }   # to the left; by face, not Ctrl+Shift+F, which broke the camera (2026-10-05)
+                'pos'        { $lines += 'wait 1.2'; $lines += 'pos' }
+                'face'       {   # the character and the camera, checked against comfyStats: right-drags turn, wow-test-tool tilts
+                    $lines += "heading $($v.heading)"; if ($null -ne $v.pitch) { $lines += "pitch $($v.pitch)$(if ($v.leftDrag) { ' left' })" }
+                    # The distance again at the first face (2026-10-07): written before it, at the last test's pitch, the
+                    # camera met the water or the ground, and the game took it in to its own distance, 0 after the
+                    # zoom in above. A snapshot's own pitch is clear: the owner's camera stood there.
+                    if ($null -ne $cfg.cameraZoom -and -not $zoomAgain) { $zoomAgain = $true; $lines += "camzoom $($cfg.cameraZoom)" }
+                }
+                'probe'      { $lines += 'atmos probe' }
+                'screenshot' { $shotViews += $view; $lines += 'ui hide'; $lines += 'wait 0.05'; $lines += 'screenshot'; $lines += 'ui show' }   # without the UI, then the UI back (Alt+Z without comfytest.dll)
+                'record'     {   # a video, without the UI as a screenshot: { seconds, label } or the seconds alone
+                    $secs = if ($null -ne $v.seconds) { [double]$v.seconds } else { [double]$v }
+                    $recLabels += $(if ($v.label) { $v.label } else { '' })
+                    $recViews += $view
+                    # With start (2026-10-05), the steps after it run while it records, until recordWait: to record a
+                    # change those steps make, such as a stealth aura going on.
+                    if ($v.start) { $lines += 'ui hide'; $lines += 'wait 0.2'; $lines += "record $secs start" }
+                    else { $lines += 'ui hide'; $lines += 'wait 0.2'; $lines += "record $secs"; $lines += 'ui show' }
+                }
+                'recordWait' { $lines += 'recordwait'; $lines += 'ui show' }
+                'atmos'      { $lines += "atmos $v" }
+                'cvar'       { $lines += "cvar $v"; if ("$v" -match '^comfyDebugView\s+(\d+)') { $view = [int]$Matches[1] } }
+                'chat'       { $lines += "chat $v" }
+                'gameFront'  { $lines += 'front' }   # the game to the front, for a frame log: behind other windows it holds 60 fps (2026-10-06)
+                'gameBack'   { $lines += 'back' }    # the focus back to the window that had it (not 'back', which walks backwards)
+                'go'         {   # another place within the test (2026-10-06): .go xyz, then until the character is there
+                    $map = if ($null -ne $v.map) { $v.map } elseif ($cfg.start) { $cfg.start.map } else { 0 }
+                    $lines += "chat .go xyz $($v.x) $($v.y) $($v.z) $map"
+                    $lines += "arrive $($v.x) $($v.y) $($v.z)"
+                    if ($null -ne $v.facing) { $lines += "heading $($v.facing)" }
+                }
+                'type'       { $lines += "type $v" }
+                'target'      { $lines += "target $v" }   # the unit with that exact name, as /target (ComfyTest)
+                'clearTarget' { $lines += 'cleartarget' }
+                'camera'     {   # the camera's distance partway through, as config.camera: 0 first person, 1 to 9 notches out, 10 all the way
+                    $lines += 'zoom -30'
+                    if ([int]$v -ge 10) { $lines += 'zoom 30' } elseif ([int]$v -gt 0) { $lines += 'zoomed'; $lines += "wheel $([int]$v)" }
+                }   # typed into the chat box as a player types: a slash command (/target Pinto)
+                'cameraZoom' {   # the camera's own distance partway through, as config.cameraZoom (2026-10-08)
+                    $lines += 'zoom -30'; $lines += 'zoomed'; $lines += "camzoom $v"
+                }
+                default      { throw "$($t.name): unknown step '$($p.Name)'" }
+            }
+        }
+        # The summoned creatures go again: each selected by its name and deleted. .npc delete takes a world spawn out
+        # of the database for good, so it is sent only when the selection has exactly that name.
+        if ($cfg.summon) {
+            foreach ($u in $cfg.summon) {
+                $lines += "target $($u.name)"
+                $lines += 'wait 0.5'
+                $lines += "npcdelete $($u.name)"
+                $lines += 'wait 0.5'
+            }
+            $lines += 'cleartarget'
+        }
+        $script = Join-Path $resultsDir "$stamp-$($t.name).script.txt"
+        [IO.File]::WriteAllText($script, ($lines -join "`r`n") + "`r`n")
+
+
+        $log = ClientLog
+        $logStart = if ($restarted) { 0 } elseif (Test-Path $log) { @(Get-Content $log).Count } else { 0 }
+        $started = Get-Date
+        $dirty = $true
+        $runOut = & (Join-Path $tool 'Run-Test.ps1') $script -Client $Client -Timing:$Timing 6>&1 | Out-String
+        if ($Timing) { $runOut -split "`r?`n" | Where-Object { $_ -like 'time *' } | ForEach-Object { Write-Host "  $_" } }
+        $positions = @($runOut -split "`r?`n" | Where-Object { $_ -match '^(pos|arrive|face|heading|pitch) ' })
+        $warnings = @($runOut -split "`r?`n" | Where-Object { $_ -match '^error ' })
+
+        # The last probe of this run: from its header to the next report or the end. The frame it logs comes
+        # before the header (2026-10-04: the water's lines), and before that the probe's own start: from its
+        # "--- probe:" line (the see-through counts), or else its "begin frame" line.
+        $new = if (Test-Path $log) { @(Get-Content $log | Select-Object -Skip $logStart) } else { @() }
+        $heads = @(for ($i = 0; $i -lt $new.Count; $i++) { if ($new[$i] -match '^=== client report \((F12|/atmos probe)\) ===') { $i } })
+        # Each probe of the run (2026-10-04): a check reads the last unless it names one (probeAt, from 1). A probe's
+        # lines end at the next probe's own start, or its report.
+        $probes = @()
+        foreach ($hd in $heads) {
+            $from = $hd
+            $begin = -1
+            for ($i = $from - 1; $i -ge 0 -and $new[$i] -notmatch '^=== (end of )?client report'; $i--) {
+                if ($new[$i] -match '^--- probe: ') { $begin = $i; break }
+                if ($begin -lt 0 -and $new[$i] -match '^--- begin frame \d+ capture ---') { $begin = $i }
+            }
+            if ($begin -ge 0) { $from = $begin }
+            $to = $new.Count
+            for ($i = $hd + 1; $i -lt $new.Count; $i++) { if ($new[$i] -match '^=== client report|^--- probe: ') { $to = $i; break } }
+            $probes += ,@($new[$from..($to - 1)])
+        }
+        $probe = if ($probes.Count) { $probes[-1] } else { @() }
+
+        # Every screenshot of the run, in order: a test can take one in each debug view.
+        $shots = @(Get-ChildItem (Join-Path $Client 'Screenshots') -File -ErrorAction SilentlyContinue |
+                   Where-Object { $_.LastWriteTime -ge $started } | Sort-Object LastWriteTime)
+
+        $results = @()
+        $checks = @()   # for the page: each check, whether it passed, and the screenshot it read (0: the probe)
+        $pass = $true
+        # A test that flies needs flight on (2026-10-07): far-terrain-cache ran on the ground for days and passed, with
+        # "error flight on" only a warning. Now it is a check of its own.
+        if ($cfg.flight) {
+            $flightError = @($warnings | Where-Object { $_ -match '^error flight on' }) | Select-Object -First 1
+            $ok = -not $flightError
+            $results += ('{0}  Flight on for the test{1}' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $(if ($ok) { '' } else { ": $flightError" }))
+            $checks += [pscustomobject]@{ ok = $ok; about = 'Flight on for the test'; got = $(if ($ok) { 'flight on' } else { $flightError }); shot = 0 }
+            if (-not $ok) { $pass = $false }
+        }
+        foreach ($e in $t.expect) {
+            if ($null -ne $e.log) {
+                # A number from the log (2026-10-06, the performance tests): the nth or the last match in this run.
+                $ms = @($new | ForEach-Object { $m = [regex]::Match($_, $e.log); if ($m.Success) { $m } })
+                $k = if ($null -ne $e.at) { [int]$e.at } else { $ms.Count }
+                if ($k -lt 1 -or $k -gt $ms.Count) {
+                    $results += "FAIL  no line $k for: $($e.about) ($($ms.Count) found)"
+                    $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = "no line $k in the log ($($ms.Count) found)"; shot = 0 }
+                    $pass = $false; continue
+                }
+                $value = [double]::Parse($ms[$k - 1].Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture)
+                $unit = if ($e.unit) { " $($e.unit)" } else { '' }
+                $ok = ($null -eq $e.max -or $value -le [double]$e.max) -and ($null -eq $e.min -or $value -ge [double]$e.min)
+                $want = @()
+                if ($null -ne $e.max) { $want += "at most $($e.max)$unit" }
+                if ($null -ne $e.min) { $want += "at least $($e.min)$unit" }
+                $wantText = if ($want.Count) { " ($($want -join ' and '))" } else { ' (recorded only)' }
+                if (-not $ok) { $pass = $false }
+                $results += ('{0}  {1}: {2}{3}{4}' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $value, $unit, $wantText)
+                $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('{0}{1}{2}' -f $value, $unit, $wantText); shot = 0 }
+                if ($e.metric) {
+                    $metrics += [pscustomobject]@{ stamp = $stamp; test = $t.name; metric = $e.metric; value = $value
+                        unit = "$($e.unit)"; max = $e.max; min = $e.min; ok = $ok; version = (DllVersion) }
+                }
+                continue
+            }
+            if ($null -ne $e.shot -and $null -ne $e.box) {
+                # A box of a screenshot (2026-10-04): how much of it jumps from one pixel to the next. Counting
+                # half-grey pixels missed speckle that came as hard black and white dots.
+                $n = [int]$e.shot
+                if ($n -lt 1 -or $n -gt $shots.Count) { $results += "FAIL  no screenshot $n ($($shots.Count) taken): $($e.about)"; $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = "no screenshot $n ($($shots.Count) taken)"; shot = 0 }; $pass = $false; continue }
+                Add-Type -AssemblyName System.Drawing
+                $bmp = [Drawing.Bitmap]::FromFile($shots[$n - 1].FullName)
+                $jumps = 0; $warm = 0; $count = 0
+                try {
+                    for ($y = [int]$e.box[1]; $y -le [int]$e.box[3] -and $y -lt $bmp.Height; $y += 2) {
+                        for ($x = [int]$e.box[0]; $x -lt [int]$e.box[2] -and $x + 1 -lt $bmp.Width; $x++) {
+                            $p = $bmp.GetPixel($x, $y); $q = $bmp.GetPixel($x + 1, $y)
+                            if ([Math]::Abs(($p.R + $p.G + $p.B) - ($q.R + $q.G + $q.B)) / 3 -gt 60) { $jumps++ }
+                            if ($p.R -gt $p.G) { $warm++ }
+                            $count++
+                        }
+                    }
+                }
+                finally { $bmp.Dispose() }
+                if ($null -ne $e.warmMax) {
+                    # Ground seen through the water (2026-10-07): a gap in the surface shows brown in the blue-green sea.
+                    $share = if ($count) { [Math]::Round(100 * $warm / $count, 1) } else { 0 }
+                    $ok = $share -le [double]$e.warmMax
+                    if (-not $ok) { $pass = $false }
+                    $got = '{0}% of the box is redder than green (at most {1}%)' -f $share, $e.warmMax
+                    $results += ('{0}  {1}: {2}' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $got)
+                    $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = $got; shot = $n }
+                    continue
+                }
+                $share = if ($count) { [int](100 * $jumps / $count) } else { 0 }
+                $ok = $share -le [int]$e.jumpMax
+                if (-not $ok) { $pass = $false }
+                $results += ('{0}  {1}: {2}% of the box jumps from one pixel to the next (at most {3}%)' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $share, $e.jumpMax)
+                $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('{0}% of the box jumps from one pixel to the next (at most {1}%)' -f $share, $e.jumpMax); shot = $n }
+                continue
+            }
+            if ($null -ne $e.shot) {
+                # A row of a screenshot (2026-10-04): the Debug View 5 shot is one grey where the shade is even, and
+                # a strip of shade that should not be there shows as a dip.
+                $n = [int]$e.shot
+                if ($n -lt 1 -or $n -gt $shots.Count) { $results += "FAIL  no screenshot $n ($($shots.Count) taken): $($e.about)"; $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = "no screenshot $n ($($shots.Count) taken)"; shot = 0 }; $pass = $false; continue }
+                Add-Type -AssemblyName System.Drawing
+                $bmp = [Drawing.Bitmap]::FromFile($shots[$n - 1].FullName)
+                $low = 255; $at = -1; $sum = 0; $count = 0
+                try {
+                    for ($x = [int]$e.from; $x -le [int]$e.to -and $x -lt $bmp.Width; $x += 4) {
+                        $c = $bmp.GetPixel($x, [int]$e.row)
+                        $l = [int](($c.R + $c.G + $c.B) / 3)
+                        if ($l -lt $low) { $low = $l; $at = $x }
+                        $sum += $l; $count++
+                    }
+                }
+                finally { $bmp.Dispose() }
+                $avg = if ($count) { [int]($sum / $count) } else { 0 }
+                # meanMax (2026-10-04): the most the average may be, for a row that must stay in shade.
+                $ok = ($null -eq $e.min -or $low -ge [int]$e.min) -and ($null -eq $e.mean -or $avg -ge [int]$e.mean) -and
+                      ($null -eq $e.meanMax -or $avg -le [int]$e.meanMax)
+                $wantAvg = @()
+                if ($null -ne $e.mean) { $wantAvg += "at least $($e.mean)" }
+                if ($null -ne $e.meanMax) { $wantAvg += "at most $($e.meanMax)" }
+                $wantAvg = if ($wantAvg.Count) { $wantAvg -join ' and ' } else { 'any' }
+                if (-not $ok) { $pass = $false }
+                $results += ('{0}  {1}: row {2} averages {3}, its darkest pixel {4} at column {5} (wanted: average {6}, darkest {7})' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $e.row, $avg, $low, $at, $wantAvg, $(if ($null -ne $e.min) { "at least $($e.min)" } else { 'any' }))
+                $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('row {0} averages {1}, its darkest pixel {2} at column {3} (wanted: average {4}, darkest {5})' -f $e.row, $avg, $low, $at, $wantAvg, $(if ($null -ne $e.min) { "at least $($e.min)" } else { 'any' })); shot = $n }
+                continue
+            }
+            if (-not $heads.Count) { $results += "FAIL  no probe in the log: $($e.about)"; $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = 'no probe in the log'; shot = 0 }; $pass = $false; continue }
+            $slice = $probe
+            if ($null -ne $e.probeAt) {
+                $k = [int]$e.probeAt
+                $slice = if ($k -ge 1 -and $k -le $probes.Count) { $probes[$k - 1] } else { @() }
+            }
+            $hits = @($slice | Where-Object { $_ -match $e.probe })
+            $ok = $true
+            if ($null -ne $e.max -and $hits.Count -gt [int]$e.max) { $ok = $false }
+            if ($null -ne $e.min -and $hits.Count -lt [int]$e.min) { $ok = $false }
+            if (-not $ok) { $pass = $false }
+            $results += ('{0}  {1}: {2} line(s) match' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $hits.Count)
+            $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('{0} line(s) of the probe match' -f $hits.Count); shot = 0 }
+            $results += @($hits | Select-Object -First 10 | ForEach-Object { "        $_" })
+        }
+
+        $shotCopies = @()
+        for ($i = 0; $i -lt $shots.Count; $i++) {
+            $suffix = if ($shots.Count -gt 1) { "-$($i + 1)" } else { '' }
+            $copy = Join-Path $resultsDir "$stamp-$($t.name)$suffix$($shots[$i].Extension)"
+            Copy-Item $shots[$i].FullName $copy
+            $shotCopies += $copy
+        }
+        # Every recording of the run (2026-10-05), with its sheet of frames: the step record.
+        $recs = @(Get-ChildItem (Join-Path $Client 'Recordings') -Filter *.mp4 -File -ErrorAction SilentlyContinue |
+                  Where-Object { $_.LastWriteTime -ge $started } | Sort-Object LastWriteTime)
+        $recCopies = @()
+        for ($i = 0; $i -lt $recs.Count; $i++) {
+            $copy = Join-Path $resultsDir "$stamp-$($t.name)-rec$($i + 1).mp4"
+            Copy-Item $recs[$i].FullName $copy
+            $sheet = $recs[$i].FullName -replace '\.mp4$', '-sheet.jpg'
+            if (Test-Path $sheet) { Copy-Item $sheet ($copy -replace '\.mp4$', '-sheet.jpg') }
+            $recCopies += $copy
+        }
+
+        $verdict = if ($pass) { 'PASS' } else { 'FAIL' }
+        $report = @("$verdict  $($t.name)  ($stamp)") + $results
+        if ($positions.Count) { $report += 'where the character was:'; $report += @($positions | ForEach-Object { "        $_" }) }
+        if ($warnings.Count) { $report += 'errors from the game:'; $report += @($warnings | ForEach-Object { "        $_" }) }
+        if ($shotCopies.Count) { $report += @($shotCopies | ForEach-Object { "screenshot: $_" }) } else { $report += 'screenshot: none taken' }
+        $report += @($recCopies | ForEach-Object { "recording: $_" })
+        $text = $report -join "`r`n"
+        Write-Host $text
+        [IO.File]::WriteAllText((Join-Path $resultsDir "$stamp-$($t.name).txt"), $text + "`r`n`r`n" + ($probe -join "`r`n") + "`r`n")
+        $summary += "$verdict  $($t.name)"
+        if ($Accept -and $shotCopies.Count) {
+            New-Item -ItemType Directory -Force $expectedDir | Out-Null
+            for ($i = 0; $i -lt $shotCopies.Count; $i++) {
+                Copy-Item $shotCopies[$i] (Join-Path $expectedDir "$($t.name)-$($i + 1)$([IO.Path]::GetExtension($shotCopies[$i]))") -Force
+            }
+        }
+        # The recordings too (2026-10-05): expected\<test>-rec<n>.mp4, played beside this run's on the page.
+        if ($Accept -and $recCopies.Count) {
+            New-Item -ItemType Directory -Force $expectedDir | Out-Null
+            for ($i = 0; $i -lt $recCopies.Count; $i++) {
+                Copy-Item $recCopies[$i] (Join-Path $expectedDir "$($t.name)-rec$($i + 1).mp4") -Force
+            }
+        }
+        $record = [pscustomobject]@{
+            name = $t.name; about = $t.about; pass = $pass; stamp = $stamp; checks = $checks
+            positions = $positions; warnings = $warnings; shots = $shotCopies; views = $shotViews
+            recordings = $recCopies; recViews = $recViews; recLabels = $recLabels; version = (DllVersion)
+        }
+        $records += $record
+        # Each test's result on its own (2026-10-06, the owner): Build-Latest.ps1 makes one page of every test's latest,
+        # whichever run it came from.
+        [IO.File]::WriteAllText((Join-Path $resultsDir "$stamp-$($t.name).record.json"), (ConvertTo-Json -InputObject $record -Depth 5),
+                                (New-Object Text.UTF8Encoding $false))
+    }
+
+}
+finally {
+    # The end (2026-10-09, the owner): no move, only flight off where the character is, and the settings back as
+    # they were, once for the whole run (2026-10-10), also when the run stops on an error. Until 2026-10-09 the end
+    # went back to the last test's flightFrom, turned the camera back, and stepped forward to fall: 5 s. A test that
+    # starts finds its own way to the start (flightFrom or the start first), so one left swimming starts as well.
+    $end = @('say flight off', 'flight off still', 'cvarsback', 'atmos reset', 'say done')
+    $script = Join-Path $resultsDir "$((Get-Date).ToString('yyyyMMdd-HHmmss'))-end.script.txt"
+    [IO.File]::WriteAllText($script, ($end -join "`r`n") + "`r`n")
+    try { & (Join-Path $tool 'Run-Test.ps1') $script -Client $Client 6>&1 | Out-Null }
+    catch { Write-Warning "The end of the run failed: $_. Put the controls back by hand (/atmos reset; the Atmosphere page)." }
+}
 
 # The performance history (2026-10-06): every number a check records, kept across runs, for the page's panel.
 $historyFile = Join-Path $resultsDir 'perf-history.json'

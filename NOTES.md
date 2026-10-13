@@ -1851,7 +1851,8 @@ Stormwind canal 67 (37 with only the larger-of-two fix).
 
 `/atmos fog.morning 0` is refused: the Morning Mist control sets it. So both fog tests ran with the hour's boost
 until the runner gained `cvars` in the config. ComfyTest's `cvar` now keeps each CVar's value before its first
-change, and `cvarsback` at the end of every test puts them back. The game saves CVars in Config.wtf, and a
+change, and `cvarsback` puts them back: at the start of each test, before a login and at the end of the run
+(since 2026-10-10; before then at the end of every test as well). The game saves CVars in Config.wtf, and a
 test would otherwise leave the owner's controls moved.
 
 ## A lit strip at the top of a stump's back (2026-10-05)
