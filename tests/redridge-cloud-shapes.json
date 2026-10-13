@@ -14,6 +14,7 @@
             "about": "the elwynn-ridge-fog start: on the ground, first person, toward the ridges"
         },
         "cvars": {
+            "comfyAtmosphere": 1,
             "comfyClouds": 1,
             "comfyCloudCover": 50,
             "comfyCloudShapes": 15,
