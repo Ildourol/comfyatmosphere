@@ -77,7 +77,31 @@ namespace
     constexpr int   kRings = 16;           // ripples held at once (32 until 2026-10-02: the frame rate)
     constexpr float kRingLife = 2.6f;      // seconds a ripple spreads before it is gone
 
-    const char* kVsHlsl = R"HLSL(
+    // Bit n of a whole number held in a float: the wet cells are packed 16 bits to a component, the sea's points 24
+    // (2026-10-13, issue #11). It was floor(bits * exp2(-n)): exp2 need not be exact (AMD's is within an ulp), and a
+    // result one ulp low reads a wrong bit. A player on an AMD Radeon RX 9060 XT saw bands of the sand's colour over
+    // the sea, not seen on NVIDIA; this is one cause it could have.
+    // BitAt16 adds half a step: for 16 bits, any exp2 within 2^-17 of the truth then gives the exact bit, in 2 more
+    // instructions. BitAt, for the 24-bit sea mask, builds the power of two from exact halvings (some 40
+    // instructions, in the vertex shader alone). Shared by the water's shaders that read the masks.
+#define COMFY_BIT_AT_HLSL \
+    "float Mod2(float x) { return x - 2.0 * floor(x * 0.5); }\n" \
+    "float BitAt16(float bits, float n) { float s = exp2(-n); return Mod2(floor(bits * s + 0.5 * s)); }\n" \
+    "float BitAt(float bits, float n)\n" \
+    "{\n" \
+    "    float p = Mod2(n) > 0.5 ? 0.5 : 1.0;\n" \
+    "    float m = floor(n * 0.5);\n" \
+    "    p *= Mod2(m) > 0.5 ? 0.25 : 1.0;\n" \
+    "    m = floor(m * 0.5);\n" \
+    "    p *= Mod2(m) > 0.5 ? 0.0625 : 1.0;\n" \
+    "    m = floor(m * 0.5);\n" \
+    "    p *= Mod2(m) > 0.5 ? 0.00390625 : 1.0;\n" \
+    "    m = floor(m * 0.5);\n" \
+    "    p *= m > 0.5 ? 1.52587890625e-5 : 1.0;\n" \
+    "    return Mod2(floor(bits * p));\n" \
+    "}\n"
+
+    const char* kVsHlsl = COMFY_BIT_AT_HLSL R"HLSL(
 float4 gM0 : register(c240);   // rows of world x view x projection
 float4 gM1 : register(c241);
 float4 gM2 : register(c242);
@@ -159,7 +183,7 @@ O main(float3 p : POSITION, float2 uv : TEXCOORD0)
             if (all(rc >= 0.0) && all(rc <= 7.0))
             {
                 const float bits = rc.x < 2.0 ? gCellsV.x : rc.x < 4.0 ? gCellsV.y : rc.x < 6.0 ? gCellsV.z : gCellsV.w;
-                touchesWet = touchesWet || fmod(floor(bits * exp2(-(fmod(rc.x, 2.0) * 8.0 + rc.y))), 2.0) > 0.5;
+                touchesWet = touchesWet || BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y) > 0.5;
             }
         }
     }
@@ -169,7 +193,7 @@ O main(float3 p : POSITION, float2 uv : TEXCOORD0)
     const float si   = clamp(g.x, 0.0, 8.0) * 9.0 + clamp(g.y, 0.0, 8.0);
     const float sc   = floor((si + 0.5) / 24.0);
     const float sb   = sc < 0.5 ? gSeaV.x : sc < 1.5 ? gSeaV.y : sc < 2.5 ? gSeaV.z : gSeaV.w;
-    const float seaP = fmod(floor(sb * exp2(-(si - sc * 24.0))), 2.0);
+    const float seaP = BitAt(sb, si - sc * 24.0);
     const float2 gp = clamp(g, 0.0, 8.0);
     const float  md = gDepthV.x >= 0.0 ? tex2Dlod(sDepthV, float4((gp.x * 9.0 + gp.y + 0.5) / 81.0, gDepthV.x, 0, 0)).r
                                        : -1.0;
@@ -194,7 +218,7 @@ O main(float3 p : POSITION, float2 uv : TEXCOORD0)
 }
 )HLSL";
 
-    const char* kPsHlsl = R"HLSL(
+    const char* kPsHlsl = COMFY_BIT_AT_HLSL R"HLSL(
 sampler2D sUnder : register(s15);  // the depth under the water (INTZ), copied before the first water draw
 sampler2D sScene : register(s14);  // the screen before the first water draw: what lies under the water
 sampler2D sFoamTex : register(s12); // the game's own foam (WATERFOAMLOOP2.blp), tiled over the water
@@ -488,7 +512,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     {
         const float2 rc  = clamp(floor(-cell * 0.24), 0.0, 7.0);
         const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
-        const float  wetC = fmod(floor(bits * exp2(-(fmod(rc.x, 2.0) * 8.0 + rc.y))), 2.0);
+        const float  wetC = BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y);
         const float  h    = -depth;
         const float  band = frac(abs(h) * 10.0);
         const float  ink  = band < 0.12 ? (frac(abs(h)) < 0.1 ? 1.0 : 0.35) : 0.0;
@@ -532,7 +556,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     {
         const float2 rc  = clamp(floor(-cell * 0.24), 0.0, 7.0);     // row, column (4.1667 yards a cell)
         const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
-        const float  wet = fmod(floor(bits * exp2(-(fmod(rc.x, 2.0) * 8.0 + rc.y))), 2.0);
+        const float  wet = BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y);
         keep = min(keep, wet > 0.5 ? 1.0 : -depth);
     }
     clip(keep);
@@ -1373,14 +1397,14 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // shadows shaded the body, not the water: a creature under the sea showed as a pale (or a dark) shape through
     // the water beside it. This draw writes the surface's depth there, colour off. It drops what the water's own
     // shader drops: the camera under the flat water, and a cell the game leaves dry.
-    const char* kBodyDepthPsHlsl = R"HLSL(
+    const char* kBodyDepthPsHlsl = COMFY_BIT_AT_HLSL R"HLSL(
 float4 gCells : register(c210);    // the chunk's wet cells, as the water's shader
 float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2, float z0 : TEXCOORD3,
             float2 cell : TEXCOORD4) : COLOR
 {
     const float2 rc   = clamp(floor(-cell * 0.24), 0.0, 7.0);
     const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
-    const float  wet  = fmod(floor(bits * exp2(-(fmod(rc.x, 2.0) * 8.0 + rc.y))), 2.0);
+    const float  wet  = BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y);
     // Under the flat water's plane, as the water's shader (FlatAbove there).
     const float3 pf = float3(rel.xy, z0);
     float3 n = cross(ddx(pf), ddy(pf));

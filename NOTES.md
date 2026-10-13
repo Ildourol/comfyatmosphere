@@ -3684,3 +3684,23 @@ the Color Effects box. The copy compiles to 2 texture reads and 7 arithmetic ins
 client pixel shaders dumped over past sessions, 477 match, all the same 204 bytes, the composite.
 `tests/stormwind-game-glow.json` takes shots at 100, 50, 0 and 200 on the bridge into Stormwind. Its first run
 (2026-10-13) found the composite and made the copy; at 200 the bridge is washed out, at 0 it is clear.
+
+## Bands of the sand's colour over the sea on an AMD card (2026-10-13, issue #11)
+
+A player on an AMD Radeon RX 9060 XT (AMD's own Vulkan driver, v0.13.0-alpha) saw straight, evenly spaced bands
+over the sea in Darkshore and over the lake in Darnassus, filled with a fixed pattern of dots in the sand's colour.
+Not seen on the NVIDIA card in either place, with their DLL, ini, controls and video settings in a fresh OctoWoW
+client.
+
+Ruled out: the waves' `sin` and `cos` of large world positions. In shader model 3 they compile to `sincos`, and fxc
+wraps the argument in the shader first (`mad x, 1/2π, 0.5`, `frc`, `mad 2π, -π`), the same on every card.
+
+One cause it could have, fixed whatever the result: the wet cells (16 bits to a component) and the sea's points
+(24) were read with `floor(bits * exp2(-n))`. exp2 need not be exact, and one ulp low reads a wrong bit: in float32,
+with exp2 off by 1 or 2 ulps, 262,108 of the 16-bit cases came out wrong. `BitAt16` adds half a step (exact for any
+exp2 within 2^-17), and `BitAt` builds the power of two from exact halvings for the 24-bit mask. Both read every bit
+right in the same check. The cost: 8 instructions in the water and the classify pass, 31 in the vertex shader.
+The water tests darkshore-water-split and westfall-far-waterline pass, and their water is unchanged.
+
+Open: the player's tests (Glint, the small waves, the swell, Foam, Swash, Wet Sand off one at a time) and a build
+with this fix on their card.
