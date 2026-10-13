@@ -73,6 +73,7 @@ COMFYATMOSPHERE_WATER_RIPPLE_MOVING = "Moving Ripple Depth";
 COMFYATMOSPHERE_WATER_RIPPLE_SPREAD = "Standing Ripple Spread";
 COMFYATMOSPHERE_WATER_RIPPLE_SPREAD_MOVING = "Moving Ripple Spread";
 COMFYATMOSPHERE_WATER_JUMP_RIPPLE = "Jump Ripple";
+COMFYATMOSPHERE_GAME_GLOW = "Game Glow";
 COMFYATMOSPHERE_WATER_FOAM     = "Foam";
 COMFYATMOSPHERE_WATER_FOAM_DRAWN = "Drawn Foam";
 COMFYATMOSPHERE_WATER_FOAM_SIZE = "Foam Size";
@@ -1558,6 +1559,17 @@ local ENTRIES = {
 		numberLabels = 1,
 	},
 	{
+		-- Percent: [colour] gameGlow (gameglow.cpp). Not under Color Effects: it scales the game's own pass.
+		name = "COMFYATMOSPHERE_GAME_GLOW",
+		desc = "How strong the game's Full Screen Glow is. 100 is the game's own. 0 is none. Needs Full Screen Glow on.",
+		type = "slider",
+		cvar = "comfyGameGlow",
+		minval = 0,
+		maxval = 200,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
 		name = "COMFYATMOSPHERE_CLOUDS",
 		desc = "Soft clouds that drift with the wind. Now and then one takes a shape. Every player in one place sees the same sky.",
 		type = "checkbutton",
@@ -2186,7 +2198,7 @@ local WINDOW_SECTIONS = {
 	              "comfyCloudLayerSoftness", "comfyCloudReshape", "comfyCloudSpeed", "comfyCloudTransition",
 	              "comfyCloudShapesOn", "comfyCloudShapes", "comfyCloudShapeSize", "comfyCloudShapeBillows",
 	              "comfyCloudClearing", "comfyCloudCutoutWidth" } },
-	{ "Color", { "comfyColor", "comfyDaySaturation", "comfyNightSaturation" } },
+	{ "Color", { "comfyColor", "comfyDaySaturation", "comfyNightSaturation", "comfyGameGlow" } },
 	{ "Grass", { "comfyGrass", "comfyGrassWind", "comfyGrassSpeed", "comfyGrassWaveLength", "comfyGrassWindDir",
 	             "comfyGrassLean", "comfyGrassParting", "comfyGrassPartingRadius", "frillDensity" } },
 	{ "Water", { "comfyWater", "comfyWaterColour", "comfyWaterZone", "comfyWaterSunset", "comfyWaterBright", "comfyWaterClarity", "comfyWaterReflect", "comfyWaterBend", "comfyWaterCover", "comfyWaterFoam", "comfyWaterFoamDrawn", "comfyWaterFoamSize", "comfyWaterFoamReach", "comfyWaterFoamEdge", "comfyWaterWakeFoam", "comfyWaterShipWake", "comfyWaterShipForward", "comfyWaterShipDepth", "comfyWaterLakeSwash", "comfyWaterLakeFoam", "comfyWaterLakeWaves", "comfyWaterRain", "comfyWaterObjectFoam", "comfyWaterObjectFoamWidth", "comfyWaterOpenFoam", "comfyWaterOpenFoamAmount", "comfyWaterSwash", "comfyWaterSwashHeight", "comfyWaterSwashLength", "comfyWaterSwashSpeed", "comfyWaterWetSand", "comfyWaterWake", "comfyWaterRippleDepth", "comfyWaterRippleMoving", "comfyWaterRippleSpread", "comfyWaterRippleSpreadMoving", "comfyWaterJumpRipple",

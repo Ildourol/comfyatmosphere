@@ -3665,3 +3665,22 @@ The client's Full Screen Glow then blooms the spells as before.
   the lit ground before the bloom reads it. The owner, comparing spellsOnTop 0 and 1 in game: the glow slightly
   brighter, "it might be ok". If it is too bright, the next step is to split the sun shadows as the fog is: the
   shade at the world's end, the Sunlight brightening where it was, after the glow.
+
+## Game Glow: the game's Full Screen Glow, turned down (2026-10-13, the owner)
+
+"The full screen glow is quite bright." With Full Screen Glow on, the client draws three passes after the world
+(a probe of 2026-10-13, the shaders dumped by F12 and disassembled):
+
+1. The world's image to a quarter size, four taps of 0.25 each.
+2. Two blur passes at that size (0.375, 0.125, 0.375, 0.125).
+3. The composite onto the screen: `out = lerp(world, blur, v0.z) + blur² x v0.w`. `v0.z` mixes the blur into the
+   world (the haze); `v0.w` adds the squared blur (the glow on what is bright). Both are the full-screen quad's
+   vertex colour, set by the zone and the hour. No CVar sets them.
+
+`gameglow.cpp` disassembles each new pixel shader once (only while Game Glow is not 100) and swaps the composite for a
+copy that multiplies both by `[colour] gameGlow` / 100, in c30 (`terrainshade.cpp` uses c31; the client's pixel
+shaders go no higher than c9). The control is Game Glow on the Atmosphere page, in Color, 0..200, and it is not under
+the Color Effects box. The copy compiles to 2 texture reads and 7 arithmetic instructions (the original: 2 and 5), its `def c0` clear of c30. The match: of 4,181
+client pixel shaders dumped over past sessions, 477 match, all the same 204 bytes, the composite.
+`tests/stormwind-game-glow.json` takes shots at 100, 50, 0 and 200 on the bridge into Stormwind. Its first run
+(2026-10-13) found the composite and made the copy; at 200 the bridge is washed out, at 0 it is clear.

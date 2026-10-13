@@ -512,6 +512,7 @@ void LoadSettings(const wchar_t* ini)
     s.lighthouse.color   = GetX(kLighthouse, L"color", s.lighthouse.color, ini) & 0xFFFFFF;
     s.colour.day   = Clamp(GetF(kColour, L"day",   s.colour.day,   ini), 0.0f, 200.0f);
     s.colour.night = Clamp(GetF(kColour, L"night", s.colour.night, ini), 0.0f, 200.0f);
+    s.colour.gameGlow = Clamp(GetF(kColour, L"gameGlow", s.colour.gameGlow, ini), 0.0f, 200.0f);
 
     GrassSettings& g = s.grass;
     g.enabled         = GetB(kGrass, L"enabled", g.enabled, ini);

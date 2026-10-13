@@ -106,7 +106,7 @@ namespace
                 kHotkeys, kWaterZone, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
                 kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing,
                 kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
-                kJumpRipple,
+                kJumpRipple, kGameGlow,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -275,6 +275,8 @@ namespace
         "comfyCloudShapesOn",
         // Jump Ripple (2026-10-12): [water] jumpRipple, as a percentage.
         "comfyWaterJumpRipple",
+        // Game Glow (2026-10-13): [colour] gameGlow, as a percentage.
+        "comfyGameGlow",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -538,6 +540,7 @@ namespace
         case kMoonlight:      snprintf(out, cap, "%.0f", s.night.tint * 100.0f); break;
         case kDaySaturation:  snprintf(out, cap, "%.0f", s.colour.day); break;      // percent already
         case kNightSaturation: snprintf(out, cap, "%.0f", s.colour.night); break;
+        case kGameGlow:       snprintf(out, cap, "%.0f", s.colour.gameGlow); break;    // percent already
         case kColour:         snprintf(out, cap, "%d", s.colour.enabled ? 1 : 0); break;
         case kFog:            snprintf(out, cap, "%d", s.fog.enabled ? 1 : 0); break;
         // Ten-thousandths a yard (40 is 0.004), yards, and percentages.
@@ -691,6 +694,7 @@ namespace
         if (c[kMoonlight].seen)      s.night.tint     = Clamp(c[kMoonlight].value * 0.01f, 0.0f, 1.0f);
         if (c[kDaySaturation].seen)  s.colour.day     = Clamp(c[kDaySaturation].value, 0.0f, 200.0f);
         if (c[kNightSaturation].seen) s.colour.night  = Clamp(c[kNightSaturation].value, 0.0f, 200.0f);
+        if (c[kGameGlow].seen)        s.colour.gameGlow = Clamp(c[kGameGlow].value, 0.0f, 200.0f);
         if (c[kColour].seen)         s.colour.enabled = c[kColour].value != 0.0f;
         if (c[kFog].seen)            s.fog.enabled    = c[kFog].value != 0.0f;
         if (c[kFogDensity].seen)     s.fog.density    = Clamp(c[kFogDensity].value * 0.0001f, 0.0f, 0.1f);

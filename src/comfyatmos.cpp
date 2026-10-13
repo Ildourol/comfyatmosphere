@@ -42,6 +42,7 @@
 #include "shadow.h"
 #include "sun.h"
 #include "sunshadows.h"
+#include "gameglow.h"
 #include "terrainshade.h"
 #include "timeofday.h"
 #include "mapterrain.h"
@@ -1217,6 +1218,7 @@ namespace
             SunShadowsReset();
             BodyMaskReset();
             TerrainShadeReset();
+            GameGlowReset();
             SpellsDrop();
             WaterReset();
             GradeReset();
@@ -1363,6 +1365,7 @@ namespace
         SunShadowsReset();
         BodyMaskReset();
         TerrainShadeReset();
+        GameGlowReset();
         SpellsDrop();
         WaterReset();
         GradeReset();
@@ -1620,6 +1623,7 @@ namespace
         SunShadowsReset();
         BodyMaskReset();
         TerrainShadeReset();
+        GameGlowReset();
         SpellsDrop();
         WaterReset();
         GradeReset();
@@ -1743,6 +1747,8 @@ namespace
             const float share = g_cfg.master ? SunShadowsShare() : 0.0f;
             const float keep  = 1.0f - (1.0f - g_cfg.sunShadows.baked) * share;
             sh = TerrainShadeSwap(dev, sh, keep);
+            // Game Glow ([colour] gameGlow): the Full Screen Glow's composite, scaled (gameglow.cpp).
+            sh = GameGlowSwap(dev, sh, g_cfg.master ? g_cfg.colour.gameGlow * 0.01f : 1.0f);
         }
         return g_oSetPS(dev, sh);
     }

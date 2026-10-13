@@ -31,6 +31,7 @@ add_library(comfyatmos SHARED
     src/spells.cpp
     src/tune.cpp
     src/terrainshade.cpp
+    src/gameglow.cpp
     src/mpq.cpp
     src/mapterrain.cpp
     src/mapwmo.cpp
