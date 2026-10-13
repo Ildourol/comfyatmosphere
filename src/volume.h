@@ -6,6 +6,10 @@
 #include <string>
 
 bool VolumeDraw(IDirect3DDevice9* dev);   // at the end of the world, after the shadow map; true if drawn
+// The same in two parts (2026-10-12, spells.cpp): the shade at the world's end, before the game's additive draws,
+// then the sun's light in the fog from what the first part kept, where VolumeDraw draws.
+bool VolumeDrawShade(IDirect3DDevice9* dev);
+bool VolumeDrawLight(IDirect3DDevice9* dev);
 void VolumeReset();                       // before Reset
 void VolumeDetach();                      // the hot reload: VolumeReset, and the noise array freed
 bool VolumeToggle();                         // true: now on

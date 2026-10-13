@@ -47,6 +47,7 @@
 #include "mapterrain.h"
 #include "mapm2.h"
 #include "memtrace.h"
+#include "spells.h"
 #include "volume.h"
 #include "water.h"
 
@@ -501,6 +502,7 @@ namespace
         if (g_inPass)
             return g_oSetVSConstF(dev, reg, data, count);   // our own passes: no fog remap, no recording
         RecordConstants(reg, data, count);
+        SpellsNoteConstants(reg + count);   // how many a held draw's state must keep
         GrassConstants(reg, data, count);   // the client's values, put back after each grass draw
         LampsConstants(reg, data, count);
         if (g_probe.active && data)
@@ -548,6 +550,26 @@ namespace
     std::vector<std::string> g_orderBlendedList;   // the last blended fixed-function draws: the water, the wake
     unsigned    g_orderBCount = 0;
     std::vector<std::string> g_orderModels;   // the last model draws of the frame, with colour and depth state
+    // Spells darkened in the shade (2026-10-12): can the sun shadows and the fog go in before the particles? The
+    // frame's last draws, each, and every depth-writing draw after the first additive one (blended, no depth
+    // writes, DESTBLEND ONE): what would get no shade if the passes ran there.
+    std::vector<std::string> g_orderTail;
+    unsigned    g_orderFirstAdd = 0, g_orderZAfterAdd = 0;
+    std::string g_orderAfterAdd;
+
+    // A texture's top level, as "WxH fmt", for the probe's draw lists.
+    std::string TexDesc(IDirect3DBaseTexture9* tex)
+    {
+        if (!tex || tex->lpVtbl->GetType(tex) != D3DRTYPE_TEXTURE)
+            return tex ? "cube/vol" : "none";
+        D3DSURFACE_DESC d = {};
+        IDirect3DTexture9* t2 = (IDirect3DTexture9*)tex;
+        if (FAILED(t2->lpVtbl->GetLevelDesc(t2, 0, &d)))
+            return "?";
+        char t[48];
+        snprintf(t, sizeof(t), "%ux%u fmt %u", d.Width, d.Height, (unsigned)d.Format);
+        return t;
+    }
 
     void OrderFlush()
     {
@@ -618,6 +640,37 @@ namespace
             if (tex) tex->lpVtbl->Release(tex);
             if (ps) ps->lpVtbl->Release(ps);
         }
+        {
+            DWORD src = 0, dst = 0;
+            dev->lpVtbl->GetRenderState(dev, D3DRS_SRCBLEND, &src);
+            dev->lpVtbl->GetRenderState(dev, D3DRS_DESTBLEND, &dst);
+            const bool additive = k == 'B' && dst == D3DBLEND_ONE;
+            if (additive && !g_orderFirstAdd)
+                g_orderFirstAdd = g_orderIndex;
+            IDirect3DBaseTexture9* tex = nullptr;
+            dev->lpVtbl->GetTexture(dev, 0, &tex);
+            const std::string td = TexDesc(tex);
+            if (tex) tex->lpVtbl->Release(tex);
+            char t[200];
+            // The distance from the camera only for a fixed-function draw: a model's place is in its constants.
+            const float dist = std::sqrt(g_world.m[3][0] * g_world.m[3][0] + g_world.m[3][1] * g_world.m[3][1] +
+                                         g_world.m[3][2] * g_world.m[3][2]);
+            char dt[24] = "";
+            if (!g_vshader)
+                snprintf(dt, sizeof(dt), " %.0fyd", dist);
+            snprintf(t, sizeof(t), " [#%u %c %s %s%up %uv%s tex %s%s%s]", g_orderIndex, k, g_vshader ? "vs" : "ff",
+                     blend ? (std::to_string(src) + "/" + std::to_string(dst) + " ").c_str() : "", pc, nv, dt, td.c_str(),
+                     atest ? " atest" : "", additive ? " ADD" : "");
+            g_orderTail.push_back(t);
+            if (g_orderTail.size() > 160)
+                g_orderTail.erase(g_orderTail.begin());
+            if (zwrite && g_orderFirstAdd)
+            {
+                ++g_orderZAfterAdd;
+                if (g_orderZAfterAdd <= 40)
+                    g_orderAfterAdd += t;
+            }
+        }
         if (zwrite && g_orderFirstB)
         {
             ++g_orderOAfterB;
@@ -637,6 +690,52 @@ namespace
         ++g_orderRun;
     }
     bool               g_volumePending = false; // the map is ready; the light waits for the first UI draw
+
+    // [general] skipAfterAdd (2026-10-12): the blended model draws after the world's first additive one, left
+    // out, to see what they are. The additive ones stay.
+    bool g_addSeen = false;
+    bool SkipAfterAdd(IDirect3DDevice9* dev)
+    {
+        if (!g_cfg.skipAfterAdd || !g_vshader || g_inPass || g_skyPhase || g_worldEnded)
+            return false;
+        DWORD blend = 0, zwrite = 0, dst = 0;
+        dev->lpVtbl->GetRenderState(dev, D3DRS_ALPHABLENDENABLE, &blend);
+        dev->lpVtbl->GetRenderState(dev, D3DRS_ZWRITEENABLE, &zwrite);
+        if (!blend || zwrite)
+            return false;
+        dev->lpVtbl->GetRenderState(dev, D3DRS_DESTBLEND, &dst);
+        if (dst == D3DBLEND_ONE)
+        {
+            g_addSeen = true;
+            return false;
+        }
+        return g_addSeen;
+    }
+
+    // The game's additive draws held until the world ends (spells.cpp, 2026-10-12): then the sun shadows and the
+    // fog's shade go on the world first, and the spells over them. Not with a debug view of the shadows, the light
+    // or the fog: those are drawn whole where they were, as before.
+    bool g_earlyDone = false;   // the shade went on at the world's end this frame; the light waits for FireRays
+    bool EarlyPasses()
+    {
+        return g_cfg.master && g_cfg.spellsOnTop && VolumeActive() && !g_cfg.sunShadows.debug && !g_cfg.volume.debug &&
+               !(g_cfg.fog.enabled && g_cfg.fog.debug);
+    }
+    // The held draws drawn now (spells.cpp), with the passes' flag up: the first flush records a state block through
+    // the device's setters, which the hooks must pass straight on.
+    void FlushSpells(IDirect3DDevice9* dev, SpellFlush why)
+    {
+        if (!SpellsPending())
+            return;
+        const bool was = g_inPass;
+        g_inPass = true;
+        SpellsFlush(dev, why);
+        g_inPass = was;
+    }
+    bool HoldsSpells(IDirect3DDevice9* dev)
+    {
+        return !g_inPass && !g_skyPhase && !g_worldEnded && g_lastPersp && EarlyPasses() && SpellsIsAdditive(dev);
+    }
 
     // The world has finished drawing: depth and the shadow map go in now, with the world's render target
     // and depth buffer still bound. The light itself waits for the rays' place before the UI (FireRays):
@@ -677,6 +776,19 @@ namespace
             }
             for (const std::string& m : g_orderModels)
                 Log("order: model draw %s", m.c_str());
+            if (g_orderFirstAdd)
+                Log("order: the first additive draw at #%u of %u, %u depth-writing draws after it (the first 40):%s",
+                    g_orderFirstAdd, g_orderIndex, g_orderZAfterAdd, g_orderAfterAdd.c_str());
+            else
+                Log("order: no additive draw in the world's %u draws", g_orderIndex);
+            // The last draws, 20 to a line: K, vs or ff, blend src/dst, prims, vertices, yards (ff), texture.
+            for (size_t i = 0; i < g_orderTail.size(); i += 20)
+            {
+                std::string line;
+                for (size_t j = i; j < i + 20 && j < g_orderTail.size(); ++j)
+                    line += g_orderTail[j];
+                Log("order: tail%s", line.c_str());
+            }
             g_orderRec = false;
         }
         if (g_orderArm)
@@ -687,6 +799,9 @@ namespace
             g_orderAfter.clear();
             g_orderBlendedList.clear();
             g_orderModels.clear();
+            g_orderTail.clear();
+            g_orderAfterAdd.clear();
+            g_orderFirstAdd = g_orderZAfterAdd = 0;
             g_orderBCount = 0;
             g_orderLast = 0;
             g_orderRun = g_orderIndex = g_orderFirstB = g_orderOAfterB = 0;
@@ -713,9 +828,41 @@ namespace
             ShadowNoReplay();        // so the cost report does not keep showing the last one
         }
         LampsWorldEnded();
+        g_earlyDone = false;
+        if (g_volumePending && EarlyPasses())
+        {
+            // The shade on the world (the sun shadows, then the world through the fog), before the held additive
+            // draws. Over the whole target: with Full Screen Glow off the world ends at the switch to 2D, and the
+            // client may have set the UI's viewport already (see FireRays).
+            D3DVIEWPORT9 oldVp = {};
+            const bool haveVp = SUCCEEDED(dev->lpVtbl->GetViewport(dev, &oldVp));
+            IDirect3DSurface9* rt = nullptr;
+            dev->lpVtbl->GetRenderTarget(dev, 0, &rt);
+            if (rt)
+            {
+                D3DSURFACE_DESC rd = {};
+                rt->lpVtbl->GetDesc(rt, &rd);
+                const D3DVIEWPORT9 full = { 0, 0, rd.Width, rd.Height, 0.0f, 1.0f };
+                dev->lpVtbl->SetViewport(dev, &full);
+                rt->lpVtbl->Release(rt);
+            }
+            BenchSectionBegin(dev, kBenchSunShadows);
+            const bool shaded = SunShadowsDraw(dev);
+            BenchSectionEnd(dev, kBenchSunShadows, shaded);
+            BenchSectionBegin(dev, kBenchVolume);
+            const bool fogged = VolumeDrawShade(dev);
+            BenchSectionEnd(dev, kBenchVolume, fogged);
+            if (haveVp)
+                dev->lpVtbl->SetViewport(dev, &oldVp);
+            g_earlyDone = true;
+        }
+        FlushSpells(dev, kSpellsAtWorldEnd);
         g_inPass = false;
         if (g_probe.active)
         {
+            char sp[400];
+            SpellsFrameText(sp, sizeof(sp));
+            Log("  %s; this frame the shade went on at the world's end: %s", sp, g_earlyDone ? "yes" : "no");
             Log("  [draw %4u] WORLD END      %s", g_probe.draws, why);
             g_probe.boundary = g_probe.draws;
         }
@@ -770,16 +917,27 @@ namespace
             // The light first: the rays streak what is bright on screen, and the light was part of that
             // when it was drawn with the world.
             g_volumePending = false;
-            // The shade first: it darkens surfaces, and the light in the air goes over it.
-            BenchSectionBegin(dev, kBenchSunShadows);
-            const bool shaded = SunShadowsDraw(dev);
-            // A sun shadow debug view is shown alone: fog, light and lamps drawn over it made every
-            // object a grey shape by its depth, which read as part of the view.
-            const bool shadowDebug = shaded && g_cfg.sunShadows.debug != 0;
-            BenchSectionEnd(dev, kBenchSunShadows, shaded);
-            BenchSectionBegin(dev, kBenchVolume);
-            const bool drawn = !shadowDebug && VolumeDraw(dev);
-            BenchSectionEnd(dev, kBenchVolume, drawn);
+            // The shade first: it darkens surfaces, and the light in the air goes over it. With the spells held
+            // (g_earlyDone) the shade went on at the world's end, and only the sun's light in the fog is left.
+            bool shadowDebug = false;
+            if (g_earlyDone)
+            {
+                BenchSectionBegin(dev, kBenchVolume);
+                const bool drawn = VolumeDrawLight(dev);
+                BenchSectionEnd(dev, kBenchVolume, drawn);
+            }
+            else
+            {
+                BenchSectionBegin(dev, kBenchSunShadows);
+                const bool shaded = SunShadowsDraw(dev);
+                // A sun shadow debug view is shown alone: fog, light and lamps drawn over it made every
+                // object a grey shape by its depth, which read as part of the view.
+                shadowDebug = shaded && g_cfg.sunShadows.debug != 0;
+                BenchSectionEnd(dev, kBenchSunShadows, shaded);
+                BenchSectionBegin(dev, kBenchVolume);
+                const bool drawn = !shadowDebug && VolumeDraw(dev);
+                BenchSectionEnd(dev, kBenchVolume, drawn);
+            }
             // The fog around lamps, which reads the same depth and camera, and draws at night too.
             BenchSectionBegin(dev, kBenchLamps);
             const bool lamps = !shadowDebug && LampGlowDraw(dev);
@@ -1059,6 +1217,7 @@ namespace
             SunShadowsReset();
             BodyMaskReset();
             TerrainShadeReset();
+            SpellsDrop();
             WaterReset();
             GradeReset();
             CloudsReset();
@@ -1118,6 +1277,8 @@ namespace
     HRESULT STDMETHODCALLTYPE hkSetDepthStencilSurface(IDirect3DDevice9* dev, IDirect3DSurface9* s)
     {
         CheckDevice(dev);
+        if (!g_inPass)
+            FlushSpells(dev, kSpellsTarget);
         return g_oSetDS(dev, g_inPass ? s : DepthSubstitute(dev, s));
     }
 
@@ -1189,6 +1350,7 @@ namespace
         const size_t slots = g_patched.size();
         const int restored = RestoreSlots();
         GrassDetach();
+        SpellsDrop();
         WeatherDetach();
         DepthDetach(dev);   // after the slots: its SetDepthStencilSurface goes straight to the device
         ShadowReset();
@@ -1201,6 +1363,7 @@ namespace
         SunShadowsReset();
         BodyMaskReset();
         TerrainShadeReset();
+        SpellsDrop();
         WaterReset();
         GradeReset();
         BeaconReset();
@@ -1227,6 +1390,7 @@ namespace
         TimeScanTick();
         TimeApply("Present");
         CheckDevice(dev);
+        FlushSpells(dev, kSpellsOther);   // a frame whose world never ended
         StartupFrame(g_raysDone || g_raysArmed || g_worldEnded);   // the start-up measurement (2026-10-06)
         // Between captures, so the pass's own draws and state changes never show up in a probe.
         // Armed but never fired: nothing was drawn to the back buffer after the world (UI hidden, say),
@@ -1324,12 +1488,15 @@ namespace
         BodyMarkFrameEnd(dev);
         WaterFrameEnd(dev);
         GrassFrameEnd();
+        SpellsFrameEnd();
         WeatherFrameEnd();
         MistFileReady();   // the rain mist's texture asked of the loader until it is read
         SplashFileReady(); // and the rain splash's
         g_frameDraws = 0;
         g_lastPersp  = false;
         g_worldEnded = false;
+        g_addSeen    = false;
+        g_earlyDone  = false;
         g_skyPhase  = true;
         g_skySunSeen = false;
         g_cloudsDone = false;
@@ -1453,6 +1620,7 @@ namespace
         SunShadowsReset();
         BodyMaskReset();
         TerrainShadeReset();
+        SpellsDrop();
         WaterReset();
         GradeReset();
         CloudsReset();
@@ -1969,6 +2137,8 @@ namespace
                 WorldEnded(dev, "render target switch");
             if (cur) cur->lpVtbl->Release(cur);
         }
+        if (!g_inPass)
+            FlushSpells(dev, kSpellsTarget);   // drawn into the target they were made for (spells.cpp)
         if (g_probe.active && !g_inPass)
             Log("  [draw %4u] SetRenderTarget %u -> %p", g_probe.draws, idx, s);
         return g_oSetRT(dev, idx, s);
@@ -1994,6 +2164,8 @@ namespace
                 WorldEnded(dev, "world copied out");
             if (cur) cur->lpVtbl->Release(cur);
         }
+        if (!g_inPass)
+            FlushSpells(dev, kSpellsOther);
         return g_oStretchRect(dev, src, sr, dst, dr, f);
     }
 
@@ -2638,6 +2810,14 @@ namespace
                 Log("  [draw %4u] RAIN CLOUDS    left out ([sky] hideRainClouds, %u triangles)", g_probe.draws, pc);
             return S_OK;
         }
+        if (HoldsSpells(dev))
+        {
+            g_inPass = true;   // the hold records the state through the device's setters
+            const bool held = SpellsHoldDraw(dev, prim, sv, pc);
+            g_inPass = false;
+            if (held)
+                return S_OK;
+        }
         if (!g_hookTiming)
             return g_oDrawPrim(dev, prim, sv, pc);
         const unsigned long long t = __rdtsc();
@@ -2935,6 +3115,8 @@ namespace
             return S_OK;
         }
         NoteOrder(dev, "Indexed", pc, nv);
+        if (SkipAfterAdd(dev))
+            return S_OK;
         if (!g_inPass)
             RecordDraw(dev, true, prim, bvi, mvi, nv, si, pc);
         NoteLampDraw(dev, true, static_cast<UINT>(bvi) + mvi, nv);
@@ -3039,6 +3221,14 @@ namespace
             if (GrassTake(dev, grass, hr))
                 return hr;
         }
+        if (HoldsSpells(dev))
+        {
+            g_inPass = true;   // the hold records the state through the device's setters
+            const bool held = SpellsHoldIdx(dev, prim, bvi, mvi, nv, si, pc);
+            g_inPass = false;
+            if (held)
+                return S_OK;
+        }
         return FwdIdx(dev, prim, bvi, mvi, nv, si, pc);
     }
 
@@ -3052,6 +3242,14 @@ namespace
         NoteLampDraw(dev, false, 0, VertsForPrims(prim, pc), data, stride);
         MaybeFireRays(dev);
         CountDraw(dev, "DrawPrimitiveUP", prim, pc, false, 0, VertsForPrims(prim, pc), data);
+        if (HoldsSpells(dev))
+        {
+            g_inPass = true;   // the hold records the state through the device's setters
+            const bool held = SpellsHoldUP(dev, prim, pc, VertsForPrims(prim, pc), data, stride);
+            g_inPass = false;
+            if (held)
+                return S_OK;
+        }
         return g_oDrawPrimUP(dev, prim, pc, data, stride);
     }
 
@@ -3066,6 +3264,14 @@ namespace
         NoteLampDraw(dev, true, mvi, nv, data, stride);
         MaybeFireRays(dev);
         CountDraw(dev, "DrawIndexedUP", prim, pc, true, 0, nv, data);
+        if (HoldsSpells(dev))
+        {
+            g_inPass = true;   // the hold records the state through the device's setters
+            const bool held = SpellsHoldIdxUP(dev, prim, mvi, nv, pc, idx, fmt, data, stride);
+            g_inPass = false;
+            if (held)
+                return S_OK;
+        }
         return g_oDrawIdxPrimUP(dev, prim, mvi, nv, pc, idx, fmt, data, stride);
     }
 
@@ -3131,6 +3337,7 @@ namespace
         if (ok)
         {
             GrassAttach({ g_oDrawPrim, g_oDrawIdxPrim, g_oSetVS, g_oSetVSConstF });
+            SpellsAttach({ g_oDrawPrim, g_oDrawIdxPrim, g_oDrawPrimUP, g_oDrawIdxPrimUP });
             TimeAttach();
         }
     }
@@ -3146,6 +3353,20 @@ namespace
 
     // A write into a buffer a held water chunk reads (water.cpp, WaterPendingUses): the held chunks are drawn first.
     // Turning the camera, the client writes the chunks coming into view into its shared water buffers.
+    // The held additive draws (spells.cpp) drawn before the client writes to a buffer one of them reads. A write with
+    // D3DLOCK_NOOVERWRITE leaves alone what the client has drawn from, by its promise.
+    template <typename Buffer> void FlushSpellsBefore(Buffer* self, DWORD flags)
+    {
+        if ((flags & (D3DLOCK_READONLY | D3DLOCK_NOOVERWRITE)) || g_inPass || !SpellsPending() || !SpellsPendingUses(self))
+            return;
+        IDirect3DDevice9* dev = nullptr;
+        if (SUCCEEDED(self->lpVtbl->GetDevice(self, &dev)) && dev)
+        {
+            FlushSpells(dev, kSpellsBufferWrite);
+            dev->lpVtbl->Release(dev);
+        }
+    }
+
     template <typename Buffer> void FlushWaterBefore(Buffer* self, DWORD flags)
     {
         if ((flags & D3DLOCK_READONLY) || g_inPass || !WaterPending() || !WaterPendingUses(self))
@@ -3163,6 +3384,7 @@ namespace
     HRESULT STDMETHODCALLTYPE hkLockVB(IDirect3DVertexBuffer9* self, UINT offset, UINT size, void** data, DWORD flags)
     {
         FlushWaterBefore(self, flags);
+        FlushSpellsBefore(self, flags);
         if (!(flags & D3DLOCK_READONLY))
             ShadowNoteBufferWrite(self, offset, size);
         const unsigned long long t = BenchTiming() ? __rdtsc() : 0;
@@ -3175,6 +3397,7 @@ namespace
     HRESULT STDMETHODCALLTYPE hkLockIB(IDirect3DIndexBuffer9* self, UINT offset, UINT size, void** data, DWORD flags)
     {
         FlushWaterBefore(self, flags);
+        FlushSpellsBefore(self, flags);
         if (!(flags & D3DLOCK_READONLY))
             ShadowNoteBufferWrite(self, offset, size);
         const unsigned long long t = BenchTiming() ? __rdtsc() : 0;

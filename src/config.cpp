@@ -571,6 +571,8 @@ void LoadSettings(const wchar_t* ini)
     s.dayNightKey = GetI(kGeneral, L"dayNightKey", s.dayNightKey, ini);
     s.chainWaitMs = GetI(kGeneral, L"chainWaitMs", s.chainWaitMs, ini);
     s.minWorldDraws = GetI(kGeneral, L"minWorldDraws", s.minWorldDraws, ini);
+    s.skipAfterAdd  = GetI(kGeneral, L"skipAfterAdd", s.skipAfterAdd, ini);
+    s.spellsOnTop   = GetB(kGeneral, L"spellsOnTop", s.spellsOnTop, ini);
 
     g_cfg = s;
 }

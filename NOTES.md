@@ -1082,7 +1082,8 @@ saw what lay under it, and in Stormwind harbour the open sea showed through the 
 writes are turned on for those draws (`[fog] waterDepth`); the shader is learnt from the 81-vertex draws, so
 water in buildings is taken too. The probe lists the blended draws without depth writes (`order:` lines).
 
-**Our fog is off by default.** Tuned scene by scene (the dial, height fog, fog at the camera, a greyer and
+**Our fog was off by default.** This is the old fog, removed the same day (*The old fog removed*). The
+volumetric fog that replaced it is on by default (`[fog] enabled = 1`). Tuned scene by scene (the dial, height fog, fog at the camera, a greyer and
 darker colour, sun glow, full fog on far scenery), it greyed the open land, and the owner found the game
 better without it. `[fog] enabled` is 0, and `desaturate` and `darken` are 0: they shape the game's own fog
 colour too. Along the way: sliders for `reach` (Fog Distance), `haze` (Fog Near You) and `distance`
@@ -3588,3 +3589,79 @@ tile and then nothing for over a minute, with the build before this change as we
 (`ReadGameRamp`). A building's water does not draw with it, so after Grand Moo Canyon the canals kept the canyon's
 red-brown (0.529 0.349 0.259; in the morning the same place read the sea's green). The colour read is now forgotten
 when the map changes (`ZoneColours`), and the water falls back to its own deep colour until a ramp is read again.
+
+## Spells dark in caves and in shade (2026-10-12, the owner)
+
+The sun shadows and the fog run at the world's end, over the spells, and judge each pixel by the depth. A spell
+writes no depth, so it takes the shade and the fog of the wall behind it. The sun shadows multiply the frame by
+the shade; the fog's composite is `world x transmittance + light`, and over a spell the transmittance takes more
+than the light gives back.
+
+`tests/fargodeep-spell-shade.json` stands on Fargodeep Mine's lower level with Lightning Shield, Mana Shield and
+Inner Fire. Mean brightness of the Mana Shield ring (one shot each, the ring moves): 26 and 33 with every effect
+on, 40 and 56 with Sun Shadows off, 36 and 43 with the fog off. The floor beside it: 25, 29, 25.
+
+**The order.** The probe's `order:` lines now give the frame's last 160 draws (`order: tail`: kind, vs or ff,
+blend source/destination, primitives, vertices, yards for a fixed-function draw, the texture's size and format,
+`ADD` for blended with DESTBLEND ONE and no depth writes) and every depth-writing draw after the first additive
+one. In the mine (107 draws): O17 W6 O59, then the blended draws, all through a vertex shader:
+
+- #83 and #84: one model's alpha-blended batches.
+- #85 and #86: two additive quads (32 x 32 and 128 x 128 textures), the mine's lamps.
+- #87 to #100: a second pass of the 14 models drawn just before as #68 to #81 (the same buffers, primitive counts
+  and textures), alpha-blended (5/6), no depth writes, less-or-equal. Not understood yet.
+- #101 to #106: the auras, additive (quads, and 60 and 90 primitive meshes).
+
+No draw after the first additive one writes depth. The particles are not a layer of their own: the lamps' quads come
+before the models' second pass and the auras after it. The client probably sorts its blended draws together by
+distance (the auras, last, are nearest the camera); not checked. Passes run at the first
+additive draw would leave #87 to #100 drawn over the shade.
+
+**The models' second pass shows nothing here.** `[general] skipAfterAdd` (1) leaves out every alpha-blended model
+draw after the world's first additive one. With it on, the mine shot differs from the shot before it by 0.3 to 0.6
+of 255 on average (JPEG noise) over the walls, the beams and the floor. The order is not the same from frame to
+frame: the next run drew 139 draws, the second pass twice (#102 to #115 and #117 to #130) with an additive quad
+between them, and two blended fixed-function quads (#137, #138) after the auras.
+
+**Outdoors the cut fails.** `tests/outdoor-spell-order.json`, with the same auras, at three places:
+
+| Place | Draws | First additive | Depth-writing draws after it |
+| --- | --- | --- | --- |
+| Redridge's grass | 347 | #339 | 0 |
+| Elwynn, the road by Goldshire's fences and lamps | 2133 | #1971 (the lamps' glows, 16p 24v) | 110 |
+| The bridge into Stormwind | 1194 | #981 | 2 (one model of 2866 primitives, in two passes) |
+
+By Goldshire the lamps' glows come before about 50 models, each drawn whole in two passes: its solid batches (O)
+and then its blended ones writing depth (W, 5/6), with more additive quads between them (`order: tail`). Passes
+run at the first additive draw would leave those models unshaded and unfogged. There is no layer of particles to
+cut at: the client draws a model that has a blended batch, and the particles, in one list.
+
+**The fix: the spells held, not the passes moved** (`spells.cpp`, `[general] spellsOnTop`, on by default). An
+additive draw adds its light to what is there, and a sum does not depend on its order. So while the world draws,
+each additive draw (blended, DESTBLEND ONE, BLENDOP ADD, no depth writes) is held: its device state and its call.
+When the world ends, the sun shadows and the fog's shade are drawn into the world's target, then the held draws.
+The client's Full Screen Glow then blooms the spells as before.
+
+- **The fog in two parts.** The composite was `world x T + sky light + sun light`. At the world's end it draws
+  `world x T + sky light` (`VolumeDrawShade`, c11.w = 1); where it drew before, the sun's light alone is added
+  (`VolumeDrawLight`, c11.w = 2), from the march part 1 kept. The light in the fog stays out of the glow, which
+  bloomed the light through leaves differently at every step (*The light through leaves re-formed*). With a debug
+  view of the shadows, the light or the fog, everything is drawn whole where it was, as before.
+- **Drawn early.** Before a write to a buffer a held draw reads (not with D3DLOCK_NOOVERWRITE), a change of render
+  target or depth buffer, a StretchRect and at Present, the held draws are drawn at once. In every probe so far
+  none was: all were drawn at the world's end.
+- **The cost.** A D3DSBT_ALL state block made and applied for each draw cost 26 and 18 microseconds a draw: 3.6 ms
+  of CPU for the 83 additive draws on the bridge into Stormwind. Now each draw captures a state block recorded once
+  with the states a draw reads (four texture stages, the vertex shader constants up to the client's highest, 223),
+  kept and reused: 2.5 microseconds to hold and 7.4 to draw back. The bridge: 0.21 ms and 0.62 ms. Fargodeep (9
+  draws): 0.10 ms. The GPU draws the same draws, plus one full-screen pass for the light's part; not timed yet.
+- **Measured.** The Mana Shield ring in the mine (three areas of it, each a mean; the ring pulses, so each shot is
+  one moment): with anti-aliasing 39, 48, 37 held, against 30, 40, 31 in the old order and 41, 50, 40 with Sun
+  Shadows off; the floor (25.2) and the wall (10.6) the same in both orders. Without anti-aliasing (the world ends
+  at the render target switch, not the copy): 42, 66, 38 held against 22, 31, 25. Full Screen Glow off (the world
+  ends at the switch to 2D) is not tested.
+- **A change in look.** The glow now blooms the shaded world. By Goldshire in the sun, the near road came out 5%
+  brighter held than in the old order (156.5 against 149.0), the trees 2% (71.7 against 70.2): Sunlight brightens
+  the lit ground before the bloom reads it. The owner, comparing spellsOnTop 0 and 1 in game: the glow slightly
+  brighter, "it might be ok". If it is too bright, the next step is to split the sun shadows as the fog is: the
+  shade at the world's end, the Sunlight brightening where it was, after the glow.
