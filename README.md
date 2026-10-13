@@ -81,6 +81,8 @@ players keep the server's time.
 - **Computer time**: your computer's clock, with its timezone and daylight saving.
 - **Fixed hour**: the hour you set with the slider, `<`, `>` or **Day/Night**. It stays, also after a restart.
 
+![The Time section of the settings window, with Server time chosen](media/v0.14.0-time-section.png)
+
 Without the addon, set `[time] enabled = 0` in `comfyatmos.ini` for the server's time, or `enabled = 1` and
 `localTime = 1` for the computer's.
 
