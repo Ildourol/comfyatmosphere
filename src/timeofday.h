@@ -15,12 +15,12 @@ void TimeToggleDayNight();           // go to dayHour or nightHour, whichever is
 void TimeReload();                   // after the ini is reloaded (F11)
 void TimeAfterTune();                // after /atmos: TimeReload, but only when a [time] value changed
 float TimeCurrentHour();             // the time being shown, for writing back to the ini
-void TimeSet(float hour);            // show this hour (the debug panel's slider)
-// Lock time (the debug panel): write [time] enabled into the ini, and with it on the hour being shown. The caller
-// reads the settings again.
+void TimeSet(float hour);            // show this hour (the Time section's slider)
+// Fixed hour (on) and Server time (off), in the Time section of the settings window: write [time] enabled into the
+// ini, and with it on the hour being shown. The caller reads the settings again.
 bool TimeLockWrite(bool on);
-// Follow the computer's local clock, including its timezone and daylight saving.
-// Turning this off returns to server time. The caller reads the settings again.
+// Computer time: follow the computer's clock, with its timezone and daylight saving. Off is the server's time. The
+// caller reads the settings again.
 bool TimeLocalWrite(bool on);
 // After either is turned off: write the server's time (GetGameTime, from the addon) into the client's clock once.
 void TimeGiveBack(float hour);

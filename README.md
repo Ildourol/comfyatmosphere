@@ -72,6 +72,18 @@ Use `/atmos options` in game to enable/disable and tune features of the mod.
 
 <img src="media/options.png"/>
 
+### Time of day
+
+The **Time** section of the settings window sets the time of day on your screen. The server and the other
+players keep the server's time.
+
+- **Server time**: the time the server sends.
+- **Computer time**: your computer's clock, with its timezone and daylight saving.
+- **Fixed hour**: the hour you set with the slider, `<`, `>` or **Day/Night**. It stays, also after a restart.
+
+Without the addon, set `[time] enabled = 0` in `comfyatmos.ini` for the server's time, or `enabled = 1` and
+`localTime = 1` for the computer's.
+
 
 ## Chat commands `/atmos`
 
@@ -98,18 +110,8 @@ Atmosphere page sets is refused: use the control.
 
 ### Debugging Help
 
-The **Debug** button in the settings window, or `/atmos debug`, opens the debug panel. It also sets the time of
-day: a slider, a step either way, Day/Night, and **Lock time**. Ticked, the hour stays where you put it, also
-after a restart. **Follow computer time** instead follows your Windows local clock, including timezone
-and daylight-saving changes. With both unticked, the server's time shows. These modes affect only your
-client's lighting, not server events or timers; they do not calculate your location's seasonal sunrise
-and sunset.
-
-For local time without the addon, set `[time] enabled = 1` and `localTime = 1` in `comfyatmos.ini`.
-The fixed-hour slider and time-step keys apply only in **Lock time** mode. Local time does not overwrite
-the saved `hour`. It is off by default, so existing configurations keep their behavior.
-
-The panel also has the Developer keys box:
+The **Debug** button in the settings window, or `/atmos debug`, opens the debug panel. It also has the
+Developer keys box:
 
 ![debug menu](media/debug-menu.png)
 

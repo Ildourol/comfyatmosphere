@@ -36,9 +36,10 @@
 // the same length, so the client's buffer is never outgrown and never replaced. Only while its length is
 // still kStatsLen: had anything set the CVar, the string would be another, and it is left alone.
 //
-// The time of day (2026-10-07): the debug panel's slider and the key bindings send "<number> <verb> [value]" in
-// comfyTimeSet, a new number each time, so the same verb twice runs twice. The verbs: set <hour>, step <steps>
-// (in [time] step hours), daynight, lock <0 or 1>, local <0 or 1>; "lock 0" and "local 0" carry the server's hour too. The first value read is left alone: it is what Config.wtf kept from the
+// The time of day (2026-10-07): the Time section of the settings window and the key bindings send
+// "<number> <verb> [value]" in comfyTimeSet, a new number each time, so the same verb twice runs twice. The verbs:
+// set <hour>, step <steps> (in [time] step hours), daynight, lock <0 or 1>, local <0 or 1>. "lock 0" and "local 0"
+// also carry the server's hour (TimeGiveBack). The first value read is left alone: it is what Config.wtf kept from the
 // last session. comfyTimeShown carries "<hour> <state>" back (TimeState), written in place as comfyStats is, and
 // only while it still holds kTimeLen characters. CVarsTime runs every frame, not every 0.2 s as the controls do: a
 // held key steps the time every 0.03 s.

@@ -19,6 +19,7 @@ end
 function methods:SetText(value) self.text = value; end
 function methods:SetChecked(value) self.checked = value; end
 function methods:GetChecked() return self.checked; end
+function methods:GetName() return self.name; end
 function methods:SetScript(event, handler) self.scripts[event] = handler; end
 function methods:EnableMouse(value) self.mouse = value; end
 function methods:SetAlpha(value) self.alpha = value; end
@@ -35,7 +36,7 @@ function methods:SetValue(value)
     end
 end
 function CreateFrame(kind, name, parent, template)
-    local frame = setmetatable({scripts = {}, enabled = true}, {__index = methods});
+    local frame = setmetatable({scripts = {}, enabled = true, name = name}, {__index = methods});
     if name then
         _G[name] = frame;
         if template then
@@ -48,11 +49,7 @@ function CreateFrame(kind, name, parent, template)
     end
     return frame;
 end
-function methods:CreateFontString() return CreateFrame(); end
-PanelMake = function(name) return CreateFrame("Frame", name); end;
-DEBUG_VIEWS = {"off"};
-GetCVar = function() return "0"; end;
-HasCVar = function() return true; end;
+function methods:CreateFontString() self.fontString = CreateFrame(); return self.fontString; end
 GetGameTime = function() return 21, 56; end;
 local shownHour, shownState;
 TimeShown = function() return shownHour, shownState; end;
@@ -62,50 +59,73 @@ TimeSend = function(verb, value) table.insert(sent, {verb, value}); end;
 local compile = loadstring or load;
 local build, refresh = assert(compile(
     between("local function TimeText(", "-- A held key") ..
-    between("local debugFrame = nil;", "function ComfyAtmosphere_DebugToggle()") ..
-    "return function() debugFrame = DebugBuild(); return debugFrame; end, DebugRefresh"
+    between("-- The Time section of the settings window", "-- The end of the Time section.") ..
+    "return TimeSectionBuild, TimeSectionRefresh"
 ))();
-local panel = build();
-local function show(hour, state)
+local parent = CreateFrame("Frame", "Parent");
+local bottom = build(parent, -4, 198);
+assert(bottom < -4, "the section takes room");
+local function show(hour, state, line)
     shownHour, shownState = hour, state;
     refresh();
+    assert(parent.fontString.text == line, "status line: " .. tostring(parent.fontString.text));
 end
-local function manual(enabled)
-    assert(ComfyAtmosphereDebugTime.mouse == enabled, "slider mode");
+local function fixed(enabled)
+    assert(ComfyAtmosphereTimeHour.mouse == enabled, "slider mode");
     for _, name in ipairs({"Earlier", "Later", "DayNight"}) do
-        assert(_G["ComfyAtmosphereDebug" .. name].enabled == enabled, "button mode");
+        assert(_G["ComfyAtmosphereTime" .. name].enabled == enabled, "button mode");
     end
 end
-local function click(frame, checked, verb, value)
-    this = frame;
-    frame:SetChecked(checked);
-    frame.scripts.OnClick();
-    assert(sent[#sent][1] == verb and sent[#sent][2] == value, "saved mode command");
+local function ticked(which)
+    for _, name in ipairs({"Server", "Fixed", "Computer"}) do
+        assert(_G["ComfyAtmosphereTime" .. name].checked == (name == which), "ticked " .. tostring(which));
+    end
+end
+local function click(name, verb, value)
+    local before = #sent;
+    this = _G["ComfyAtmosphereTime" .. name];
+    this:SetChecked(not this.checked);
+    this.scripts.OnClick();
+    if verb then
+        assert(#sent == before + 1 and sent[#sent][1] == verb and sent[#sent][2] == value, "mode command " .. name);
+    else
+        assert(#sent == before, "no command for the mode already shown");
+    end
+    ticked(name);
 end
 
-show(22.2625, 4); -- 22:15:45 must not round up to 22:16.
-assert(panel.timeText.text == "Computer time: 22:15", "live minute display");
-assert(ComfyAtmosphereDebugTimeLocal.checked and not ComfyAtmosphereDebugTimeOn.checked);
-manual(false);
-show(23.9958, 4);
-assert(panel.timeText.text == "Computer time: 23:59", "display before midnight");
-show(0, 4);
-assert(panel.timeText.text == "Computer time: 00:00", "display at midnight");
-show(13.25, 1);
-assert(panel.timeText.text == "Time of day: 13:15");
-assert(ComfyAtmosphereDebugTimeOn.checked and not ComfyAtmosphereDebugTimeLocal.checked);
-manual(true);
-for _, state in ipairs({0, 2, 3}) do
-    show(13, state);
-    assert(not ComfyAtmosphereDebugTimeOn.checked and not ComfyAtmosphereDebugTimeLocal.checked);
-    manual(false);
+assert(#sent == 0, "building must not issue time commands");
+show(22.2625, 4, "Computer time: 22:15"); -- 22:15:45 must not round up to 22:16.
+ticked("Computer");
+fixed(false);
+show(13.25, 1, "Fixed hour: 13:15");
+ticked("Fixed");
+fixed(true);
+show(13, 0, "Server time: 21:56");
+ticked("Server");
+fixed(false);
+for _, state in ipairs({2, 3}) do
+    show(13, state, state == 2 and "comfytime.dll sets the time. Remove it" or "Not set (another WoW.exe?). See the log");
+    ticked(nil);
+    fixed(false);
 end
-show(nil, nil);
-assert(panel.timeText.text == "Time of day: waiting for comfyatmos.dll");
-manual(false);
+show(nil, nil, "Waiting for comfyatmos.dll");
+ticked(nil);
+fixed(false);
 assert(#sent == 0, "refresh must not issue time commands");
-click(ComfyAtmosphereDebugTimeLocal, true, "local", "1");
-click(ComfyAtmosphereDebugTimeLocal, false, "local", "0 21.9333");
-click(ComfyAtmosphereDebugTimeOn, true, "lock", "1");
-click(ComfyAtmosphereDebugTimeOn, false, "lock", "0 21.9333");
-print("PASS: local/fixed/server/error controls, mode commands, minute display and refresh guard");
+
+show(13, 0, "Server time: 21:56");
+click("Computer", "local", "1");
+show(22.25, 4, "Computer time: 22:15");
+click("Server", "lock", "0 21.9333");
+show(13, 0, "Server time: 21:56");
+click("Fixed", "lock", "1");
+show(13, 1, "Fixed hour: 13:00");
+click("Fixed", nil);
+ComfyAtmosphereTimeHour.scripts.OnMouseDown();
+ComfyAtmosphereTimeHour:SetValue(6.5);
+assert(sent[#sent][1] == "set" and sent[#sent][2] == "6.5000", "slider sets the hour");
+this = ComfyAtmosphereTimeDayNight;
+this.scripts.OnClick();
+assert(sent[#sent][1] == "daynight", "Day/Night");
+print("PASS: server/fixed/computer/error states, mode commands, slider and buttons, refresh guard");

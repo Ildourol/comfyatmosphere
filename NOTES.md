@@ -3285,6 +3285,37 @@ second after the last move. The write keeps each line's comment, as `/atmos save
 `/atmos time.hour` is never written: a test's hour must not stay in the client's ini. Ctrl+Home and
 `[general] saveKey` are gone.
 
+## Three time modes, and the server's time back (2026-10-12)
+
+**Computer time** came from nummy (pull request 10). `[time] localTime = 1` shows the computer's clock. `LocalHour`
+reads `GetLocalTime` at each write and keeps no offset, so a change of timezone, daylight saving or a resume from
+sleep shows at once, and a hot reload cannot keep an old hour. The mode never writes `[time] hour`, so the fixed
+hour is kept. The slider, the steps and Day/Night do nothing in it. The DLL's state for it is 4.
+
+**The server's time back.** With the time turned off, the client did not show the server's time again. It
+counted on from the last hour written, until a relog. Lock time had the same fault from the start. The client
+keeps the server's time in a place of its own: with the sky at a fixed 13:00, `GetGameTime()` gave 21:56. So the
+addon sends that hour with `lock 0` and `local 0`, and the DLL writes it into the three addresses once
+(`TimeGiveBack`). `GetGameTime` gives whole minutes, so the time can be up to a minute early, until the server
+sends the time again. F11 and `/atmos time.enabled 0` do not go through the addon and still leave the last hour
+until a relog. To cover them, find the address that `GetGameTime` reads.
+
+**A moon held after a jump.** From a fixed night hour back to the server's night hour (03:00 to 22:01), the
+lighting came back but the shadows kept the moon of the fixed hour. The log had no new sun or moon place after
+the jump. From a day hour (16:30) the sun moved at once. Not fixed: the night code holds the last moon it found
+(see Night and the two moons).
+
+**The Time section.** The controls moved from the debug panel into the last section of the settings window:
+players use them, not only developers. A CVar that no section lists goes into the last section with CVars, not
+into Time. The Video > Atmosphere page cannot hold them: the client builds that page
+from CVar entries, and these send commands on `comfyTimeSet`. One choice of three replaced Lock time and Follow
+computer time. With two boxes, clearing Follow computer time went to the server's time, not to the fixed hour.
+Fixed hour from Server time brings back `[time] hour`; from Computer time it keeps the hour shown.
+
+Tests: `tests/timeofday_test.cpp` (the modes against a fake clock, Madrid's daylight saving) and
+`tests/timeofday_ui_test.lua` (the Time section against a stand-in UI). Both build with
+`-DCOMFY_BUILD_UNIT_TESTS=ON`; the Lua test runs when a `lua` is on the PATH.
+
 ## The probe to the clipboard (2026-10-07, the owner)
 
 A probe (F12, `/atmos probe`, the Probe button or binding) also copies its lines to the clipboard. The DLL notes

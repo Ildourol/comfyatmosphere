@@ -1919,6 +1919,236 @@ local function AddControls()
 	return false;
 end
 
+local function Say(text)
+	DEFAULT_CHAT_FRAME:AddMessage("|cff88cc88atmos|r: " .. text);
+end
+
+-- ---- the time of day (2026-10-07, from comfytime) --------------------------------------------------
+--
+-- The addon sends "<number> <verb> [value]" in comfyTimeSet: set <hour>, step <steps>, daynight, lock/local <0 or 1>. A new
+-- number each time, so the same command twice runs twice; it starts from the clock, so a /reload does not repeat
+-- the last number. comfyatmos.dll reads it every frame. It writes "<hour> <state>" into comfyTimeShown in place,
+-- which needs the CVar to hold 16 characters, as comfyStats does. State: 0 the server's time ([time] enabled 0),
+-- 1 locked, 2 an old comfytime.dll sets it, 3 the addresses did not check out, 4 the computer's local clock.
+
+local TIME_LEN = 16;
+local timeNumber = math.floor(GetTime() * 1000);
+
+local function TimeSend(verb, value)
+	if not HasCVar("comfyTimeSet") then
+		Say("this comfyatmos.dll does not set the time of day.");
+		return;
+	end
+	timeNumber = timeNumber + 1;
+	SetCVar("comfyTimeSet", timeNumber .. " " .. verb .. (value and (" " .. value) or ""));
+end
+
+-- The hour shown and the state, or nil while the DLL has not written them yet.
+local function TimeShown()
+	if not HasCVar("comfyTimeShown") then
+		return nil;
+	end
+	local raw = GetCVar("comfyTimeShown") or "";
+	if string.len(raw) ~= TIME_LEN then
+		-- The game saved it in Config.wtf, and it came back at another length, with no room.
+		SetCVar("comfyTimeShown", string.rep(" ", TIME_LEN));
+		return nil;
+	end
+	local _, _, hour, state = string.find(raw, "^%s*([%d%.]+)%s+(%d)");
+	if not hour then
+		return nil;
+	end
+	return tonumber(hour), tonumber(state);
+end
+
+local function TimeText(hour, live)
+	local minutes = math.floor(hour * 60 + (live and 0 or 0.5));
+	return string.format("%02d:%02d", math.mod(math.floor(minutes / 60), 24), math.mod(minutes, 60));
+end
+
+-- "0" and the server's hour, for Server time. The client counts on from the last hour written, so the DLL writes
+-- this one back. GetGameTime gives the server's time also while ours shows.
+local function TimeOff()
+	local h, m = GetGameTime();
+	return "0 " .. string.format("%.4f", h + m / 60);
+end
+
+-- A held key steps the time as Ctrl+PageUp does: one step at once, then after 0.35 s one every 0.03 s. With
+-- runOnUp the binding gets "up" when the key is let go. A release can be lost (a window over the game), so the
+-- repeat also ends after 15 s.
+local timeHeld, timeHeldSince, timeLastStep = 0, 0, 0;
+local timeRepeat = CreateFrame("Frame");
+timeRepeat:Hide();
+timeRepeat:SetScript("OnUpdate", function()
+	local now = GetTime();
+	if timeHeld == 0 or now - timeHeldSince > 15 then
+		timeHeld = 0;
+		this:Hide();
+		return;
+	end
+	if now - timeHeldSince > 0.35 and now - timeLastStep >= 0.03 then
+		TimeSend("step", timeHeld);
+		timeLastStep = now;
+	end
+end);
+
+function ComfyAtmosphere_TimeKey(direction, state)
+	if state == "up" then
+		if timeHeld == direction then
+			timeHeld = 0;
+		end
+		return;
+	end
+	TimeSend("step", direction);
+	if state == "down" then
+		timeHeld, timeHeldSince, timeLastStep = direction, GetTime(), GetTime();
+		timeRepeat:Show();
+	end
+end
+
+function ComfyAtmosphere_DayNight()
+	TimeSend("daynight");
+end
+
+-- The Time section of the settings window (2026-10-12; the debug panel had these until then). One choice of three:
+-- the server's time, the computer's clock, or a fixed hour. The slider and the buttons move the fixed hour, and
+-- are dimmed in the other two. The modes are the DLL's states (TimeShown).
+local TIME_MODES = {
+	{ "Server", "Server time", 0, "The time of day the server sends. All players see the same sky." },
+	{ "Computer", "Computer time", 4, "The computer's clock, with its timezone and daylight saving. Only your client shows it." },
+	{ "Fixed", "Fixed hour", 1, "The hour set with the slider below. It stays, also after a restart. Only your client shows it." },
+};
+local timeSection = nil;
+
+local function TimeSectionRefresh()
+	if not timeSection then
+		return;
+	end
+	local hour, state = TimeShown();
+	local text = timeSection.text;
+	if not hour then
+		text:SetText("Waiting for comfyatmos.dll");
+	elseif state == 0 then
+		local h, m = GetGameTime();
+		text:SetText("Server time: " .. string.format("%02d:%02d", h, m));
+	elseif state == 1 then
+		text:SetText("Fixed hour: " .. TimeText(hour));
+	elseif state == 4 then
+		text:SetText("Computer time: " .. TimeText(hour, true));
+	elseif state == 2 then
+		text:SetText("comfytime.dll sets the time. Remove it");
+	else
+		text:SetText("Not set (another WoW.exe?). See the log");
+	end
+	for _, mode in ipairs(TIME_MODES) do
+		getglobal("ComfyAtmosphereTime" .. mode[1]):SetChecked(state == mode[3]);
+	end
+	-- In the other modes the slider shows the saved hour, which Fixed hour brings back.
+	local slider = ComfyAtmosphereTimeHour;
+	if hour and not slider.dragging then
+		slider.refreshing = true;
+		slider:SetValue(hour);
+		slider.refreshing = false;
+	end
+	local fixed = state == 1;
+	slider:EnableMouse(fixed);
+	slider:SetAlpha(fixed and 1 or 0.4);
+	for _, name in ipairs({ "Earlier", "Later", "DayNight" }) do
+		local button = getglobal("ComfyAtmosphereTime" .. name);
+		if fixed then button:Enable(); else button:Disable(); end
+	end
+end
+
+-- The section's controls in parent, from y down; returns the y under them.
+local function TimeSectionBuild(parent, y, width)
+	local text = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall");
+	text:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, y - 4);
+	text:SetWidth(width - 8);
+	text:SetJustifyH("LEFT");
+	y = y - 22;
+
+	for _, mode in ipairs(TIME_MODES) do
+		local box = CreateFrame("CheckButton", "ComfyAtmosphereTime" .. mode[1], parent, "UICheckButtonTemplate");
+		box:SetWidth(26);
+		box:SetHeight(26);
+		box:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, y);
+		getglobal(box:GetName() .. "Text"):SetText(mode[2]);
+		box.comfyMode = mode;
+		box:SetScript("OnClick", function()
+			local _, state = TimeShown();
+			local m = this.comfyMode;
+			if state ~= m[3] then
+				if m[3] == 0 then
+					TimeSend("lock", TimeOff());
+				elseif m[3] == 1 then
+					TimeSend("lock", "1");
+				else
+					TimeSend("local", "1");
+				end
+			end
+			-- Ticked at once; the next refresh shows what the DLL did.
+			for _, other in ipairs(TIME_MODES) do
+				getglobal("ComfyAtmosphereTime" .. other[1]):SetChecked(other == m);
+			end
+		end);
+		box:SetScript("OnEnter", function()
+			GameTooltip:SetOwner(this, "ANCHOR_RIGHT");
+			GameTooltip:SetText(this.comfyMode[2], 1, 1, 1);
+			GameTooltip:AddLine(this.comfyMode[4], NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b, 1);
+			GameTooltip:Show();
+		end);
+		box:SetScript("OnLeave", function() GameTooltip:Hide(); end);
+		y = y - 30;
+	end
+
+	-- In quarter hours. The keys and the bindings move it too, so it follows the hour shown.
+	local slider = CreateFrame("Slider", "ComfyAtmosphereTimeHour", parent, "OptionsSliderTemplate");
+	slider:SetWidth(width - 16);
+	slider:SetHeight(17);
+	slider:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, y - 16);
+	slider:SetMinMaxValues(0, 24);
+	slider:SetValueStep(0.25);
+	ComfyAtmosphereTimeHourLow:SetText("0");
+	ComfyAtmosphereTimeHourHigh:SetText("24");
+	ComfyAtmosphereTimeHourText:SetText("Hour");
+	slider:SetScript("OnMouseDown", function() this.dragging = true; end);
+	slider:SetScript("OnMouseUp", function() this.dragging = false; end);
+	slider:SetScript("OnValueChanged", function()
+		if this.refreshing then
+			return;
+		end
+		TimeSend("set", string.format("%.4f", this:GetValue()));
+	end);
+	y = y - 50;
+
+	-- A step either way ([time] step), and Day/Night.
+	local function Button(name, label, w, x, onClick)
+		local b = CreateFrame("Button", "ComfyAtmosphereTime" .. name, parent, "UIPanelButtonTemplate");
+		b:SetWidth(w);
+		b:SetHeight(22);
+		b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y);
+		b:SetText(label);
+		b:SetScript("OnClick", onClick);
+	end
+	Button("Earlier", "<", 30, 4, function() TimeSend("step", -1); end);
+	Button("Later", ">", 30, 38, function() TimeSend("step", 1); end);
+	Button("DayNight", "Day/Night", 100, 72, function() TimeSend("daynight"); end);
+	y = y - 28;
+
+	timeSection = { text = text };
+	local wait = 0;
+	parent:SetScript("OnUpdate", function()
+		wait = wait - arg1;
+		if wait > 0 then
+			return;
+		end
+		wait = 0.1;
+		TimeSectionRefresh();
+	end);
+	return y;
+end
+-- The end of the Time section.
+
 -- The settings window, /atmos options (2026-09-30). The same controls as the Atmosphere page, from the same
 -- ENTRIES, in a window of our own: a client with the old options panel (stock 1.12 and most servers other
 -- than Turtle) has no page for them. It uses only what stock 1.12 has: the UIPanelScrollFrameTemplate,
@@ -1964,6 +2194,7 @@ local WINDOW_SECTIONS = {
 	             "comfyWaterGlint", "comfyWaterMoonGlint", "comfyWaterGlintSize",
 	             "comfyWaveHeight",
 	             "comfyWaveSize" } },
+	{ "Time", {} },     -- controls of its own (TimeSectionBuild), not CVars
 };
 local WINDOW_MASTER = "comfyAtmosphere";
 -- Left out of this window: Debug View has the debug window (/atmos debug, the Debug button below).
@@ -2147,7 +2378,7 @@ local function WindowBuild()
 		bar:SetValue(bar:GetValue() - arg1 * 40);
 	end);
 
-	-- Each CVar's tab: its section, or the last.
+	-- Each CVar's tab: its section, or the last one with CVars (Time, the last, has controls of its own).
 	local sectionOf = {};
 	for i, section in ipairs(WINDOW_SECTIONS) do
 		for _, cvar in ipairs(section[2]) do
@@ -2155,6 +2386,10 @@ local function WindowBuild()
 		end
 	end
 	local count = table.getn(WINDOW_SECTIONS);
+	local others = count;
+	while others > 1 and table.getn(WINDOW_SECTIONS[others][2]) == 0 do
+		others = others - 1;
+	end
 
 	-- One control, at y in its frame; returns the y under it.
 	local function Add(option, i, parent, x, y, width)
@@ -2256,8 +2491,13 @@ local function WindowBuild()
 	end
 	for i, option in ipairs(ENTRIES) do
 		if option.cvar ~= WINDOW_MASTER and not WINDOW_LEFT_OUT[option.cvar] and HasCVar(option.cvar) then
-			local t = sectionOf[option.cvar] or count;
+			local t = sectionOf[option.cvar] or others;
 			heights[t] = Add(option, i, contents[t], 0, heights[t], CONTENT_WIDTH);
+		end
+	end
+	for t = 1, count do
+		if WINDOW_SECTIONS[t][1] == "Time" then
+			heights[t] = TimeSectionBuild(contents[t], heights[t], CONTENT_WIDTH);
 		end
 	end
 	for t = 1, count do
@@ -2357,10 +2597,6 @@ local tuneUntil = 0;
 -- test's sun elevation went missing that way.
 local tuneQueue = {};
 local TuneSend;
-
-local function Say(text)
-	DEFAULT_CHAT_FRAME:AddMessage("|cff88cc88atmos|r: " .. text);
-end
 
 -- Notices: lines the DLL starts on its own (the benchmark's start and end, F12), as comfyNotice1, comfyNotice2
 -- and on. Those already registered when the addon loads were printed before a /reload, so they are skipped.
@@ -2695,94 +2931,6 @@ function ComfyAtmosphere_StatsToggle()
 	end
 end
 
--- ---- the time of day (2026-10-07, from comfytime) --------------------------------------------------
---
--- The addon sends "<number> <verb> [value]" in comfyTimeSet: set <hour>, step <steps>, daynight, lock/local <0 or 1>. A new
--- number each time, so the same command twice runs twice; it starts from the clock, so a /reload does not repeat
--- the last number. comfyatmos.dll reads it every frame. It writes "<hour> <state>" into comfyTimeShown in place,
--- which needs the CVar to hold 16 characters, as comfyStats does. State: 0 the server's time ([time] enabled 0),
--- 1 locked, 2 an old comfytime.dll sets it, 3 the addresses did not check out, 4 the computer's local clock.
-
-local TIME_LEN = 16;
-local timeNumber = math.floor(GetTime() * 1000);
-
-local function TimeSend(verb, value)
-	if not HasCVar("comfyTimeSet") then
-		Say("this comfyatmos.dll does not set the time of day.");
-		return;
-	end
-	timeNumber = timeNumber + 1;
-	SetCVar("comfyTimeSet", timeNumber .. " " .. verb .. (value and (" " .. value) or ""));
-end
-
--- The hour shown and the state, or nil while the DLL has not written them yet.
-local function TimeShown()
-	if not HasCVar("comfyTimeShown") then
-		return nil;
-	end
-	local raw = GetCVar("comfyTimeShown") or "";
-	if string.len(raw) ~= TIME_LEN then
-		-- The game saved it in Config.wtf, and it came back at another length, with no room.
-		SetCVar("comfyTimeShown", string.rep(" ", TIME_LEN));
-		return nil;
-	end
-	local _, _, hour, state = string.find(raw, "^%s*([%d%.]+)%s+(%d)");
-	if not hour then
-		return nil;
-	end
-	return tonumber(hour), tonumber(state);
-end
-
-local function TimeText(hour, live)
-	local minutes = math.floor(hour * 60 + (live and 0 or 0.5));
-	return string.format("%02d:%02d", math.mod(math.floor(minutes / 60), 24), math.mod(minutes, 60));
-end
-
--- "0" and the server's hour, for Lock time and Follow computer time turned off. The client counts on from the last
--- hour written, so the DLL writes this one back. GetGameTime gives the server's time also while ours shows.
-local function TimeOff()
-	local h, m = GetGameTime();
-	return "0 " .. string.format("%.4f", h + m / 60);
-end
-
--- A held key steps the time as Ctrl+PageUp does: one step at once, then after 0.35 s one every 0.03 s. With
--- runOnUp the binding gets "up" when the key is let go. A release can be lost (a window over the game), so the
--- repeat also ends after 15 s.
-local timeHeld, timeHeldSince, timeLastStep = 0, 0, 0;
-local timeRepeat = CreateFrame("Frame");
-timeRepeat:Hide();
-timeRepeat:SetScript("OnUpdate", function()
-	local now = GetTime();
-	if timeHeld == 0 or now - timeHeldSince > 15 then
-		timeHeld = 0;
-		this:Hide();
-		return;
-	end
-	if now - timeHeldSince > 0.35 and now - timeLastStep >= 0.03 then
-		TimeSend("step", timeHeld);
-		timeLastStep = now;
-	end
-end);
-
-function ComfyAtmosphere_TimeKey(direction, state)
-	if state == "up" then
-		if timeHeld == direction then
-			timeHeld = 0;
-		end
-		return;
-	end
-	TimeSend("step", direction);
-	if state == "down" then
-		timeHeld, timeHeldSince, timeLastStep = direction, GetTime(), GetTime();
-		timeRepeat:Show();
-	end
-end
-
-function ComfyAtmosphere_DayNight()
-	TimeSend("daynight");
-end
-
-
 function ComfyAtmosphere_Command(command)
 	SlashCmdList["COMFYATMOS"](command);
 end
@@ -2819,36 +2967,6 @@ local function DebugRefresh()
 	debugFrame.view:SetText("View " .. v .. ": " .. DEBUG_VIEWS[v + 1]);
 	ComfyAtmosphereDebugTrace:SetText(traceOn and "Trace: on" or "Trace: off");
 
-	local hour, state = TimeShown();
-	local slider = ComfyAtmosphereDebugTime;
-	if not hour then
-		debugFrame.timeText:SetText("Time of day: waiting for comfyatmos.dll");
-	elseif state == 1 then
-		debugFrame.timeText:SetText("Time of day: " .. TimeText(hour));
-	elseif state == 4 then
-		debugFrame.timeText:SetText("Computer time: " .. TimeText(hour, true));
-	elseif state == 0 then
-		debugFrame.timeText:SetText("Time of day: the server's. Tick Lock time to set it");
-	elseif state == 2 then
-		debugFrame.timeText:SetText("Time of day: comfytime.dll sets it. Remove it");
-	else
-		debugFrame.timeText:SetText("Time of day: not set (another WoW.exe? See the log)");
-	end
-	if hour and not slider.dragging then
-		slider.refreshing = true;
-		slider:SetValue(hour);
-		slider.refreshing = false;
-	end
-	-- Unlocked, the slider and the buttons do nothing, so they are dimmed.
-	local ours = state == 1;
-	slider:EnableMouse(ours);
-	slider:SetAlpha(ours and 1 or 0.4);
-	ComfyAtmosphereDebugTimeOn:SetChecked(state == 1);
-	ComfyAtmosphereDebugTimeLocal:SetChecked(state == 4);
-	for _, name in ipairs({ "Earlier", "Later", "DayNight" }) do
-		local button = getglobal("ComfyAtmosphereDebug" .. name);
-		if ours then button:Enable(); else button:Disable(); end
-	end
 	if HasCVar("comfyHotkeys") then
 		ComfyAtmosphereDebugHotkeys:SetChecked(GetCVar("comfyHotkeys") == "1");
 	end
@@ -2883,54 +3001,10 @@ local function DebugBuild()
 	view:SetJustifyH("CENTER");
 	f.view = view;
 
-	-- The time of day: a slider in quarter hours, a step either way ([time] step), and Day/Night from comfytime's
-	-- keys. The slider follows the hour the keys and the bindings move.
-	local timeText = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall");
-	timeText:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -134);
-	f.timeText = timeText;
-	local slider = CreateFrame("Slider", "ComfyAtmosphereDebugTime", f, "OptionsSliderTemplate");
-	slider:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -154);
-	slider:SetWidth(268);
-	slider:SetMinMaxValues(0, 24);
-	slider:SetValueStep(0.25);
-	ComfyAtmosphereDebugTimeLow:SetText("0");
-	ComfyAtmosphereDebugTimeHigh:SetText("24");
-	ComfyAtmosphereDebugTimeText:SetText("");
-	slider:SetScript("OnMouseDown", function() this.dragging = true; end);
-	slider:SetScript("OnMouseUp", function() this.dragging = false; end);
-	slider:SetScript("OnValueChanged", function()
-		if this.refreshing then
-			return;
-		end
-		TimeSend("set", string.format("%.4f", this:GetValue()));
-	end);
-	DebugButton(f, "Earlier", "<", 30, 12, -180, function() TimeSend("step", -1); end);
-	DebugButton(f, "Later", ">", 30, 46, -180, function() TimeSend("step", 1); end);
-	DebugButton(f, "DayNight", "Day/Night", 100, 82, -180, function() ComfyAtmosphere_DayNight(); end);
-
-	-- Lock time: ticked, the hour stays where it is put, and the DLL keeps it in comfyatmos.ini ([time] enabled
-	-- and hour), so the next start shows it. Unticked, the server's time shows, and that is kept too.
-	local timeOn = CreateFrame("CheckButton", "ComfyAtmosphereDebugTimeOn", f, "UICheckButtonTemplate");
-	timeOn:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -206);
-	timeOn:SetWidth(24);
-	timeOn:SetHeight(24);
-	ComfyAtmosphereDebugTimeOnText:SetText("Lock time");
-	timeOn:SetScript("OnClick", function()
-		TimeSend("lock", this:GetChecked() and "1" or TimeOff());
-	end);
-	local timeLocal = CreateFrame("CheckButton", "ComfyAtmosphereDebugTimeLocal", f, "UICheckButtonTemplate");
-	timeLocal:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -230);
-	timeLocal:SetWidth(24);
-	timeLocal:SetHeight(24);
-	ComfyAtmosphereDebugTimeLocalText:SetText("Follow computer time");
-	timeLocal:SetScript("OnClick", function()
-		TimeSend("local", this:GetChecked() and "1" or TimeOff());
-	end);
-
 	-- comfyatmos.dll's own keys, read past the game's key bindings ([general] hotkeys). A control CVar, so the
 	-- game keeps it in Config.wtf.
 	local hotkeys = CreateFrame("CheckButton", "ComfyAtmosphereDebugHotkeys", f, "UICheckButtonTemplate");
-	hotkeys:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -254);
+	hotkeys:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -134);
 	hotkeys:SetWidth(24);
 	hotkeys:SetHeight(24);
 	ComfyAtmosphereDebugHotkeysText:SetText("Developer keys (F11, F12, Ctrl+PageUp)");
@@ -2941,7 +3015,7 @@ local function DebugBuild()
 		end
 		SetCVar("comfyHotkeys", this:GetChecked() and "1" or "0");
 	end);
-	f:SetHeight(290);
+	f:SetHeight(170);
 
 	local wait = 0;
 	f:SetScript("OnUpdate", function()
@@ -2966,7 +3040,6 @@ function ComfyAtmosphere_DebugToggle()
 	if debugFrame:IsShown() then
 		debugFrame:Hide();
 	else
-		TimeShown();
 		debugFrame:Show();
 		DebugRefresh();
 	end
