@@ -2738,6 +2738,13 @@ local function TimeText(hour, live)
 	return string.format("%02d:%02d", math.mod(math.floor(minutes / 60), 24), math.mod(minutes, 60));
 end
 
+-- "0" and the server's hour, for Lock time and Follow computer time turned off. The client counts on from the last
+-- hour written, so the DLL writes this one back. GetGameTime gives the server's time also while ours shows.
+local function TimeOff()
+	local h, m = GetGameTime();
+	return "0 " .. string.format("%.4f", h + m / 60);
+end
+
 -- A held key steps the time as Ctrl+PageUp does: one step at once, then after 0.35 s one every 0.03 s. With
 -- runOnUp the binding gets "up" when the key is let go. A release can be lost (a window over the game), so the
 -- repeat also ends after 15 s.
@@ -2909,7 +2916,7 @@ local function DebugBuild()
 	timeOn:SetHeight(24);
 	ComfyAtmosphereDebugTimeOnText:SetText("Lock time");
 	timeOn:SetScript("OnClick", function()
-		TimeSend("lock", this:GetChecked() and "1" or "0");
+		TimeSend("lock", this:GetChecked() and "1" or TimeOff());
 	end);
 	local timeLocal = CreateFrame("CheckButton", "ComfyAtmosphereDebugTimeLocal", f, "UICheckButtonTemplate");
 	timeLocal:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -230);
@@ -2917,7 +2924,7 @@ local function DebugBuild()
 	timeLocal:SetHeight(24);
 	ComfyAtmosphereDebugTimeLocalText:SetText("Follow computer time");
 	timeLocal:SetScript("OnClick", function()
-		TimeSend("local", this:GetChecked() and "1" or "0");
+		TimeSend("local", this:GetChecked() and "1" or TimeOff());
 	end);
 
 	-- comfyatmos.dll's own keys, read past the game's key bindings ([general] hotkeys). A control CVar, so the

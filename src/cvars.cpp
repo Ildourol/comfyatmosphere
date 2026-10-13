@@ -38,7 +38,7 @@
 //
 // The time of day (2026-10-07): the debug panel's slider and the key bindings send "<number> <verb> [value]" in
 // comfyTimeSet, a new number each time, so the same verb twice runs twice. The verbs: set <hour>, step <steps>
-// (in [time] step hours), daynight, lock <0 or 1>, local <0 or 1>. The first value read is left alone: it is what Config.wtf kept from the
+// (in [time] step hours), daynight, lock <0 or 1>, local <0 or 1>; "lock 0" and "local 0" carry the server's hour too. The first value read is left alone: it is what Config.wtf kept from the
 // last session. comfyTimeShown carries "<hour> <state>" back (TimeState), written in place as comfyStats is, and
 // only while it still holds kTimeLen characters. CVarsTime runs every frame, not every 0.2 s as the controls do: a
 // held key steps the time every 0.03 s.
@@ -1019,15 +1019,16 @@ void CVarsTime()
         strcpy_s(g_timeSetLast, cmd);
         // The number only makes each command new; it is skipped.
         char verb[16] = {};
-        float value = 0.0f;
-        const int n = first ? 0 : sscanf_s(cmd, "%*s %15s %f", verb, static_cast<unsigned>(sizeof(verb)), &value);
+        float value = 0.0f, server = 0.0f;
+        const int n = first ? 0 : sscanf_s(cmd, "%*s %15s %f %f", verb, static_cast<unsigned>(sizeof(verb)), &value,
+                                           &server);
         if (n == 2 && strcmp(verb, "set") == 0)
             TimeSet(value);
         else if (n == 2 && strcmp(verb, "step") == 0)
             TimeStep(value * g_cfg.time.step);
         else if (n >= 1 && strcmp(verb, "daynight") == 0)
             TimeToggleDayNight();
-        else if (n == 2 && (strcmp(verb, "lock") == 0 || strcmp(verb, "local") == 0))
+        else if (n >= 2 && (strcmp(verb, "lock") == 0 || strcmp(verb, "local") == 0))
         {
             const bool written = strcmp(verb, "local") == 0 ? TimeLocalWrite(value != 0.0f) : TimeLockWrite(value != 0.0f);
             if (written)
@@ -1035,6 +1036,8 @@ void CVarsTime()
                 LoadSettings(ConfigIniPath());
                 CVarsAfterLoad();
                 TimeReload();
+                if (n == 3)
+                    TimeGiveBack(server);
             }
         }
         else if (!first && cmd[0])

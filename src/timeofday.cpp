@@ -525,6 +525,22 @@ bool TimeLocalWrite(bool on)
     return true;
 }
 
+// The client does not take the server's time back by itself: it counts on from the last time written, until a
+// relog. GetGameTime still gives the server's time, so the addon sends it, and it is written once.
+void TimeGiveBack(float hour)
+{
+    if (g_cfg.time.enabled || g_otherDll || !g_checked || !g_usable)
+        return;
+    const float    minutes = fmodf(fmodf(hour, 24.0f) + 24.0f, 24.0f) * 60.0f;
+    const uint32_t m       = static_cast<uint32_t>(minutes) % 1440;
+    const uintptr_t slide  = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr)) - 0x00400000;
+    *reinterpret_cast<volatile uint32_t*>(g_checkedAddr[0] + slide) = m;
+    *reinterpret_cast<volatile float*>(g_checkedAddr[1] + slide) = minutes / 1440.0f;
+    if (g_checkedAddr[2])
+        *reinterpret_cast<volatile float*>(g_checkedAddr[2] + slide) = static_cast<float>(m);
+    Log("--- time: the server's time given back, %02u:%02u ---", m / 60, m % 60);
+}
+
 void TimePersistTick()
 {
     if (!g_moved || !g_cfg.time.enabled || g_cfg.time.localTime || g_otherDll || Now() - g_movedAt < 1.0)

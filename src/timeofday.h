@@ -22,6 +22,8 @@ bool TimeLockWrite(bool on);
 // Follow the computer's local clock, including its timezone and daylight saving.
 // Turning this off returns to server time. The caller reads the settings again.
 bool TimeLocalWrite(bool on);
+// After either is turned off: write the server's time (GetGameTime, from the addon) into the client's clock once.
+void TimeGiveBack(float hour);
 // Once a frame: while the time is ours, an hour the player moved goes into [time] hour a second after the last move,
 // so the next start shows it. /atmos time.hour (a test's hour) is never written.
 void TimePersistTick();
