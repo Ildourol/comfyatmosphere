@@ -3785,3 +3785,13 @@ Fog Sunlight 15 (4.0 to 1.5), Fog Toward the Sun 40 (0.3 to 0.4), Light Strength
 The Booty Bay fog that looked too dense was the dawn thickening at 06:40 (Fog Morning: 1.9 times), with the water's
 and the low ground's on top. The tests' expected shots were taken with the old defaults where a test does not set
 the controls itself.
+
+## The near maps at least 2048 (2026-10-14, the owner)
+
+At a lower Shadow Resolution the shadows of things close by stepped as they moved: a moving caster's edge covers a
+texel or not, so it jumps a whole texel, and the filter smooths only still edges. Every map took the slider's size.
+The near map, its leaves and the units' map now take at least `[shadow] nearMinSize` (2048) texels a side, with a
+colour target of their own when they are larger than the far map (`g_nearColour`); the near grid's snap and the sun
+shadows' texel sizes follow (`ShadowNearSize`). At Shadow Resolution 1 the far map is 1024 (0.49 yards a texel) and
+the near maps 2048 (0.031 yards), for about 36 MB more. At 2 and 3 nothing changes. A slider for 4096 near maps was
+offered and left out: the owner wants fewer settings.

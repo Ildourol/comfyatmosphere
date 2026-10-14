@@ -320,6 +320,7 @@ void LoadSettings(const wchar_t* ini)
     s.depth.waterDepth  = GetB(kDepth, L"waterDepth", s.depth.waterDepth, ini);
     s.shadow.enabled    = GetB(kShadow, L"enabled", s.shadow.enabled, ini);
     s.shadow.size       = GetI(kShadow, L"size", s.shadow.size, ini);
+    s.shadow.nearMinSize = GetI(kShadow, L"nearMinSize", s.shadow.nearMinSize, ini);
     s.shadow.range      = Clamp(GetF(kShadow, L"range", s.shadow.range, ini), 5.0f, 1000.0f);
     s.shadow.nearRange  = Clamp(GetF(kShadow, L"nearRange", s.shadow.nearRange, ini), 0.0f, 200.0f);
     s.shadow.midRange   = Clamp(GetF(kShadow, L"midRange", s.shadow.midRange, ini), 0.0f, 250.0f);

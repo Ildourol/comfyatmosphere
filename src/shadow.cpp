@@ -2778,6 +2778,8 @@ namespace
     KeptMap               g_kept[7];
     unsigned              g_keptPasses = 0;        // passes kept, for the probe
     UINT                  g_size      = 0;
+    UINT                  g_nearSize  = 0;         // the near map's, its leaves' and the units' map's (nearMinSize)
+    IDirect3DSurface9*    g_nearColour = nullptr;  // their colour target, when they are not the far map's size
     IDirect3DStateBlock9* g_sb        = nullptr;
     bool                  g_failed    = false;
     bool                  g_valid     = false;
@@ -2960,6 +2962,8 @@ namespace
         SafeRelease(g_depthSurf);
         SafeRelease(g_depthTex);
         SafeRelease(g_colour);
+        SafeRelease(g_nearColour);
+        g_nearSize = 0;
         for (KeptMap& k : g_kept)
             k.ok = false;
         SafeRelease(g_sb);
@@ -2967,13 +2971,13 @@ namespace
         g_valid = false;
     }
 
-    bool EnsureResources(IDirect3DDevice9* dev, UINT size)
+    bool EnsureResources(IDirect3DDevice9* dev, UINT size, UINT nearSize)
     {
         const bool wantNear = g_cfg.shadow.nearRange > 0.0f;
         const bool wantLeaves = g_cfg.shadow.leaves;
         const bool wantMid = g_cfg.shadow.midRange > 0.0f;
         const bool wantTerr = wantLeaves && g_cfg.shadow.terrainLeaves;
-        if (g_size == size && g_depthSurf && g_colour && g_sb && wantNear == (g_nearSurf != nullptr) &&
+        if (g_size == size && g_nearSize == nearSize && g_depthSurf && g_colour && g_sb && wantNear == (g_nearSurf != nullptr) &&
             wantLeaves == (g_farLeafSurf != nullptr) && (wantLeaves && wantNear) == (g_nearLeafSurf != nullptr) &&
             wantNear == (g_unitSurf != nullptr) && wantMid == (g_midSurf != nullptr) &&
             wantTerr == (g_terrSurf != nullptr))
@@ -2987,12 +2991,12 @@ namespace
         // The near map is the same size, so the one colour target serves both.
         if (SUCCEEDED(hr) && wantNear)
         {
-            hr = d->CreateTexture(dev, size, size, 1, D3DUSAGE_DEPTHSTENCIL, kINTZ, D3DPOOL_DEFAULT, &g_nearTex, nullptr);
+            hr = d->CreateTexture(dev, nearSize, nearSize, 1, D3DUSAGE_DEPTHSTENCIL, kINTZ, D3DPOOL_DEFAULT, &g_nearTex, nullptr);
             if (SUCCEEDED(hr))
                 hr = g_nearTex->lpVtbl->GetSurfaceLevel(g_nearTex, 0, &g_nearSurf);
             if (SUCCEEDED(hr) && wantLeaves)
             {
-                hr = d->CreateTexture(dev, size, size, 1, D3DUSAGE_DEPTHSTENCIL, kINTZ, D3DPOOL_DEFAULT, &g_nearLeafTex, nullptr);
+                hr = d->CreateTexture(dev, nearSize, nearSize, 1, D3DUSAGE_DEPTHSTENCIL, kINTZ, D3DPOOL_DEFAULT, &g_nearLeafTex, nullptr);
                 if (SUCCEEDED(hr))
                     hr = g_nearLeafTex->lpVtbl->GetSurfaceLevel(g_nearLeafTex, 0, &g_nearLeafSurf);
             }
@@ -3014,7 +3018,7 @@ namespace
         // itself now comes from it, and half the size stepped about on the body.
         if (SUCCEEDED(hr) && wantNear)
         {
-            hr = d->CreateTexture(dev, size, size, 1, D3DUSAGE_DEPTHSTENCIL, kINTZ, D3DPOOL_DEFAULT, &g_unitTex, nullptr);
+            hr = d->CreateTexture(dev, nearSize, nearSize, 1, D3DUSAGE_DEPTHSTENCIL, kINTZ, D3DPOOL_DEFAULT, &g_unitTex, nullptr);
             if (SUCCEEDED(hr))
                 hr = g_unitTex->lpVtbl->GetSurfaceLevel(g_unitTex, 0, &g_unitSurf);
         }
@@ -3042,6 +3046,16 @@ namespace
                 return false;
             }
         }
+        // The near maps' own colour target when they are larger (nearMinSize): a depth surface may be larger than its
+        // render target, but the draws reach only as far as the target.
+        if (wantNear && nearSize != size &&
+            FAILED(d->CreateRenderTarget(dev, nearSize, nearSize, kNULL, D3DMULTISAMPLE_NONE, 0, FALSE, &g_nearColour, nullptr)) &&
+            FAILED(d->CreateRenderTarget(dev, nearSize, nearSize, D3DFMT_R5G6B5, D3DMULTISAMPLE_NONE, 0, FALSE, &g_nearColour, nullptr)))
+        {
+            Log("shadow: could not create a %ux%u colour target for the near maps", nearSize, nearSize);
+            ReleaseResources();
+            return false;
+        }
         if (FAILED(d->CreateStateBlock(dev, D3DSBT_ALL, &g_sb)) || !g_sb)
         {
             Log("shadow: could not create a state block");
@@ -3050,13 +3064,16 @@ namespace
         }
         if (g_unitSurf)
         {
-            g_unitColour = g_colour;   // the same size: one colour target serves every map
+            g_unitColour = g_nearColour ? g_nearColour : g_colour;   // the near maps' size
             g_unitColour->lpVtbl->AddRef(g_unitColour);
         }
         g_size = size;
+        g_nearSize = nearSize;
         Log("shadow: %ux%u INTZ depth map%s ready (colour target %s)%s", size, size,
             g_nearLeafSurf ? "s, far and near, each solid and leaves," : g_nearSurf ? "s, far and near," : "",
             colourKind, g_unitSurf ? ", and one of the units" : "");
+        if (g_nearSurf && nearSize != size)
+            Log("shadow: the near maps %ux%u ([shadow] nearMinSize %d)", nearSize, nearSize, g_cfg.shadow.nearMinSize);
         if (g_midSurf)
             Log("shadow: and a middle map, solid only, %ux%u", size, size);
         if (g_terrSurf)
@@ -3738,7 +3755,7 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
     // Nothing to draw only if the cache is empty and the files are off: with them on, the cache holds only
     // what moves, and can be empty on a hill with nobody about.
     const bool nothing = g_cache.empty() && !s.mapTerrain;
-    if (nothing || !EnsureResources(dev, static_cast<UINT>(s.size)))
+    if (nothing || !EnsureResources(dev, static_cast<UINT>(s.size), static_cast<UINT>(ShadowNearSize())))
     {
         g_replayOutcome = 4;
         if (!nothing)
@@ -3866,14 +3883,14 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
     // caster's outline fell on other texels, and shadow edges hopped as you walked and stood still when you
     // only turned. Where the world's origin lands in the map's clip space is kept on a whole texel, worked
     // out in doubles (cam is thousands of yards out).
-    auto narrowMap = [&](float range, D3DMATRIX& proj, D3DMATRIX& vp, D3DMATRIX& absToSun, D3DMATRIX& cutToSun)
+    auto narrowMap = [&](float range, int mapSize, D3DMATRIX& proj, D3DMATRIX& vp, D3DMATRIX& absToSun, D3DMATRIX& cutToSun)
     {
         OrthoLH(range * 2.0f, range * 2.0f, 1.0f, mapDepth * 2.0f, proj);
         D3DMATRIX p, v;
         OrthoLH(range * 2.0f, range * 2.0f, cutNear, cutFar, p);
         if (s.nearSnap)
         {
-            const double texelClip = 2.0 / (s.size > 0 ? s.size : 1);
+            const double texelClip = 2.0 / (mapSize > 0 ? mapSize : 1);
             for (int a = 0; a < 2; ++a)
             {
                 const double viewAt = -(static_cast<double>(cam[0]) * sunView.m[0][a] +
@@ -3893,7 +3910,7 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
     const bool doNear = s.nearRange > 0.0f && g_nearSurf;
     D3DMATRIX nearProj, nearVP, nearAbsToSun, nearCutAbsToSun;
     if (doNear)
-        narrowMap(s.nearRange, nearProj, nearVP, nearAbsToSun, nearCutAbsToSun);
+        narrowMap(s.nearRange, ShadowNearSize(), nearProj, nearVP, nearAbsToSun, nearCutAbsToSun);
     // The middle map ([shadow] midRange, 2026-10-02): past the near map, a shadow cast from under a yard
     // away (a merlon on the wall behind it, an eave) was lost in the far map's slack, up to 1.4 yards.
     // Every midEvery-th replay (2026-10-07, perf-1), on the replays the far maps skip; read in between as the far map
@@ -3904,7 +3921,7 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
     const bool doMid = haveMid && (!g_midValid || midEvery <= 1 || (tick % midEvery) == 1 % midEvery);
     D3DMATRIX midProj, midVP, midAbsToSun, midCutAbsToSun;
     if (doMid)
-        narrowMap(s.midRange, midProj, midVP, midAbsToSun, midCutAbsToSun);
+        narrowMap(s.midRange, s.size, midProj, midVP, midAbsToSun, midCutAbsToSun);
     else if (haveMid && g_midValid)
     {
         D3DMATRIX toAbs;
@@ -4280,8 +4297,9 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
     static const BenchSection kPassSection[7] = { kBenchMapFar, kBenchMapFarLeaf, kBenchMapNear, kBenchMapNearLeaf,
                                                   kBenchMapMid, kBenchMapUnits, kBenchMapTerrain };
     BenchSectionBegin(dev, kPassSection[pass]);   // each map's own GPU time (2026-10-06)
-    if (unitPass)
-        d->SetRenderTarget(dev, 0, g_unitColour);   // the restore puts the client's back
+    // The near maps may be larger than the rest (nearMinSize), with a colour target of their own. The restore puts
+    // the client's back.
+    d->SetRenderTarget(dev, 0, nearPass && g_nearColour ? g_nearColour : g_colour);
     d->SetDepthStencilSurface(dev, unitPass ? g_unitSurf : terrPass ? g_terrSurf
                                             : nearPass ? (leafPass ? g_nearLeafSurf : g_nearSurf)
                                             : midPass ? g_midSurf : (leafPass ? g_farLeafSurf : g_depthSurf));
@@ -5159,4 +5177,11 @@ void ShadowShaderList()
     snprintf(src, sizeof(src), "sampler2D t : register(s0);\n"
                                "float4 main(float2 uv : TEXCOORD%d) : COLOR { return tex2D(t, uv); }\n", 2);
     ShaderPrecompile("shadow_uv", src, "ps_2_0");
+}
+
+int ShadowNearSize()
+{
+    const ShadowSettings& s = g_cfg.shadow;
+    const int size = s.size > 0 ? s.size : 2048;
+    return s.nearMinSize > size ? (s.nearMinSize < 4096 ? s.nearMinSize : 4096) : size;
 }

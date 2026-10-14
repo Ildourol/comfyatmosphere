@@ -1204,7 +1204,8 @@ bool SunShadowsDraw(IDirect3DDevice9* dev)
     // Bias and offset are in texels of each map: yards = texels x the map's width / its size.
     const float size    = static_cast<float>(g_cfg.shadow.size > 0 ? g_cfg.shadow.size : 2048);
     const float farTex  = g_cfg.shadow.range * 2.0f / size;
-    const float nearTex_ = nearRange * 2.0f / size;
+    const float nearSize = static_cast<float>(ShadowNearSize());   // the near maps can be larger (nearMinSize)
+    const float nearTex_ = nearRange * 2.0f / nearSize;
     // The slack in the depth test: bias texels of the map, plus minGap yards on either map. The map is
     // orthographic, so its depth is yards / span.
     // The bias follows the sun's height (2026-09-29). Flat ground changes depth, as the sun sees it, by
@@ -1221,7 +1222,7 @@ bool SunShadowsDraw(IDirect3DDevice9* dev)
     // top of a merlon's shaded side clear of the merlon: its shade went missing past the near map.
     const float midRangeNow = haveMid ? midRange : 0.0f;
     float finest = farTex;
-    if (haveNear) finest = (std::min)(finest, nearRange * 2.0f / size);
+    if (haveNear) finest = (std::min)(finest, nearRange * 2.0f / nearSize);
     if (haveMid)  finest = (std::min)(finest, midRangeNow * 2.0f / size);
     const float offYards = ss.normalBias * finest;
     pc[40] = (biasTex * farTex + ss.minGap) / span; pc[41] = offYards; pc[42] = 1.0f / size; pc[43] = ss.softness;
@@ -1229,7 +1230,7 @@ bool SunShadowsDraw(IDirect3DDevice9* dev)
     for (int r = 0; r < 4; ++r)
         for (int c = 0; c < 4; ++c)
             pc[48 + r * 4 + c] = nearVP.m[r][c];
-    pc[64] = (biasTex * nearTex_ + ss.minGap) / span; pc[65] = offYards; pc[66] = 1.0f / size;
+    pc[64] = (biasTex * nearTex_ + ss.minGap) / span; pc[65] = offYards; pc[66] = 1.0f / nearSize;
     pc[67] = haveNear ? 1.0f : 0.0f;
     // The largest slope, 8 yards of depth a yard, in each map's units: depth (0..1 over span) per uv
     // (0..1 over the map's width).
@@ -1257,10 +1258,10 @@ bool SunShadowsDraw(IDirect3DDevice9* dev)
     UnitColour(ss.shadeColor, &pc[92]); pc[95] = ss.debug ? 0.0f : ss.shadeTint * keep;
     UnitColour(ss.sunColor, &pc[96]);   pc[99] = ss.debug ? 0.0f : ss.sunTint * keep;
     // The units' map: the near map's size and texel (half its size until 2026-10-01).
-    const float unitTex = nearRange * 2.0f / size;
+    const float unitTex = nearRange * 2.0f / nearSize;
     pc[100] = ss.debug ? 0.0f : ss.unitStrength * 0.01f * sunset * keep;
     pc[101] = unitTex / span;                                   // one texel: no ground in this map
-    pc[102] = 1.0f / size;                                      // one texel (uv): the near map's size
+    pc[102] = 1.0f / nearSize;                                  // one texel (uv): the near map's size
     pc[103] = unitMap ? 1.0f : 0.0f;
     pc[104] = ss.unitGap > 0.0f ? span / ss.unitGap : 1e6f;
     pc[105] = span * sunDir[2];                                 // yards straight down per map unit along the sun

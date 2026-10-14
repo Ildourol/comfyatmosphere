@@ -133,6 +133,9 @@ struct ShadowSettings
                               // light the same look (benchmark, 2026-09-24: 2.35 against 1.66
                               // microseconds a caster); it gives the sun shadows sharper edges. The
                               // Shadow Resolution control sets it: 1024, 2048 or 4096
+    // The near map, its leaves and the units' map at least this size, whatever size is (2026-10-14, the owner: at a
+    // lower Shadow Resolution the shadows of things close by stepped as they moved). 0 = size.
+    int   nearMinSize = 2048;
     float range   = 250.0f;    // yards covered either side of the player
     float nearRange = 32.0f;   // the near map, for the sun shadows: yards either side (0 = none). The far
                                // map's texel, a quarter of a yard, was too coarse for a trunk or a post
