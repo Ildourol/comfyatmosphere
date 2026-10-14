@@ -542,6 +542,11 @@ struct WaterSettings
     // Zone Colour (2026-10-07): the colour deep water turns is the game's own water colour for the zone and the hour,
     // warmed by the sky's glow at dusk, at our brightness, in place of Water Colour.
     bool  zone      = true;
+    // Zone Colour's tuning (2026-10-14, the owner: the Stormwind canal too green). zoneSaturation: how much the game's
+    // hue is strengthened, 0 grey (Zone Saturation). zoneHue: degrees the hue is turned round the colour wheel, up
+    // from green toward teal and blue, down toward yellow (Zone Hue).
+    float zoneSaturation = 1.75f;
+    float zoneHue   = 0.0f;
     // 0..3: how far deep water turns to the sky's glow at sunset, by how red the glow is, and how much more of the
     // sky it shows (2026-10-07). 0: none.
     float sunset    = 1.0f;

@@ -106,7 +106,7 @@ namespace
                 kHotkeys, kWaterZone, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
                 kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing,
                 kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
-                kJumpRipple, kGameGlow, kWetSandReach,
+                kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kZoneHue,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -279,6 +279,9 @@ namespace
         "comfyGameGlow",
         // Wet Sand Distance (2026-10-13): [water] wetSandReach, in yards.
         "comfyWaterWetSandDistance",
+        // Zone Saturation and Zone Hue (2026-10-14): [water] zoneSaturation as a percentage, zoneHue in degrees.
+        "comfyWaterZoneSaturation",
+        "comfyWaterZoneHue",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -544,6 +547,8 @@ namespace
         case kNightSaturation: snprintf(out, cap, "%.0f", s.colour.night); break;
         case kGameGlow:       snprintf(out, cap, "%.0f", s.colour.gameGlow); break;    // percent already
         case kWetSandReach:   snprintf(out, cap, "%.0f", s.water.wetSandReach); break;   // yards
+        case kZoneSaturation: snprintf(out, cap, "%.0f", s.water.zoneSaturation * 100.0f); break;   // percent
+        case kZoneHue:        snprintf(out, cap, "%.0f", s.water.zoneHue); break;   // degrees
         case kColour:         snprintf(out, cap, "%d", s.colour.enabled ? 1 : 0); break;
         case kFog:            snprintf(out, cap, "%d", s.fog.enabled ? 1 : 0); break;
         // Ten-thousandths a yard (40 is 0.004), yards, and percentages.
@@ -699,6 +704,8 @@ namespace
         if (c[kNightSaturation].seen) s.colour.night  = Clamp(c[kNightSaturation].value, 0.0f, 200.0f);
         if (c[kGameGlow].seen)        s.colour.gameGlow = Clamp(c[kGameGlow].value, 0.0f, 200.0f);
         if (c[kWetSandReach].seen)    s.water.wetSandReach = Clamp(c[kWetSandReach].value, 20.0f, 300.0f);
+        if (c[kZoneSaturation].seen)  s.water.zoneSaturation = Clamp(c[kZoneSaturation].value * 0.01f, 0.0f, 3.0f);
+        if (c[kZoneHue].seen)         s.water.zoneHue = Clamp(c[kZoneHue].value, -90.0f, 90.0f);
         if (c[kColour].seen)         s.colour.enabled = c[kColour].value != 0.0f;
         if (c[kFog].seen)            s.fog.enabled    = c[kFog].value != 0.0f;
         if (c[kFogDensity].seen)     s.fog.density    = Clamp(c[kFogDensity].value * 0.0001f, 0.0f, 0.1f);

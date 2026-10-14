@@ -96,6 +96,8 @@ namespace
         { "water.rain",          "Rain on Water" },
         { "water.wetSand",       "Wet Sand" },
         { "water.wetSandReach",  "Wet Sand Distance" },
+        { "water.zoneSaturation", "Zone Saturation" },
+        { "water.zoneHue",       "Zone Hue" },
         { "lighthouse.enabled",  "Lighthouses" },
         { "lighthouse.beam",     "Lighthouse Beam" },
         { "lighthouse.beacon",   "Lighthouse Beacon" },

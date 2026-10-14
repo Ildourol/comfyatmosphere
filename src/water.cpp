@@ -2660,7 +2660,19 @@ float4 main(float2 vpos : VPOS) : COLOR
             float target[3];
             const float scale = L / luma(g_easedWater);
             for (int i = 0; i < 3; ++i)
-                target[i] = L + (g_easedWater[i] * scale - L) * 1.75f;
+                target[i] = L + (g_easedWater[i] * scale - L) * w.zoneSaturation;
+            // Zone Hue (2026-10-14): the hue turned round the grey axis, then brought back to the luma.
+            if (w.zoneHue != 0.0f)
+            {
+                const float a = w.zoneHue * 0.01745329f, c = cosf(a), s = sinf(a) * 0.57735027f, o = (1.0f - c) / 3.0f;
+                const float r = target[0], g = target[1], b = target[2];
+                target[0] = r * (c + o) + g * (o - s) + b * (o + s);
+                target[1] = r * (o + s) + g * (c + o) + b * (o - s);
+                target[2] = r * (o - s) + g * (o + s) + b * (c + o);
+                const float lt = luma(target);
+                for (int i = 0; i < 3; ++i)
+                    target[i] *= lt > 1e-4f ? L / lt : 1.0f;
+            }
             if (w.skyFromGame && g_easedSkySet && luma(g_easedGlow) > 0.02f)
             {
                 const float gl = luma(g_easedGlow);
