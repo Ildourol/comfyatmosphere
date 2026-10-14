@@ -310,13 +310,23 @@ namespace
             // Even one draw will do: tilting the camera up to the sky left fewer than 8 world draws at
             // times, the sky's slice won again, and the view went dark. With no slice from 0 at all this
             // frame, the world's slice stays what it was; the most votes decide only before any is known.
+            // The slice in use stays while it has a draw this frame, and else the one from 0 with the most draws
+            // (2026-10-14, the owner: a flash of all the light at each druid form change). A model change has the
+            // client draw the portrait again, before the world, into a slice of its own from 0 (0..1). The first
+            // slice from 0 won then: every pixel was rebuilt with the wrong depth range for that frame, and the sun
+            // shadows and the light turned all shade or all sun.
             static bool known = false;
             const Slice* best = nullptr;
             for (int i = 0; i < g_sliceCount; ++i)
                 if (g_slices[i].minZ == 0.0f && g_slices[i].votes >= 1)
                 {
-                    best = &g_slices[i];
-                    break;
+                    if (known && g_slices[i].minZ == g_worldMinZ && g_slices[i].maxZ == g_worldMaxZ)
+                    {
+                        best = &g_slices[i];
+                        break;
+                    }
+                    if (!best || g_slices[i].votes > best->votes)
+                        best = &g_slices[i];
                 }
             if (!best && !known)
             {
@@ -329,6 +339,15 @@ namespace
                 g_worldMinZ = best->minZ;
                 g_worldMaxZ = best->maxZ;
                 known = known || best->minZ == 0.0f;
+            }
+            if (!log && g_cfg.trace)   // the trace: each frame's slices, the world's marked
+            {
+                char line[400] = {};
+                int len = 0;
+                for (int i = 0; i < g_sliceCount; ++i)
+                    len += _snprintf_s(line + len, sizeof(line) - len, _TRUNCATE, " %.4f..%.4f x%u%s", g_slices[i].minZ,
+                                       g_slices[i].maxZ, g_slices[i].votes, &g_slices[i] == best ? "*" : "");
+                Log("shadow: trace slices:%s", line);
             }
             if (log)
                 for (int i = 0; i < g_sliceCount; ++i)
@@ -3196,6 +3215,30 @@ void RecordDraw(IDirect3DDevice9* dev, bool indexed, D3DPRIMITIVETYPE prim, INT 
     if (!zen)   { ++g_rejZ;     return; }
     if (!zw)    { ++g_rejZW;    return; }
     if (blend)  { ++g_rejBlend; return; }
+    // Not into a viewport smaller than half the back buffer each way (2026-10-14, the owner: a flash of all the light
+    // at each druid form change): the portrait in the player frame, drawn again at a model change, before the world,
+    // in a viewport of 64 x 64 and a depth slice of 0..1. It won the slice's vote, and every pixel of that frame was
+    // rebuilt with the wrong depth range.
+    {
+        static unsigned long long bbFrame = ~0ull;
+        static UINT bbW = 0, bbH = 0;
+        if (bbFrame != g_frameId)
+        {
+            bbFrame = g_frameId;
+            IDirect3DSurface9* bb = nullptr;
+            D3DSURFACE_DESC bd = {};
+            if (SUCCEEDED(d->GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb)
+            {
+                bb->lpVtbl->GetDesc(bb, &bd);
+                bb->lpVtbl->Release(bb);
+            }
+            bbW = bd.Width;
+            bbH = bd.Height;
+        }
+        D3DVIEWPORT9 vp = {};
+        if (bbW && SUCCEEDED(d->GetViewport(dev, &vp)) && (vp.Width * 2 < bbW || vp.Height * 2 < bbH))
+            return;
+    }
     if (g_frame.size() >= kMaxFrame)
         return;
 

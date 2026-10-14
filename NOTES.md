@@ -3795,3 +3795,38 @@ colour target of their own when they are larger than the far map (`g_nearColour`
 shadows' texel sizes follow (`ShadowNearSize`). At Shadow Resolution 1 the far map is 1024 (0.49 yards a texel) and
 the near maps 2048 (0.031 yards), for about 36 MB more. At 2 and 3 nothing changes. A slider for 4096 near maps was
 offered and left out: the owner wants fewer settings.
+
+## A flash of all the light at each druid form change (2026-10-14, the owner)
+
+At each change of form the whole view flashed for one frame: all shade in open ground (Darkshore), all sun under
+buildings (Darnassus). Measured from recordings, frame by frame (the mean brightness of each frame against the six
+round it): every change gave one frame 8 to 12 levels off with the effects on, and none with them off. Sun Shadows
+off or Volumetric Light off removed it; Fog, Rays and Colour did not.
+
+A model change has the client draw the portrait in the player frame again. It does this first in the frame, before
+the sky, into the back buffer, in a viewport of 64 x 64 and a depth slice of 0..1. Three things took the portrait
+for the world:
+
+- **The depth slice.** Each frame the recorded draws vote for their viewport's depth range, and the first range from
+  0 was the world's (SettleVotes). The portrait's 0..1 came before the world's 0..0.94: for that frame every pixel
+  was rebuilt with the wrong range (`/atmos trace 1`: "depth range 0.0000..1.0000"), and the sun shadows and the
+  light read the shadow maps at the wrong points. Now the recorder skips draws into a viewport smaller than half
+  the back buffer each way, and the slice in use stays while it has a draw this frame (else the slice from 0 with
+  the most draws).
+- **The world's end.** With anti-aliasing on, a copy out of the current render target counts as the world's end
+  ("world copied out"). The portrait is copied out as a small rectangle of the back buffer, so the world ended after
+  the portrait's 35 draws, and the effects ran before the world was drawn. Without anti-aliasing, Full Screen Glow
+  ends the world at a render target switch, and the switch from the back buffer into the glow's own target to start
+  the world was taken for it. Now a copy counts only when it takes at least half the surface each way, a target
+  smaller than half the back buffer each way is never the world's (ScreenSized), and a switch into the target the
+  world was drawn into last time (`g_worldRt`) is never its end.
+- **The sky's phase.** The sky's phase lasts until the frame's first draw that writes depth (IsCloudDraw), and the
+  portrait's first draw writes depth. The phase ended before the sky: our clouds and the rays' copy of the sky
+  before the clouds were made over the portrait, and with the sky in view the rays shone through the rain for that
+  frame, a white flash over the upper half of the view (+80 to +90 levels). Now a draw in a small viewport
+  (SmallViewport) neither ends the phase nor counts toward its 48 draws.
+
+After: 24 changes with the sky in view and with the ground in view, in Darkshore, with anti-aliasing on, had no
+flash. With the sky in view, putting the cat form on still darkens two or three frames: the game moves the camera
+through the rock as the model changes, and the frames are the same with Atmosphere off. Before the third change,
+32 changes with the ground in view, with and without anti-aliasing, also had none.

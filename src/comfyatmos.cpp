@@ -379,6 +379,11 @@ namespace
         }
     }
     bool     g_lastPersp  = false;
+    // The render target the world was drawn into, at its last end (by address, not held; cleared at Reset). A switch
+    // into it is never the world's end (2026-10-14, the owner: a flash of all the light at each druid form change).
+    // A model change has the client draw the portrait again, first, into the back buffer: then it switches to the
+    // world's own target to draw the world, and with Full Screen Glow that switch was taken for the world's end.
+    IDirect3DSurface9* g_worldRt = nullptr;
     bool     g_reloadDown = false;
     bool     g_probeDown  = false;
     bool     g_scanDown = false, g_upDown = false, g_dnDown = false, g_dayNightDown = false;
@@ -749,6 +754,12 @@ namespace
         if (g_worldEnded)
             return;
         g_worldEnded = true;
+        {
+            IDirect3DSurface9* rt = nullptr;
+            dev->lpVtbl->GetRenderTarget(dev, 0, &rt);
+            g_worldRt = rt;
+            if (rt) rt->lpVtbl->Release(rt);
+        }
         g_inPass = true;
         g_seeThroughLast = g_seeThroughDraws;
         g_seeThroughDraws = 0;
@@ -1237,6 +1248,7 @@ namespace
             g_haveWorldFogColor = false;
             g_fogEnable = 0;
             g_vshader   = nullptr;
+            g_worldRt   = nullptr;
             g_worldEnded     = false;
             g_volumePending  = false;
             g_raysArmed      = false;
@@ -1618,6 +1630,7 @@ namespace
     HRESULT STDMETHODCALLTYPE hkReset(IDirect3DDevice9* dev, D3DPRESENT_PARAMETERS* pp)
     {
         CheckDevice(dev);
+        g_worldRt = nullptr;   // the client makes its targets again
         DepthReset(dev);   // Reset fails outright while any D3DPOOL_DEFAULT object is alive
         ShadowReset();
         VolumeReset();
@@ -2135,6 +2148,39 @@ namespace
         g_inPass = false;
     }
 
+    // Whether a surface is at least half the back buffer each way: only such a target can hold the world, so a switch
+    // away from a smaller one, or a copy out of it, is not the world's end (2026-10-14). Half, not equal: Full Screen
+    // Glow's own target need not be the back buffer's size.
+    bool ScreenSized(IDirect3DDevice9* dev, IDirect3DSurface9* s)
+    {
+        IDirect3DSurface9* bb = nullptr;
+        if (!s || FAILED(dev->lpVtbl->GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb)
+            return true;   // not known: as before
+        D3DSURFACE_DESC a = {}, b = {};
+        s->lpVtbl->GetDesc(s, &a);
+        bb->lpVtbl->GetDesc(bb, &b);
+        bb->lpVtbl->Release(bb);
+        return a.Width * 2 >= b.Width && a.Height * 2 >= b.Height;
+    }
+
+    // Whether the viewport is smaller than half the back buffer each way (2026-10-14, the owner: a flash of all the
+    // light at each druid form change). A model change has the client draw the portrait in the player frame again,
+    // first in the frame, in a viewport of 64 x 64. Its first draw writes depth, and the sky's phase ended there,
+    // before the sky: our clouds and the rays' copy of the sky were made over the portrait, and the rays shone
+    // through the rain for that frame.
+    bool SmallViewport(IDirect3DDevice9* dev)
+    {
+        D3DVIEWPORT9 vp = {};
+        IDirect3DSurface9* bb = nullptr;
+        if (FAILED(dev->lpVtbl->GetViewport(dev, &vp)) ||
+            FAILED(dev->lpVtbl->GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb)
+            return false;
+        D3DSURFACE_DESC b = {};
+        bb->lpVtbl->GetDesc(bb, &b);
+        bb->lpVtbl->Release(bb);
+        return vp.Width * 2 < b.Width || vp.Height * 2 < b.Height;
+    }
+
     HRESULT STDMETHODCALLTYPE hkSetRenderTarget(IDirect3DDevice9* dev, DWORD idx, IDirect3DSurface9* s)
     {
         CheckDevice(dev);
@@ -2146,7 +2192,7 @@ namespace
         {
             IDirect3DSurface9* cur = nullptr;
             dev->lpVtbl->GetRenderTarget(dev, 0, &cur);
-            if (cur && cur != s)
+            if (cur && cur != s && s != g_worldRt && ScreenSized(dev, cur))
                 WorldEnded(dev, "render target switch");
             if (cur) cur->lpVtbl->Release(cur);
         }
@@ -2173,7 +2219,19 @@ namespace
         {
             IDirect3DSurface9* cur = nullptr;
             dev->lpVtbl->GetRenderTarget(dev, 0, &cur);
-            if (cur == src)
+            // The whole of it, or half each way at least (2026-10-14, the owner: a flash of all the light at each druid
+            // form change). A model change has the client draw the portrait again, into the back buffer before the
+            // world, and copy a small rectangle of it out: with anti-aliasing on that copy was taken for the world's
+            // end, after the portrait's 35 draws, and the effects ran before the world was drawn.
+            bool most = true;
+            if (sr)
+            {
+                D3DSURFACE_DESC sd = {};
+                src->lpVtbl->GetDesc(src, &sd);
+                most = (sr->right - sr->left) * 2 >= static_cast<LONG>(sd.Width) &&
+                       (sr->bottom - sr->top) * 2 >= static_cast<LONG>(sd.Height);
+            }
+            if (cur == src && most && ScreenSized(dev, src))
                 WorldEnded(dev, "world copied out");
             if (cur) cur->lpVtbl->Release(cur);
         }
@@ -2241,7 +2299,9 @@ namespace
     inline void CountDraw(IDirect3DDevice9* dev, const char* kind, D3DPRIMITIVETYPE prim, UINT pc,
                           bool indexed = false, UINT first = 0, UINT nv = 0, const void* upData = nullptr)
     {
-        g_frameDraws++;
+        // Not the portrait's draws before the sky (SmallViewport): the sky's phase ends by the count too.
+        if (!g_skyPhase || g_inPass || !SmallViewport(dev))
+            g_frameDraws++;
         if (!g_probe.active)
             return;
         ProbeWeatherDraw(dev, kind, pc, nv);
@@ -2867,7 +2927,7 @@ namespace
 
     bool IsCloudDraw(IDirect3DDevice9* dev, D3DPRIMITIVETYPE prim, UINT nv)
     {
-        if (!g_skyPhase || g_inPass)
+        if (!g_skyPhase || g_inPass || SmallViewport(dev))   // the portrait: the sky has not been drawn yet
             return false;
         DWORD zwrite = 1;
         dev->lpVtbl->GetRenderState(dev, D3DRS_ZWRITEENABLE, &zwrite);
