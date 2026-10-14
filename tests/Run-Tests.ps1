@@ -545,16 +545,22 @@ try {
                 }
                 finally { $bmp.Dispose() }
                 $avg = if ($count) { [int]($sum / $count) } else { 0 }
-                # meanMax (2026-10-04): the most the average may be, for a row that must stay in shade.
+                # meanMax (2026-10-04): the most the average may be, for a row that must stay in shade. lowMax (2026-10-14):
+                # the most the darkest pixel may be, for a shadow that must be there whatever its shape: an average over
+                # a shadow's edge moved with the character's idle pose, from 31 to 88 between runs.
                 $ok = ($null -eq $e.min -or $low -ge [int]$e.min) -and ($null -eq $e.mean -or $avg -ge [int]$e.mean) -and
-                      ($null -eq $e.meanMax -or $avg -le [int]$e.meanMax)
+                      ($null -eq $e.meanMax -or $avg -le [int]$e.meanMax) -and ($null -eq $e.lowMax -or $low -le [int]$e.lowMax)
                 $wantAvg = @()
                 if ($null -ne $e.mean) { $wantAvg += "at least $($e.mean)" }
                 if ($null -ne $e.meanMax) { $wantAvg += "at most $($e.meanMax)" }
                 $wantAvg = if ($wantAvg.Count) { $wantAvg -join ' and ' } else { 'any' }
+                $wantLow = @()
+                if ($null -ne $e.min) { $wantLow += "at least $($e.min)" }
+                if ($null -ne $e.lowMax) { $wantLow += "at most $($e.lowMax)" }
+                $wantLow = if ($wantLow.Count) { $wantLow -join ' and ' } else { 'any' }
                 if (-not $ok) { $pass = $false }
-                $results += ('{0}  {1}: row {2} averages {3}, its darkest pixel {4} at column {5} (wanted: average {6}, darkest {7})' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $e.row, $avg, $low, $at, $wantAvg, $(if ($null -ne $e.min) { "at least $($e.min)" } else { 'any' }))
-                $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('row {0} averages {1}, its darkest pixel {2} at column {3} (wanted: average {4}, darkest {5})' -f $e.row, $avg, $low, $at, $wantAvg, $(if ($null -ne $e.min) { "at least $($e.min)" } else { 'any' })); shot = $n }
+                $results += ('{0}  {1}: row {2} averages {3}, its darkest pixel {4} at column {5} (wanted: average {6}, darkest {7})' -f $(if ($ok) { 'pass' } else { 'FAIL' }), $e.about, $e.row, $avg, $low, $at, $wantAvg, $wantLow)
+                $checks += [pscustomobject]@{ ok = $ok; about = $e.about; got = ('row {0} averages {1}, its darkest pixel {2} at column {3} (wanted: average {4}, darkest {5})' -f $e.row, $avg, $low, $at, $wantAvg, $wantLow); shot = $n }
                 continue
             }
             if (-not $heads.Count) { $results += "FAIL  no probe in the log: $($e.about)"; $checks += [pscustomobject]@{ ok = $false; about = $e.about; got = 'no probe in the log'; shot = 0 }; $pass = $false; continue }

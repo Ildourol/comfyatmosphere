@@ -315,20 +315,20 @@
             "min": 1
         },
         {
-            "about": "You, before stealth, in the shade alone (Debug View 5): row 540 crosses your shadow on the ground, at 1152x864 (row 474 at 1280x720). 7 on 2026-10-08, 6 on 2026-10-09",
+            "about": "You, before stealth, in the shade alone (Debug View 5): row 540 crosses your shadow on the ground, at 1152x864, between columns 532 and 576 as the idle pose moves it. Its darkest pixel, not an average: the average over columns 544 to 560, at the shadow's edge, went from 31 to 88 between runs (2026-10-14). 3 in every run",
             "shot": 3,
             "row": 540,
-            "from": 544,
-            "to": 560,
-            "meanMax": 60
+            "from": 500,
+            "to": 620,
+            "lowMax": 30
         },
         {
-            "about": "You in stealth, in the shade alone (Debug View 5): row 540, where your shadow lay, is lit. 255 after the fix (2026-10-08); with the player left out of the stealthed units, your shadow stayed",
+            "about": "You in stealth, in the shade alone (Debug View 5): row 540, where your shadow lay, is lit, every pixel from column 500 to 620. 255 after the fix (2026-10-08); with the player left out of the stealthed units, your shadow stayed",
             "shot": 4,
             "row": 540,
-            "from": 544,
-            "to": 560,
-            "mean": 200
+            "from": 500,
+            "to": 620,
+            "min": 200
         }
     ]
 }
