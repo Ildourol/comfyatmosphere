@@ -1,15 +1,18 @@
 // sun: where the sun is and where the camera looks, for the shadow map and the volumetric light.
 //
-// The sun comes from the sky. The visible sun is a quad drawn in the sky, under a view whose translation is
-// the sun's camera-space position (comfyatmos.cpp, NoteSkySun, hands each such quad to SunSetView). By day it
-// is the first draw of the frame. At night the sky draws two, the two moons, and the first one above the
-// horizon is taken (PickQuad). It is turned into a world direction against the frame's camera, which is
-// mirrored here from SetTransform.
-// When the sun is not drawn (off screen, indoors), the last world direction carries on. [sun] fixed = 1
-// replaces it with a fixed direction instead.
+// The sun comes from the game clock and a measured table of where the sky draws the sun and the two moons
+// (sunpath.cpp, 2026-10-14). By day the light follows the sun. At night it follows the larger moon while it is up,
+// else the other, and the other moon casts rays of its own ([rays] secondMoon). [sun] fixed = 1 replaces it with a
+// fixed direction instead.
+//
+// Until 2026-10-14 the sun was read from the sprite the sky draws for it: a quad under a view whose translation is
+// the sun's camera-space position (comfyatmos.cpp, NoteSkySun). The sky draws a sprite only where the camera can
+// see it, so the sun followed whatever sprite was in view, a moon among them, and the shadows turned as the camera
+// turned. The sprites are still handed here (SunSetView): [sun] measure logs them for the table, and the probe
+// compares them with it (SunProbe).
 //
 // At night the rays and the light follow a moon as if it were the sun. NightScale turns them down by
-// the game clock, since the moon's height cannot tell night from day.
+// the game clock.
 //
 // This code was part of the screen-space sun rays (rays.cpp) until the rays were removed.
 
@@ -23,61 +26,49 @@
 #include "common.h"
 #include "config.h"
 #include "sun.h"
+#include "sunpath.h"
 
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-
-static bool ClockSun(float dir[3]);   // below SunDirection
 
 namespace
 {
     D3DMATRIX g_view = {}, g_proj = {};
     bool      g_haveView = false, g_haveProj = false;
 
-    // Direction TO the sun, world space, unit length.
-    float g_sunDir[3]    = { 0.0f, 0.0f, 1.0f };
     unsigned g_sunFrame  = 0;       // counts frames, so the glide below advances once a frame
-    bool  g_haveSun      = false;
-    // The sun-shaped quads of this frame's sky, in camera space: one by day, two at night.
+    // The sun-shaped quads of this frame's sky, in camera space, and their textures' widths: the sun's is 128, the
+    // moons' 512 and 256 (tests/sun-table.json).
     constexpr int kMaxQuads = 4;
-    float g_quads[kMaxQuads][3] = {};
-    int   g_nQuads       = 0;
-    int   g_loggedQuads  = -1;
-    int   g_quadLogs     = 0;
-    float g_sunView[3]   = { 0.0f, 0.0f, 1.0f };
-    bool  g_sunViewFresh = false;
-    float g_secondDir[3] = { 0.0f, 0.0f, 1.0f };    // the other moon, world space, for the rays
-    bool  g_haveSecond   = false;
-    float g_loggedDir[3] = { 0.0f, 0.0f, 0.0f };
-    int   g_sunLogs      = 0;
+    float    g_quads[kMaxQuads][3] = {};
+    unsigned g_quadTex[kMaxQuads] = {};
+    int      g_nQuads       = 0;
+    bool     g_quadsFresh   = false;
+    // The last sky's quads in the world, for the probe.
+    float    g_lastQuads[kMaxQuads][3] = {};
+    unsigned g_lastTex[kMaxQuads] = {};
+    int      g_nLast        = 0;
+    unsigned g_lastQuadFrame = 0;
+
+    // This frame's light from the table (SunPathLight), worked out once a frame.
+    float    g_tableDir[3]   = { 0.0f, 0.0f, 1.0f };
+    float    g_secondDir[3]  = { 0.0f, 0.0f, 1.0f };   // the other moon, world space, for the rays
+    bool     g_haveSecond    = false;
+    bool     g_haveTable     = false;
+    SkyBody  g_tableBody     = kBodySun;
+    unsigned g_tableFrame    = ~0u;
+    SkyBody  g_loggedBody    = kBodies;
 
     // For the stats (SunStatsText, 2026-10-03): this frame's measurement and where it came from, the glided
     // sun, the shadows' held sun, and how often the held sun stepped.
     float    g_statMeas[3]  = { 0.0f, 0.0f, 1.0f };
-    int      g_statSrc      = -1;      // -1 none yet, 0 the clock, 1 the sky, 2 [sun] fixed
+    int      g_statSrc      = -1;      // -1 none yet, 0 the table, 2 [sun] fixed
     float    g_statGlide[3] = { 0.0f, 0.0f, 1.0f };
     float    g_statHeld[3]  = { 0.0f, 0.0f, 1.0f };
     bool     g_statHaveHeld = false;
     unsigned g_heldSteps    = 0;       // since the last stats line
     double   g_heldStepAt   = 0.0;
-
-    // The two moons, each held in the world where it was last seen (2026-10-03). The sky draws only the moons
-    // on screen. With one off screen the other was "the first quad", and the light, the shadows, the rays and
-    // the water's glint jumped 110 degrees from one moon to the other as the camera turned. Slot 0 is the
-    // larger moon (drawn first when both are), slot 1 the other.
-    struct Moon
-    {
-        float  dir[3];
-        bool   known;
-        double seen;     // when a quad last matched it
-        double missed;   // since when it has been on screen and not drawn; 0 while it is drawn or off screen
-    };
-    Moon g_moons[2] = {};
-    int  g_moonLogs = 0;
-    constexpr float  kMoonMatch = 0.9659f;   // cos 15 degrees: a quad this near a held moon is that moon
-    constexpr double kMoonHold  = 600.0;     // seconds a moon is held unseen
-    constexpr double kMoonGone  = 1.0;       // seconds on screen and not drawn before a moon counts as set
 
     // Camera space -> world space. The camera matrix is a pure rotation here (this client folds the
     // camera position into every world matrix), so its inverse is its transpose: for D3D's row vectors,
@@ -94,298 +85,79 @@ namespace
         return true;
     }
 
-    float Dot3(const float a[3], const float b[3]) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+    float Azimuth(const float d[3])   { return atan2f(d[1], d[0]) * 57.29578f; }
+    float Elevation(const float d[3]) { return asinf(d[2] < -1.0f ? -1.0f : (d[2] > 1.0f ? 1.0f : d[2])) * 57.29578f; }
 
-    // World -> camera space: the transpose of ViewToWorld.
-    void WorldToView(const float d[3], float v[3])
+    const char* BodyName(SkyBody b)
     {
-        for (int j = 0; j < 3; ++j)
-            v[j] = d[0] * g_view.m[0][j] + d[1] * g_view.m[1][j] + d[2] * g_view.m[2][j];
+        return b == kBodySun ? "the sun" : b == kBodyMoon1 ? "the larger moon" : "the smaller moon";
     }
 
-    // Whether a world direction is well inside the screen. A moon there that the sky did not draw has set.
-    bool OnScreen(const float d[3])
+    // This frame's sky quads into the world, once a frame, for the probe and [sun] measure (2026-10-14): each
+    // quad's world direction, its texture's width and the game time, at most four times a second.
+    // tests/sun-table.json steps the hour and the camera, and tests/Sun-Table.ps1 turns these lines into the
+    // table in sunpath.cpp.
+    void NoteQuads()
     {
-        if (!g_haveView || !g_haveProj)
-            return false;
-        float v[3];
-        WorldToView(d, v);
-        const float x = v[0] * g_proj.m[0][0] + v[1] * g_proj.m[1][0] + v[2] * g_proj.m[2][0];
-        const float y = v[0] * g_proj.m[0][1] + v[1] * g_proj.m[1][1] + v[2] * g_proj.m[2][1];
-        const float w = v[0] * g_proj.m[0][3] + v[1] * g_proj.m[1][3] + v[2] * g_proj.m[2][3];
-        if (w <= 1e-4f)
-            return false;
-        return fabsf(x / w) < 0.85f && fabsf(y / w) < 0.85f;
-    }
-
-    void MoonLog(const char* what, int slot)
-    {
-        if (g_moonLogs >= 200)
+        if (!g_quadsFresh)
             return;
-        ++g_moonLogs;
-        const float* d = g_moons[slot].dir;
-        Log("sun: moon %d %s at azimuth %.1f, elevation %.1f", slot + 1, what, atan2f(d[1], d[0]) * 57.29578f,
-            asinf(d[2] < -1.0f ? -1.0f : (d[2] > 1.0f ? 1.0f : d[2])) * 57.29578f);
-    }
-
-    // At night: this frame's moon quads update the held moons; the light follows the larger moon while it is
-    // above the horizon, else the other. Returns false when no moon is held.
-    bool PickMoon(int n, const float dirs[][3], const bool ok[])
-    {
-        const double now = Now();
-        bool matched[2] = { false, false };
-        int  quads[kMaxQuads], nq = 0;
-        for (int q = 0; q < n; ++q)
-            if (ok[q])
-                quads[nq++] = q;
-        if (nq >= 2 && !(g_moons[0].known && g_moons[1].known))
-        {
-            // Both drawn and not both held yet: the draw order says which is which.
-            for (int m = 0; m < 2; ++m)
-            {
-                const bool was = g_moons[m].known;
-                memcpy(g_moons[m].dir, dirs[quads[m]], sizeof(g_moons[m].dir));
-                g_moons[m].known  = true;
-                g_moons[m].seen   = now;
-                g_moons[m].missed = 0.0;
-                matched[m] = true;
-                if (!was)
-                    MoonLog("first seen", m);
-            }
-        }
-        else
-        {
-            // Each quad updates the held moon it is near. One near neither: a moon not held yet takes it,
-            // else it is a stray sky quad and is left out.
-            for (int i = 0; i < nq; ++i)
-            {
-                const float* d = dirs[quads[i]];
-                int   best = -1;
-                float bestDot = kMoonMatch;
-                for (int m = 0; m < 2; ++m)
-                    if (g_moons[m].known && !matched[m] && Dot3(d, g_moons[m].dir) > bestDot)
-                    {
-                        bestDot = Dot3(d, g_moons[m].dir);
-                        best = m;
-                    }
-                if (best < 0)
-                    for (int m = 0; m < 2 && best < 0; ++m)
-                        if (!g_moons[m].known)
-                        {
-                            best = m;
-                            MoonLog("first seen", m);
-                        }
-                if (best < 0)
-                    continue;
-                memcpy(g_moons[best].dir, d, sizeof(g_moons[best].dir));
-                g_moons[best].known  = true;
-                g_moons[best].seen   = now;
-                g_moons[best].missed = 0.0;
-                matched[best] = true;
-            }
-        }
-        // A held moon on screen that the sky has not drawn for a second has set; one unseen for 10 minutes is
-        // let go. A second, not a frame: the sky now and then leaves a moon out of one frame, and let go at
-        // once the larger moon was dropped at 8 degrees up, still in the sky, and the light and the glint
-        // went to the other (2026-10-03).
-        for (int m = 0; m < 2; ++m)
-        {
-            Moon& mo = g_moons[m];
-            if (!mo.known)
-                continue;
-            if (matched[m] || !(mo.dir[2] > 0.0f && OnScreen(mo.dir)))
-                mo.missed = 0.0;
-            else if (mo.missed == 0.0)
-                mo.missed = now;
-            if ((mo.missed > 0.0 && now - mo.missed > kMoonGone) || now - mo.seen > kMoonHold)
-            {
-                MoonLog("let go: not drawn where it was", m);
-                mo.known = false;
-                mo.missed = 0.0;
-            }
-        }
-
-        int pick = -1;
-        for (int m = 0; m < 2 && pick < 0; ++m)
-            if (g_moons[m].known && g_moons[m].dir[2] > 0.0f)
-                pick = m;
-        if (pick < 0)
-            for (int m = 0; m < 2; ++m)
-                if (g_moons[m].known && (pick < 0 || g_moons[m].dir[2] > g_moons[pick].dir[2]))
-                    pick = m;
-        if (pick < 0)
-            return false;
-        WorldToView(g_moons[pick].dir, g_sunView);
-        const int other = 1 - pick;
-        // Down to 4 degrees under the horizon: the disc's top still shows (the water's glint, water.cpp).
-        g_haveSecond = g_moons[other].known && g_moons[other].dir[2] > -0.0698f;
-        if (g_haveSecond)
-            memcpy(g_secondDir, g_moons[other].dir, sizeof(g_secondDir));
-        return true;
-    }
-
-    // Which of this frame's quads the light follows. By day there is one, the sun. At night there are
-    // two: Azeroth's two moons. Both were logged at the same height (45.3 degrees at 00:40) and 92 degrees
-    // apart in azimuth, so "the highest" swapped between them every few seconds and the light jumped from
-    // one moon to the other. So the rule has to hold on to one: the first quad in draw order that is above
-    // the horizon (the first is the larger moon: a quad of 1.8 against 1.0), or the highest when none is.
-    // Logged each time the count changes, with every quad's place, so the log shows which was taken.
-    void PickQuad()
-    {
+        g_quadsFresh = false;
         const int n = g_nQuads;
-        g_nQuads = 0;
         if (!g_haveView || n == 0)
             return;
-        // By day (the game clock), two quads are the moons, not the sun (2026-09-30). The sky still draws
-        // them by day; logged at 10:00: two quads at 31.8 degrees, 95 apart, on some frames and the sun alone
-        // at 56.6 on others, by where the camera looked. The light followed the moon on those frames, and
-        // the rays came from it and from "the second moon" too, so they jumped as the camera tilted. Such a
-        // frame is left out: the sun carries on from its own quad.
-        float hour = 0.0f;
-        const bool haveHour = ClientHour(hour);
-        const bool night = haveHour && NightWeight(hour) >= 0.5f;
-        if (!night)
-            g_moons[0].known = g_moons[1].known = false;
-        if (n >= 2 && haveHour && !night)
-        {
-            g_haveSecond = false;
-            if (n != g_loggedQuads && g_quadLogs < 100)
-            {
-                ++g_quadLogs;
-                g_loggedQuads = n;
-                Log("sun: %d sun-shaped quads in the sky by day: the moons, left out", n);
-            }
-            return;
-        }
-        int pick = -1, highest = -1;
-        float highZ = -2.0f, el[kMaxQuads] = {}, az[kMaxQuads] = {}, dirs[kMaxQuads][3] = {};
-        bool ok[kMaxQuads] = {};
+        g_nLast = 0;
+        g_lastQuadFrame = g_sunFrame;
         for (int q = 0; q < n; ++q)
-        {
-            float* d = dirs[q];
-            if (!ViewToWorld(g_quads[q], d))
-                continue;
-            ok[q] = true;
-            el[q] = asinf(d[2] < -1.0f ? -1.0f : (d[2] > 1.0f ? 1.0f : d[2])) * 57.29578f;
-            az[q] = atan2f(d[1], d[0]) * 57.29578f;
-            if (pick < 0 && d[2] > 0.0f)
-                pick = q;
-            if (d[2] > highZ)
-            {
-                highZ = d[2];
-                highest = q;
-            }
-        }
-        if (pick < 0)
-            pick = highest;
-        if (pick < 0)
+            if (ViewToWorld(g_quads[q], g_lastQuads[g_nLast]))
+                g_lastTex[g_nLast++] = g_quadTex[q];
+        if (!g_cfg.sun.measure)
             return;
-        if (night && PickMoon(n, dirs, ok))
-        {
-            // The moons held (PickMoon) set g_sunView and the other moon.
-        }
-        else
-        {
-            memcpy(g_sunView, g_quads[pick], sizeof(g_sunView));
-
-            // The other moon casts rays too ([rays] secondMoon): the first other quad above the horizon.
-            g_haveSecond = false;
-            for (int q = 0; q < n && !g_haveSecond; ++q)
-                if (q != pick && ok[q] && dirs[q][2] > 0.0f)
-                {
-                    memcpy(g_secondDir, dirs[q], sizeof(g_secondDir));
-                    g_haveSecond = true;
-                }
-        }
-
-        if (n != g_loggedQuads && g_quadLogs < 100)
-        {
-            ++g_quadLogs;
-            g_loggedQuads = n;
-            char line[200];
-            int at = snprintf(line, sizeof(line), "sun: %d sun-shaped quad%s in the sky (azimuth/elevation):", n,
-                              n == 1 ? "" : "s");
-            for (int q = 0; q < n && at > 0 && at < static_cast<int>(sizeof(line)); ++q)
-                at += snprintf(line + at, sizeof(line) - at, "%s %.1f/%.1f", q ? "," : "", az[q], el[q]);
-            Log("%s; following number %d", line, pick + 1);
-        }
+        static double next = 0.0;
+        const double now = Now();
+        float hour = -1.0f;
+        if (now < next || !ClientHour(hour))
+            return;
+        next = now + 0.25;
+        char line[400];
+        int at = snprintf(line, sizeof(line), "sun measure: hour %.4f, %d quad%s:", hour, g_nLast,
+                          g_nLast == 1 ? "" : "s");
+        for (int q = 0; q < g_nLast && at > 0 && at < static_cast<int>(sizeof(line)); ++q)
+            at += snprintf(line + at, sizeof(line) - at, " %.2f/%.2f tex %u;", Azimuth(g_lastQuads[q]),
+                           Elevation(g_lastQuads[q]), g_lastTex[q]);
+        const float f[3] = { g_view.m[0][2], g_view.m[1][2], g_view.m[2][2] };
+        if (at > 0 && at < static_cast<int>(sizeof(line)))
+            snprintf(line + at, sizeof(line) - at, " camera %.1f/%.1f", Azimuth(f), Elevation(f));
+        Log("%s", line);
     }
 
-    void SunViewToWorld()
+    // This frame's light from the table, once a frame. Logged when the body it follows changes.
+    bool TableLight()
     {
-        if (!g_haveView)
-            return;
-        float d[3];
-        if (!ViewToWorld(g_sunView, d))
-            return;
-
-        // A big jump has to hold for a few frames before it is believed. The sprite match now and then
-        // catches another sky quad for a single frame (logged: 75.8 -> 25.8 -> 75.8 degrees within one
-        // second), and every sun-driven pass (shadow map, volume) flashed with it. Real jumps (the time
-        // stepped with Ctrl+PageUp) still land, a sixth of a second late; small drift follows at once.
-        // Before the first sun is believed, the clock's is what it is held against, and the jump has to hold
-        // for 3 seconds: at a login in the Undercity the first reading was 49.8 degrees for two seconds, with the
-        // sun at 28.8 (2026-10-01).
-        static int    pending = 0;
-        static float  pendDir[3] = {};
-        static double pendSince = 0.0;
-        float ref[3];
-        const bool haveRef = g_haveSun ? (memcpy(ref, g_sunDir, sizeof(ref)), true) : ClockSun(ref);
-        if (haveRef && d[0] * ref[0] + d[1] * ref[1] + d[2] * ref[2] < 0.9962f)   // > 5 degrees
+        if (g_tableFrame == g_sunFrame)
+            return g_haveTable;
+        g_tableFrame = g_sunFrame;
+        float hour = 0.0f;
+        if (!ClientHour(hour))
         {
-            const bool same = d[0] * pendDir[0] + d[1] * pendDir[1] + d[2] * pendDir[2] > 0.9962f;
-            pending = same ? pending + 1 : 1;
-            if (pending == 1)
-                pendSince = Now();
-            memcpy(pendDir, d, sizeof(d));
-            if (g_haveSun ? pending < 10 : Now() - pendSince < 3.0)
-                return;
+            g_haveTable = g_haveSecond = false;
+            return false;
         }
-        pending = 0;
-        memcpy(g_sunDir, d, sizeof(d));
-        g_haveSun = true;
-
-        // Logged whenever it moves more than ~2 degrees, as azimuth/elevation (Z up) with the local time
-        // and the game's, so the log shows whether it follows the time of day.
-        const float dot = d[0] * g_loggedDir[0] + d[1] * g_loggedDir[1] + d[2] * g_loggedDir[2];
-        if (dot < 0.99939f && g_sunLogs < 200)
+        g_tableBody = SunPathLight(hour, NightWeight(hour) >= 0.5f, g_tableDir, g_secondDir, g_haveSecond);
+        g_haveTable = true;
+        if (g_tableBody != g_loggedBody)
         {
-            ++g_sunLogs;
-            memcpy(g_loggedDir, d, sizeof(d));
-            const float az = atan2f(d[1], d[0]) * 57.29578f;
-            const float el = asinf(d[2] < -1.0f ? -1.0f : (d[2] > 1.0f ? 1.0f : d[2])) * 57.29578f;
-            SYSTEMTIME t;
-            GetLocalTime(&t);
-            float hour = -1.0f;
-            ClientHour(hour);
-            const int gm = hour >= 0.0f ? static_cast<int>(hour * 60.0f) : -1;
-            Log("sun from the sky: azimuth %.1f, elevation %.1f (dir %.3f %.3f %.3f) at %02d:%02d:%02d, "
-                "game time %02d:%02d", az, el, d[0], d[1], d[2], t.wHour, t.wMinute, t.wSecond,
-                gm >= 0 ? gm / 60 : -1, gm >= 0 ? gm % 60 : -1);
+            g_loggedBody = g_tableBody;
+            Log("sun: the light follows %s from the clock's table, at azimuth %.1f, elevation %.1f, game time %02d:%02d",
+                BodyName(g_tableBody), Azimuth(g_tableDir), Elevation(g_tableDir), static_cast<int>(hour),
+                static_cast<int>(hour * 60.0f) % 60);
         }
+        return true;
     }
-}
-
-// The sun from the game clock (2026-10-01), until the sky's sprite is seen. Logged in indoors (Ironforge, the
-// Undercity) the client draws no sky: there was no sun, nothing drew, and the first sight of the sky set every
-// effect up in one frame, a long stall. Measured from the sprite: azimuth 45 all day, and the height falling
-// about 10 degrees an hour (59.0 at 14:39, 38.8 at 16:39, 28.8 at 17:39). Past 90 the line goes over the top to
-// azimuth 225; no morning was measured. At night, a moon high in the sky, as the client draws them (75 to 83
-// degrees at 01:00). Indoors the direction matters little; outdoors the sprite takes over within frames.
-static bool ClockSun(float dir[3])
-{
-    float hour = 0.0f;
-    if (!ClientHour(hour))
-        return false;
-    float el = NightWeight(hour) >= 0.5f ? 75.0f : 59.0f - 10.1f * (hour - 14.65f);
-    el = el < 3.0f ? 3.0f : (el > 177.0f ? 177.0f : el);
-    const float az = 45.0f * 0.01745329f, e = el * 0.01745329f;
-    dir[0] = cosf(e) * cosf(az); dir[1] = cosf(e) * sinf(az); dir[2] = sinf(e);
-    return true;
 }
 
 bool SunDirection(float dir[3])
 {
+    NoteQuads();
     // [sun] fixed = 1 pins the sun for the shadow map and the volumetric light, whatever the game's clock
     // says.
     const SunSettings& s = g_cfg.sun;
@@ -398,41 +170,9 @@ bool SunDirection(float dir[3])
         g_statSrc = 2;
         return true;
     }
-    if (g_sunViewFresh)
-    {
-        g_sunViewFresh = false;
-        PickQuad();
-        SunViewToWorld();
-    }
-    else
-    {
-        // A frame with no moon drawn still checks the held moons, once: watching the last moon set, no quad
-        // came, and the set moon was held for good.
-        static unsigned checked = 0;
-        float hour = 0.0f;
-        if (checked != g_sunFrame && g_haveView && (g_moons[0].known || g_moons[1].known) && ClientHour(hour) &&
-            NightWeight(hour) >= 0.5f)
-        {
-            checked = g_sunFrame;
-            if (PickMoon(0, nullptr, nullptr))
-                SunViewToWorld();
-        }
-    }
-    float clock[3];
-    if (!g_haveSun && !ClockSun(clock))
+    if (!TableLight())
         return false;
-    static int clockLogs = 0;   // 0: not used yet, 1: in use, 2: the sky's sun took over
-    if (!g_haveSun && clockLogs == 0)
-    {
-        clockLogs = 1;
-        Log("sun from the clock until the sky's sun is seen: dir (%.3f %.3f %.3f)", clock[0], clock[1], clock[2]);
-    }
-    else if (g_haveSun && clockLogs == 1)
-    {
-        clockLogs = 2;
-        Log("sun: the sky's sun is seen and takes over from the clock's");
-    }
-    const float* meas = g_haveSun ? g_sunDir : clock;
+    const float* meas = g_tableDir;
 
     // The sprite is measured afresh every frame and the measurement is noisy: standing still, with the
     // camera still and the time pinned, the direction wandered in the fifth decimal. Everything here is
@@ -450,6 +190,8 @@ bool SunDirection(float dir[3])
     // thousandth) starts a straight move from where the sun is to the new place, as long as the time since
     // the sky's last step and at least glide seconds. The sun then moves on all the time at the sky's own
     // pace, one step behind it.
+    // Since 2026-10-14 the measurement is the table (sunpath.cpp), which has no wander and moves with the clock's
+    // day fraction. The glide still smooths a time stepped by hand.
     static float  stable[3] = { 0.0f, 0.0f, 0.0f };
     static bool   have = false;
     static double last = 0.0;
@@ -464,12 +206,12 @@ bool SunDirection(float dir[3])
     static float  raw[3] = { 0.0f, 0.0f, 0.0f };
     static int    stepLogs = 0;
     const double  now = Now();
-    // Log the measurement's own jumps, to see whether the sky moves its sun in steps.
+    // Log the measurement's own jumps: a time set by hand, or the light going from the sun to a moon.
     const float rawDot = raw[0] * meas[0] + raw[1] * meas[1] + raw[2] * meas[2];
     if (have && rawDot < 0.9999939f && stepLogs < 60)   // > 0.2 degrees in one frame
     {
         ++stepLogs;
-        Log("sun: the sky's sun moved %.2f degrees in one frame, at %.1f s", acosf(rawDot > 1.0f ? 1.0f : rawDot) * 57.29578f,
+        Log("sun: the table's light moved %.2f degrees in one frame, at %.1f s", acosf(rawDot > 1.0f ? 1.0f : rawDot) * 57.29578f,
             now);
     }
     memcpy(raw, meas, sizeof(raw));
@@ -514,7 +256,7 @@ bool SunDirection(float dir[3])
     memcpy(dir, stable, sizeof(stable));
     memcpy(g_statMeas, meas, sizeof(g_statMeas));
     memcpy(g_statGlide, stable, sizeof(g_statGlide));
-    g_statSrc = g_haveSun ? 1 : 0;
+    g_statSrc = 0;
     return true;
 }
 
@@ -654,7 +396,7 @@ bool ShadowSunDirection(float dir[3])
 }
 
 // The sun for the on-screen stats (/atmos stats), as name=value; pairs: azimuth and elevation in degrees of the
-// measurement (the sky's sprite, or the clock before it is seen), of the glided sun that the light, the rays,
+// measurement (the clock's table, or [sun] fixed), of the glided sun that the light, the rays,
 // the water and the fog read (SunDirection), and of the held sun the shadow maps are drawn with
 // (ShadowSunDirection); the game time; and how often the held sun stepped in the last second.
 void SunStatsText(std::string& out)
@@ -674,7 +416,7 @@ void SunStatsText(std::string& out)
     snprintf(line, sizeof(line),
              "sunsrc=%s;sunmaz=%.3f;sunmel=%.3f;sungaz=%.3f;sungel=%.3f;sunheld=%d;sunhaz=%.3f;sunhel=%.3f;"
              "sunsteps=%u;sunstepago=%.1f;sunstep=%.3f;gametime=%s%02d:%02d;",
-             g_statSrc == 2 ? "fixed" : g_statSrc == 1 ? "sky" : g_statSrc == 0 ? "clock" : "none", maz, mel, gaz, gel,
+             g_statSrc == 2 ? "fixed" : g_statSrc == 0 ? "table" : "none", maz, mel, gaz, gel,
              g_statHaveHeld ? 1 : 0, haz, hel, g_heldSteps, g_heldStepAt > 0.0 ? Now() - g_heldStepAt : -1.0,
              g_cfg.shadow.sunStep, clock ? "" : "?", gm >= 0 ? gm / 60 : 0, gm >= 0 ? gm % 60 : 0);
     out += line;
@@ -703,14 +445,7 @@ void SunStatsText(std::string& out)
 
 bool SunSecondDirection(float dir[3])
 {
-    if (g_cfg.sun.fixed)
-        return false;
-    if (g_sunViewFresh)                // this frame's quads are sorted by SunDirection
-    {
-        float first[3];
-        SunDirection(first);
-    }
-    if (!g_haveSecond)
+    if (g_cfg.sun.fixed || !TableLight() || !g_haveSecond)
         return false;
     memcpy(dir, g_secondDir, sizeof(g_secondDir));
     return true;
@@ -720,7 +455,54 @@ void SunFrameStart()
 {
     ++g_sunFrame;
     g_nQuads = 0;
-    g_sunViewFresh = false;
+    g_quadsFresh = false;
+}
+
+// The probe (2026-10-14): the table's sun and moons at this time, the body the light follows, and the quads the last
+// sky drew, each with how far it is from the table's body of its texture. A client whose sky differs from the
+// table shows here.
+void SunProbe()
+{
+    float hour = 0.0f;
+    if (!ClientHour(hour))
+    {
+        Log("sun: no game clock at [client] clockAddr, so no sun from the table%s", g_cfg.sun.fixed ? " ([sun] fixed is on)" : "");
+        return;
+    }
+    char line[600];
+    int at = snprintf(line, sizeof(line), "sun: the table at %02d:%02d:", static_cast<int>(hour), static_cast<int>(hour * 60.0f) % 60);
+    float body[kBodies][3];
+    for (int b = 0; b < kBodies && at > 0 && at < static_cast<int>(sizeof(line)); ++b)
+    {
+        const bool drawn = SunPathBody(hour, static_cast<SkyBody>(b), body[b]);
+        at += snprintf(line + at, sizeof(line) - at, "%s %s %.1f/%.1f%s", b ? "," : "", BodyName(static_cast<SkyBody>(b)),
+                       Azimuth(body[b]), Elevation(body[b]), drawn ? "" : " (not drawn)");
+    }
+    if (at > 0 && at < static_cast<int>(sizeof(line)))
+        at += snprintf(line + at, sizeof(line) - at, "; the light follows %s%s", g_haveTable ? BodyName(g_tableBody) : "nothing yet",
+                       g_cfg.sun.fixed ? " ([sun] fixed is on: the fixed sun)" : "");
+    Log("%s", line);
+    if (!g_nLast)
+    {
+        Log("sun: the sky has drawn no sun-shaped quad yet");
+        return;
+    }
+    at = snprintf(line, sizeof(line), "sun: the last sky with sun-shaped quads (%u frames ago) drew %d:", g_sunFrame - g_lastQuadFrame,
+                  g_nLast);
+    for (int q = 0; q < g_nLast && at > 0 && at < static_cast<int>(sizeof(line)); ++q)
+    {
+        const SkyBody b = g_lastTex[q] == 128 ? kBodySun : g_lastTex[q] == 512 ? kBodyMoon1 : g_lastTex[q] == 256 ? kBodyMoon2 : kBodies;
+        at += snprintf(line + at, sizeof(line) - at, "%s %.1f/%.1f, texture %u", q ? ";" : "", Azimuth(g_lastQuads[q]),
+                       Elevation(g_lastQuads[q]), g_lastTex[q]);
+        if (b != kBodies && at > 0 && at < static_cast<int>(sizeof(line)))
+        {
+            const float* d = body[b];
+            float dot = d[0] * g_lastQuads[q][0] + d[1] * g_lastQuads[q][1] + d[2] * g_lastQuads[q][2];
+            dot = dot > 1.0f ? 1.0f : dot < -1.0f ? -1.0f : dot;
+            at += snprintf(line + at, sizeof(line) - at, " (%s, %.1f degrees from the table)", BodyName(b), acosf(dot) * 57.29578f);
+        }
+    }
+    Log("%s", line);
 }
 
 bool SunCamera(D3DMATRIX& view, D3DMATRIX& proj)
@@ -732,16 +514,17 @@ bool SunCamera(D3DMATRIX& view, D3DMATRIX& proj)
     return true;
 }
 
-void SunSetView(const float v[3])
+void SunSetView(const float v[3], unsigned texWidth)
 {
     const float len = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
     if (!(len > 1e-4f))
         return;
-    g_sunViewFresh = true;
+    g_quadsFresh = true;
     if (g_nQuads < kMaxQuads)
     {
         for (int i = 0; i < 3; ++i)
             g_quads[g_nQuads][i] = v[i] / len;
+        g_quadTex[g_nQuads] = texWidth;
         ++g_nQuads;
     }
 }

@@ -1379,6 +1379,8 @@ a fire in the forge pit 39 yards down at 3.7. The Undercity 2197 to 2324 cells.
 
 ## The sun from the clock (2026-10-01)
 
+Replaced on 2026-10-14 by the measured table: see "The sun from the clock's table".
+
 Logged in indoors (Ironforge, the Undercity), the client draws no sky, so there was no sun sprite and no sun:
 no shadow map, no fog, no light, no lamp glow. The first sight of the sky then set every effect up in one
 frame (shaders, the 4096 maps, the 34 archives, the map files), and the owner felt a long stall at the gate.
@@ -3704,3 +3706,38 @@ The water tests darkshore-water-split and westfall-far-waterline pass, and their
 
 Open: the player's tests (Glint, the small waves, the swell, Foam, Swash, Wet Sand off one at a time) and a build
 with this fix on their card.
+
+## The sun from the clock's table (2026-10-14)
+
+A WOW-HC player (plain 1.12.1 WoW.exe, v0.12.0-alpha) saw the shadows change as they turned the camera. Their
+probe at 11:45 had the sky's sun at azimuth 45, elevation 82.7, and the light at azimuth -98, elevation 59.
+
+The cause: the sun was read from the sprite the sky draws for it, and the sky draws a sprite only where the camera
+can see it. With the sun out of view and a moon in view, the one sprite was taken for the sun. With both in view,
+the frame was left out as "the moons" (by day, two quads). So the light followed whatever sprite was in view.
+
+The sky places the sun and the moons by the game clock alone. `tests/sun-table.json` measured where: `[sun] measure`
+logs every sky sprite as azimuth/elevation with its texture's width and the game time, the camera points in 18
+directions (6 headings 60 degrees apart, pitches 5, 45 and 80), and the hour steps by half hours at each one.
+`tests/Sun-Table.ps1` turns the log into the rows of `src/sunpath.cpp`. What it found:
+
+- The sun stands at azimuth 45 all day. Its height is two straight lines: up 14.80 degrees an hour from the horizon
+  at 06:10, down 10.09 an hour to the horizon at 20:30, and held at 85 between them (11:55 to 12:05).
+- The larger moon stands at azimuth 45 too: up 33.9 degrees an hour from 22:15, held at 55 from 23:55 to 00:05,
+  down 16.6 an hour to 03:25. The smaller moon has the same height. Its azimuth is 135 at 00:00, 15 degrees an hour
+  less before and 3.75 an hour more after.
+- The sky draws a body down to about 2.5 degrees under the horizon. From 03:30 to 06:00 and from 20:30 to 22:30 it
+  draws none.
+- Textures: the sun 128 wide, the larger moon 512, the smaller 256. The WOW-HC probe had a 64-wide second quad by
+  day, which this client never drew. It is not known what it was.
+- The `ClockSun` line (59.0 at 14:39, 10.1 an hour) was the afternoon line, right there and 6 degrees off at noon.
+- Measured the same on both clients: the table gives 82.6 at 11:45, the WOW-HC sprite 82.7.
+
+`SunDirection` now takes the light from the table: the sun by day, at night the larger moon while it is up, else
+the other moon, else the highest body (under the horizon the shadows take `riseTo` anyway, and the sun and the
+larger moon share azimuth 45). The glide (`[sun] glide`) and the shadows' turn rate are kept. The sprites are still
+read: the probe prints the table's three bodies and the last sky's sprites, each with how far it is from the table
+(0.1 to 0.2 degrees in the test client). A client whose sky differs from the table shows there.
+
+`tests/sun-camera-turn.json` checks it: at 11:45 the camera at the sun, away from it and toward the moons' side,
+and at 01:30 away from the moons and at them; the volumetric light's sun must be the table's in every probe.

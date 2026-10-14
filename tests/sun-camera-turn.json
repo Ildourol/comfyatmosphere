@@ -1,0 +1,47 @@
+{
+    "name": "sun-camera-turn",
+    "about": "The sun must not move when the camera turns (2026-10-14). A WOW-HC player saw the shadows change as they turned the camera: the sun was read from the sprite the sky draws, and the sky draws only the sprites in view, so with the sun out of view a moon was taken for the sun. The sun now comes from the clock's table (src/sunpath.cpp). At 11:45 the camera looks at the sun, away from it, and up; at 01:30 away from the moons and at them. In every probe the volumetric light's sun must be the table's: azimuth 45, elevation 82.5 by day (0.09 0.09 0.99), the larger moon at 31.3 at night (0.60 0.60 0.52).",
+    "config": {
+        "character": 1,
+        "flight": false,
+        "cameraZoom": 0,
+        "start": {
+            "map": 0,
+            "x": -9416.7,
+            "y": -2248,
+            "z": 67.8,
+            "facing": 45,
+            "about": "Elwynn's ridges (the elwynn-ridge-fog start), on the ground, first person, open sky"
+        },
+        "hour": 11.75,
+        "cvars": {
+            "comfyVolume": 1
+        }
+    },
+    "steps": [
+        { "face": { "heading": 45, "pitch": 70 } },
+        { "wait": 2 },
+        { "probe": true },
+        { "face": { "heading": 225, "pitch": 5 } },
+        { "wait": 2 },
+        { "probe": true },
+        { "face": { "heading": 135, "pitch": 45 } },
+        { "wait": 2 },
+        { "probe": true },
+        { "atmos": "time.hour 1.5" },
+        { "face": { "heading": 225, "pitch": 5 } },
+        { "wait": 3 },
+        { "probe": true },
+        { "face": { "heading": 90, "pitch": 30 } },
+        { "wait": 2 },
+        { "probe": true }
+    ],
+    "expect": [
+        { "probeAt": 1, "probe": "^volume: drawn at .*sun \\(0\\.09 0\\.09 0\\.99\\)", "min": 1, "about": "11:45, the camera at the sun: the table's sun" },
+        { "probeAt": 2, "probe": "^volume: drawn at .*sun \\(0\\.09 0\\.09 0\\.99\\)", "min": 1, "about": "11:45, the camera away from the sun: the same sun" },
+        { "probeAt": 3, "probe": "^volume: drawn at .*sun \\(0\\.09 0\\.09 0\\.99\\)", "min": 1, "about": "11:45, the camera toward the moons' side: the same sun" },
+        { "probeAt": 4, "probe": "^volume: drawn at .*sun \\(0\\.60 0\\.60 0\\.52\\)", "min": 1, "about": "01:30, the camera away from the moons: the larger moon" },
+        { "probeAt": 5, "probe": "^volume: drawn at .*sun \\(0\\.60 0\\.60 0\\.52\\)", "min": 1, "about": "01:30, the camera at the moons: the same moon" },
+        { "probeAt": 5, "probe": "^sun: the table at 01:3\\d:.*the light follows the larger moon", "min": 1, "about": "01:30: the light follows the larger moon" }
+    ]
+}

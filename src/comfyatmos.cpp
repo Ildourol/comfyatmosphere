@@ -1575,6 +1575,7 @@ namespace
                     g_cfg.night.strength);
             else
                 Log("night: no game clock at [client] clockAddr, so the rays and the light keep their day strength");
+            SunProbe();
             Log("depth: last frame, %u see-through model draws and %u depth-only model passes of stealthed units, %u "
                 "of them drawn into the scratch depth (in order: %s; D depth, C colour, L a layer, + a copy of the world's depth), the rest without "
                 "depth ([depth] seeThrough %d); the camera %.1f yd from you%s; %s",
@@ -2257,8 +2258,9 @@ namespace
     //
     // At night the sky starts with a dozen model draws (stars, sky models) and then draws TWO such quads,
     // at draws 12 and 13 (probe, 01:00): Azeroth's two moons. So every quad of the sky phase is handed to
-    // sun.cpp, which picks one (PickQuad). Until 2026-09-28 only the first 8 draws were looked at, and at night the light
-    // kept the last direction it had by day.
+    // sun.cpp. Until 2026-09-28 only the first 8 draws were looked at, and at night the light kept the last direction it
+    // had by day. Since 2026-10-14 the light comes from the clock's table (sunpath.cpp), not from these quads: the sky
+    // draws only the quads in view. They are kept for [sun] measure and the probe.
     void NoteSkySun(IDirect3DDevice9* dev, D3DPRIMITIVETYPE prim, UINT pc, UINT nv)
     {
         // A quad, or near the horizon a quad cut in two at it, 4 triangles of 6 points, so the part below can
@@ -2285,7 +2287,19 @@ namespace
         Mul4(origin, g_viewAll, v);
         if (v[2] * v[2] + v[1] * v[1] + v[0] * v[0] < 1e-6f)
             return;
-        SunSetView(v);
+        // The texture's width tells the sun (128) from the moons (512, 256) in the probe and [sun] measure (2026-10-14).
+        UINT texWidth = 0;
+        IDirect3DBaseTexture9* tex = nullptr;
+        dev->lpVtbl->GetTexture(dev, 0, &tex);
+        if (tex)
+        {
+            D3DSURFACE_DESC d = {};
+            if (tex->lpVtbl->GetType(tex) == D3DRTYPE_TEXTURE &&
+                SUCCEEDED(((IDirect3DTexture9*)tex)->lpVtbl->GetLevelDesc((IDirect3DTexture9*)tex, 0, &d)))
+                texWidth = d.Width;
+            tex->lpVtbl->Release(tex);
+        }
+        SunSetView(v, texWidth);
         g_skySunSeen = true;
         if (g_probe.active)
             Log("  [draw %4u] SKY SUN        camera-space (%.3f %.3f %.3f)", g_probe.draws, v[0], v[1], v[2]);

@@ -1,0 +1,5321 @@
+{
+    "name": "sun-table",
+    "about": "Measures where the sky draws the sun and the two moons at each half hour, for the table of the sun by the clock (src/sunpath.cpp, 2026-10-14). [sun] measure logs each sky quad's world direction, its texture and the game time. The sky draws a quad only where the camera can see it, so the camera points in 18 directions (6 headings 60 degrees apart, at pitches 5, 45 and 80, which cover the whole sky) and the hour steps through the day at each one. Then run tests\\Sun-Table.ps1 to turn the log into the table. No checks: the table is the result. Takes about 8 minutes. The steps are written by a loop; change the loop in the commit that adds this file, not the steps by hand.",
+    "config": {
+        "character": 1,
+        "flight": false,
+        "cameraZoom": 0,
+        "start": {
+            "map": 0,
+            "x": -9416.7,
+            "y": -2248,
+            "z": 67.8,
+            "facing": 45,
+            "about": "Elwynn's ridges (the elwynn-ridge-fog start), on the ground, first person, open sky"
+        },
+        "hour": 0,
+        "ini": {
+            "sun.measure": 1
+        }
+    },
+    "steps": [
+        {
+            "face": {
+                "heading": 45,
+                "pitch": 5
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 45,
+                "pitch": 45
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 45,
+                "pitch": 80
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 105,
+                "pitch": 5
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 105,
+                "pitch": 45
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 105,
+                "pitch": 80
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 165,
+                "pitch": 5
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 165,
+                "pitch": 45
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 165,
+                "pitch": 80
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 225,
+                "pitch": 5
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 225,
+                "pitch": 45
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 225,
+                "pitch": 80
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 285,
+                "pitch": 5
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 285,
+                "pitch": 45
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 285,
+                "pitch": 80
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 345,
+                "pitch": 5
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 345,
+                "pitch": 45
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "face": {
+                "heading": 345,
+                "pitch": 80
+            }
+        },
+        {
+            "atmos": "time.hour 0"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 0.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 1.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 2.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 3.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 4.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 5.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 6.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 7.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 8.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 9.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 10.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 11.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 12.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 13.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 14.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 15.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 16.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 17.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 18.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 19.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 20.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 21.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 22.5"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23"
+        },
+        {
+            "wait": 0.4
+        },
+        {
+            "atmos": "time.hour 23.5"
+        },
+        {
+            "wait": 0.4
+        }
+    ],
+    "expect": [
+        {
+            "log": "sun measure: hour ([0-9.]+)",
+            "about": "The sky's quads logged with the game time (the hour of the last line)"
+        }
+    ]
+}

@@ -210,6 +210,7 @@ void LoadSettings(const wchar_t* ini)
     s.sun.azimuth      = GetF(kSun, L"azimuth",   s.sun.azimuth,   ini);
     s.sun.elevation    = GetF(kSun, L"elevation", s.sun.elevation, ini);
     s.sun.glide        = Clamp(GetF(kSun, L"glide", s.sun.glide, ini), 0.0f, 60.0f);
+    s.sun.measure      = GetB(kSun, L"measure",   s.sun.measure,   ini);
 
     s.client.camAddr      = GetX(kClient, L"camAddr",      s.client.camAddr,      ini);
     s.client.objMgrAddr   = GetX(kClient, L"objMgrAddr",   s.client.objMgrAddr,   ini);

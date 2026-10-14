@@ -55,6 +55,9 @@ struct SunSettings
     // control). The sky moves its sun in steps of 0.56 degrees once a game minute; each step is followed at a
     // steady speed, over the time since the last step and at least this long. 0 = at once.
     float glide     = 3.0f; 
+    // 1: log where the sky draws its sun and moons, with the game time (sun.cpp, SunMeasure), for the table
+    // of the sun by the clock. tests/sun-table.json turns it on.
+    bool  measure   = false;
 };
 
 // Where the client keeps the camera and the player (verified for this WoW.exe by comfygrass). Shadows
