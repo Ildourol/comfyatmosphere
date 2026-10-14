@@ -1246,7 +1246,14 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // Through the water the light is absorbed, red first, along the line of sight's path under the surface,
     // and the water's own colour takes its place.
     // Through far terrain's pixels, the map's depth along the line of sight.
-    float  path = lerp(dist * max(zg / zw - 1.0, 0.0), gd * dist / max(-relN, 0.5), mapK);
+    // Refracted (2026-10-14, the owner: the Stormwind canal turned lighter and darker as the camera tilted). The line
+    // of sight bends down where it enters the water (Snell, index 1.33), so its path under the surface is the depth
+    // over the cosine of the bent angle: at most 1.5 times the depth. Taken straight along the line of sight, it
+    // was the depth over the sine of the view's slope: 2.56 times the depth at 23 degrees and 2.92 at 20, and a
+    // small tilt changed the water's colour at once.
+    float  sv   = saturate(-relN / max(dist, 1e-3));          // the sine of the line of sight's slope
+    float  cosT = sqrt(1.0 - (1.0 - sv * sv) * 0.5653);       // the bent line's cosine; 0.5653 = 1 / 1.33^2
+    float  path = lerp(max(zg / zw - 1.0, 0.0) * -relN, gd, mapK) / cosT;
     // A body under the water is covered more than the bed beside it ([water] cover, Underwater Cover): at 0.5
     // three times the water it is seen through, and at least half a yard of it. By the bare distance, legs just under the surface showed in their full
     // colour, as if they stood beside the water rather than in it (2026-10-02).

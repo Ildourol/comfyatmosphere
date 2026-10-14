@@ -3749,3 +3749,14 @@ The owner found the Stormwind canal too green. Its zone colour is the game's wat
 sliders now tune it for every zone: Zone Saturation (`[water] zoneSaturation`, 0 to 300%, 175 by default) and Zone
 Hue (`[water] zoneHue`, -60 to 60 degrees on the page, 0 by default). The hue turns round the grey axis, up from
 green toward teal and blue, and the colour is brought back to the same luma.
+
+## The water's colour changed as the camera tilted (2026-10-14, the owner)
+
+Over the Stormwind canal, a small tilt of the camera made the water lighter or darker at once. Two probes, 23 and 20
+degrees down from 40 yards up, had the same zone colour, sky, fog and game light: only the angle differed. The water
+takes its colour by the path of the line of sight under the surface, and that path was taken straight along the
+line of sight: the depth over the sine of its slope, 2.56 times the depth at 23 degrees and 2.92 at 20 (14% for a
+tilt of 3 degrees). Real light bends down where it enters the water (Snell, index 1.33), so the path is the depth
+over the cosine of the bent angle: 1.39 and 1.41 times the depth, and never more than 1.5. The shader now takes that,
+for the depth from the depth copy and for the map's depth on far terrain alike, so no seam shows where they meet.
+Shallow water seen low or from far off shows more of its bed than before.
