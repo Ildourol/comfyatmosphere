@@ -3746,8 +3746,8 @@ and at 01:30 away from the moons and at them; the volumetric light's sun must be
 
 The owner found the Stormwind canal too green. Its zone colour is the game's water for Stormwind, olive green
 (0.251 0.341 0.202), and Zone Colour took its hue at 1.75 times its saturation: deep water 0.161 0.307 0.108. Two
-sliders now tune it for every zone: Zone Saturation (`[water] zoneSaturation`, 0 to 300%, 175 by default) and Zone
-Hue (`[water] zoneHue`, -60 to 60 degrees on the page, 0 by default). The hue turns round the grey axis, up from
+sliders now tune it for every zone: Zone Saturation (`[water] zoneSaturation`, 0 to 300%) and Zone Hue (`[water] zoneHue`,
+-60 to 60 degrees on the page). The owner's defaults: 165 and 20 (the old look was 175 and 0). The hue turns round the grey axis, up from
 green toward teal and blue, and the colour is brought back to the same luma.
 
 ## The water's colour changed as the camera tilted (2026-10-14, the owner)
