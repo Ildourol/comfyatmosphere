@@ -233,6 +233,10 @@ namespace
     float     g_cam[3] = {};
     D3DMATRIX g_vp = {}, g_vpInv = {};
     unsigned  g_reads = 0;
+    // Where every player and creature stands (their feet), read at the frame's first sprite (OnCharacter).
+    constexpr int kMaxUnits = 256;
+    float     g_units[kMaxUnits][3];
+    int       g_unitCount = -1;          // -1: not read this frame
 
     // Counts over the window.
     unsigned g_nDraws = 0, g_nLightable = 0, g_nLit = 0, g_nShaderUnplaced = 0;
@@ -271,6 +275,7 @@ namespace
             return;
         g_frameReady = true;
         g_reads = 0;
+        g_unitCount = -1;
         g_haveCam = ClientCamera(g_cam);
         D3DMATRIX view, proj;
         g_haveVP = SunCamera(view, proj);
@@ -974,6 +979,28 @@ namespace
         AddSighting(camRel, colour, reach, 0);
     }
 
+    // Whether a camera-relative point lies on a player or a creature: within kOnUnitAcross yards across of where it
+    // stands, and from kOnUnitBelow under its feet to kOnUnitAbove over them (2026-10-14, the owner: Mana Shield lit
+    // the whole bridge into Stormwind yellow). Mana Shield's sprites are four-vertex additive draws with the warm tint
+    // of a lamppost's glow, 1.9 and 2.7 yards across, 0.9 to 1.3 yards over the player's feet; standing still they
+    // never moved past kStill and were taken for a lamp. A lamppost's glow hangs about 4 yards up its post.
+    constexpr float kOnUnitAcross = 1.5f, kOnUnitBelow = 0.5f, kOnUnitAbove = 3.0f;
+    bool OnCharacter(const float camRel[3])
+    {
+        if (!g_haveCam)
+            return false;
+        if (g_unitCount < 0)
+            g_unitCount = ClientUnits(g_units, kMaxUnits);
+        const float p[3] = { camRel[0] + g_cam[0], camRel[1] + g_cam[1], camRel[2] + g_cam[2] };
+        for (int i = 0; i < g_unitCount; ++i)
+        {
+            const float dx = p[0] - g_units[i][0], dy = p[1] - g_units[i][1], dz = p[2] - g_units[i][2];
+            if (dx * dx + dy * dy <= kOnUnitAcross * kOnUnitAcross && dz >= -kOnUnitBelow && dz <= kOnUnitAbove)
+                return true;
+        }
+        return false;
+    }
+
     // A lamppost's glow sprite. The cheap tests come first: most additive draws are particles.
     void TrackSprite(IDirect3DDevice9* dev, const LampDraw& d)
     {
@@ -1010,6 +1037,8 @@ namespace
             return;
         if (size < 0.2f || size > 4.0f || Len3(centre) > g_cfg.lamps.maxDistance)
             return;
+        if (OnCharacter(centre))
+            return;   // a spell's sprite on someone, not a lamp
         const float colour[3] = { tint[0] * g_cfg.lamps.spriteGain, tint[1] * g_cfg.lamps.spriteGain,
                                   tint[2] * g_cfg.lamps.spriteGain };
         AddSighting(centre, colour, g_cfg.lamps.spriteReach, 1);

@@ -3837,3 +3837,16 @@ After: 24 changes with the sky in view and with the ground in view, in Darkshore
 flash. With the sky in view, putting the cat form on still darkens two or three frames: the game moves the camera
 through the rock as the model changes, and the frames are the same with Atmosphere off. Before the third change,
 32 changes with the ground in view, with and without anti-aliasing, also had none.
+
+## Mana Shield lit the bridge like a lamp (2026-10-14, the owner)
+
+In outdoor-spell-order's shot on the bridge into Stormwind (Lightning Shield, Mana Shield and Inner Fire on), the
+bridge and the character were lit a bright yellow. One aura off at a time: Mana Shield (1463) alone did it, and
+with Lamps off it was gone. The lamp tracker takes a lamppost's glow from a four-vertex additive M2 draw with a warm
+tint (c28 + c29) that stays within kStill of where it was first seen (TrackSprite). Mana Shield's sprites are such
+draws, 1.9 and 2.7 yards across, 0.9 to 1.3 yards over the player's feet; standing still, they were a lamp.
+
+A sprite on a player or a creature is now never a lamp (OnCharacter): within 1.5 yards across of where one stands,
+from 0.5 yards under its feet to 3 over them. A lamppost's glow hangs about 4 yards up its post. The units are read
+once a frame (ClientUnits), at the first sprite that passes the other tests. After: no yellow with Mana Shield on,
+and the lampposts at the bridge still glow at night, gone with Lamps off.
