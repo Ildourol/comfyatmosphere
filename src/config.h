@@ -13,14 +13,14 @@
 struct FogSettings
 {
     bool  enabled     = true;
-    float density     = 0.0025f;   // fog per yard at the ground: 0.0025 lets through 60% of what is 200 yards away
+    float density     = 0.0015f;   // fog per yard at the ground: 0.0015 lets through 74% of what is 200 yards away
     float height      = 25.0f;     // yards: the fog thins by e (2.7 times) every this many yards up
     float groundRadius = 150.0f;   // yards around you the ground under the fog is averaged over (the map files)
     float reach       = 200.0f;    // yards: how far a line of sight gathers fog; it fades out over the last 40%
     float skyDistance = 75.0f;     // yards: the same for a line of sight to the sky (0 = the sky gets none)
-    float brightness  = 1.2f;      // the sky's light on the fog: the game's fog colour times this
-    float sunLight    = 4.0f;      // the sun's light on the fog, against the air's ([volume] strength sets both)
-    float toward      = 0.3f;      // 0..0.9: how much the fog sends the sunlight on toward you when you look toward the
+    float brightness  = 0.45f;     // the sky's light on the fog: the game's fog colour times this
+    float sunLight    = 1.5f;      // the sun's light on the fog, against the air's ([volume] strength sets both)
+    float toward      = 0.4f;      // 0..0.9: how much the fog sends the sunlight on toward you when you look toward the
                                    // sun, and less to the sides (Fog Toward the Sun); 0 = the same from every side
     float horizonGlow = 1.0f;      // 0..2: the fog's glow along the horizon with the sun low, brightest under the sun
                                    // (Fog Horizon Glow); 0 = none
@@ -58,6 +58,9 @@ struct SunSettings
     // 1: log where the sky draws its sun and moons, with the game time (sun.cpp, SunMeasure), for the table
     // of the sun by the clock. tests/sun-table.json turns it on.
     bool  measure   = false;
+    // 1: dots where the effects take the sun, the shadows' sun, the other moon and the sky's sprites (sundot.cpp,
+    // the Debug View "sun: dots ...").
+    int   debug     = 0;
 };
 
 // Where the client keeps the camera and the player (verified for this WoW.exe by comfygrass). Shadows
@@ -199,9 +202,9 @@ struct ShadowSettings
 struct VolumeSettings
 {
     bool  enabled      = true;
-    float strength     = 25.0f;     // the dial, 0..100
+    float strength     = 20.0f;     // the dial, 0..100
     float maxIntensity = 3.0f;      // gain at 100
-    float density      = 0.016f;     // how much the air scatters, per yard (Light Density, in thousandths)
+    float density      = 0.012f;     // how much the air scatters, per yard (Light Density, in thousandths)
     float maxDistance  = 190.0f;     // yards along each line of sight (the shadow map's reach)
     int   steps        = 64;        // samples along each line of sight: more holds up over a long
                                     // maxDistance, where a thin canopy can fall between two samples.
@@ -277,8 +280,9 @@ struct SunShadowSettings
     // the real light sinks, as the owner asked: at the horizon, and with neither sun nor moon up, the
     // shadows are short, as at noon. A steep light needs little slack. Until then they faded out between
     // 6 and 0 degrees.
-    float riseFrom   = 12.0f;     // degrees: the real light's height below which the shadows' light climbs
-    float riseTo     = 85.0f;     // degrees: the shadows' light with the real light at the horizon or under
+    float riseFrom   = 3.0f;      // degrees: the real light's height below which the shadows' light climbs, over the
+                                  // next 12 degrees down (Low Sun From)
+    float riseTo     = 89.0f;     // degrees: the shadows' light at the end of the climb (Low Sun Height)
     // The characters' shadows darker than the world's (2026-09-30). In Darkshire the buildings' shade took
     // so much of the street that a player's shadow was lost in it: a shaded pixel is shaded once, whatever
     // shades it. Players and creatures are drawn a second time into a map of their own, and their shade
@@ -531,7 +535,7 @@ struct WaterSettings
                                       // Spread): 1 is a third of their speed, 1.1 to 3 yards a second
     float jumpRipple = 4.0f;     // 0..6: how deep the ring is where someone lands in the water from a jump or a fall,
                                  // for a landing at 8 yards a second (Jump Ripple); 0 is none
-    float wetSand   = 0.2f;      // 0..1: how much darker the sand is where the water reaches (Wet Sand)
+    float wetSand   = 0.45f;     // 0..1: how much darker the sand is where the water reaches (Wet Sand)
     float wetSandReach = 250.0f; // yards: the wet sand fades out over the second half of this distance from the
                                  // camera (Wet Sand Distance, 2026-10-13)
     // The surface (2026-10-02): the water drawn by us in place of the game's: its colour by the real depth, the

@@ -106,7 +106,7 @@ namespace
                 kHotkeys, kWaterZone, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
                 kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing,
                 kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
-                kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kZoneHue,
+                kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kZoneHue, kRiseFrom, kRiseTo,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -282,13 +282,16 @@ namespace
         // Zone Saturation and Zone Hue (2026-10-14): [water] zoneSaturation as a percentage, zoneHue in degrees.
         "comfyWaterZoneSaturation",
         "comfyWaterZoneHue",
+        // Low Sun From and Low Sun Height (2026-10-14): [sunshadows] riseFrom and riseTo, in degrees.
+        "comfyShadowRiseFrom",
+        "comfyShadowRiseTo",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
     // options window instead of an ini edit and F11. 0 leaves the ini's own debug values alone. The panel
     // cannot draw a dropdown (it builds a page from a table of tick boxes and sliders), so the names are
     // in the slider's tooltip and in the log.
-    struct DebugViewInfo { const char* name; int volume, sunShadows, lamps, rays, fog, water = 0, grass = 0, clouds = 0; };
+    struct DebugViewInfo { const char* name; int volume, sunShadows, lamps, rays, fog, water = 0, grass = 0, clouds = 0, sun = 0; };
     const DebugViewInfo kDebugViews[] = {
         { "off",                                              0, 0, 0, 0, 0 },
         { "volumetric light: the glow alone",                 1, 0, 0, 0, 0 },
@@ -324,6 +327,7 @@ namespace
         { "clouds: the shapes (red), the layer (blue)", 0, 0, 0, 0, 0, 0, 0, 1 },
         { "water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)", 0, 0, 0, 0, 0, 11 },
         { "water: the game's rain splashes left out; its other particles red under the water, green above", 0, 0, 0, 0, 0, 12 },
+        { "sun: dots where the effects take it: yellow the light, red the shadows' sun, blue the other moon, white the sky's own sprites", 0, 0, 0, 0, 0, 0, 0, 0, 1 },
     };
     constexpr int kDebugViewCount = sizeof(kDebugViews) / sizeof(kDebugViews[0]);
     int g_debugViewLogged = -1;
@@ -549,6 +553,8 @@ namespace
         case kWetSandReach:   snprintf(out, cap, "%.0f", s.water.wetSandReach); break;   // yards
         case kZoneSaturation: snprintf(out, cap, "%.0f", s.water.zoneSaturation * 100.0f); break;   // percent
         case kZoneHue:        snprintf(out, cap, "%.0f", s.water.zoneHue); break;   // degrees
+        case kRiseFrom:       snprintf(out, cap, "%.0f", s.sunShadows.riseFrom); break;   // degrees
+        case kRiseTo:         snprintf(out, cap, "%.0f", s.sunShadows.riseTo); break;   // degrees
         case kColour:         snprintf(out, cap, "%d", s.colour.enabled ? 1 : 0); break;
         case kFog:            snprintf(out, cap, "%d", s.fog.enabled ? 1 : 0); break;
         // Ten-thousandths a yard (40 is 0.004), yards, and percentages.
@@ -706,6 +712,8 @@ namespace
         if (c[kWetSandReach].seen)    s.water.wetSandReach = Clamp(c[kWetSandReach].value, 20.0f, 300.0f);
         if (c[kZoneSaturation].seen)  s.water.zoneSaturation = Clamp(c[kZoneSaturation].value * 0.01f, 0.0f, 3.0f);
         if (c[kZoneHue].seen)         s.water.zoneHue = Clamp(c[kZoneHue].value, -90.0f, 90.0f);
+        if (c[kRiseFrom].seen)        s.sunShadows.riseFrom = Clamp(c[kRiseFrom].value, 0.0f, 60.0f);
+        if (c[kRiseTo].seen)          s.sunShadows.riseTo = Clamp(c[kRiseTo].value, 10.0f, 89.0f);
         if (c[kColour].seen)         s.colour.enabled = c[kColour].value != 0.0f;
         if (c[kFog].seen)            s.fog.enabled    = c[kFog].value != 0.0f;
         if (c[kFogDensity].seen)     s.fog.density    = Clamp(c[kFogDensity].value * 0.0001f, 0.0f, 0.1f);
@@ -745,6 +753,7 @@ namespace
                 s.water.debug      = d.water;
                 s.grass.debug      = d.grass;
                 s.clouds.debug     = d.clouds;
+                s.sun.debug        = d.sun;
             }
             if (v != g_debugViewLogged)
             {

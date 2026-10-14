@@ -52,6 +52,8 @@ COMFYATMOSPHERE_SHADOWS_WORLD  = "World / Object Shadows";
 COMFYATMOSPHERE_SHADOWS_UNITS  = "Player / Creature Shadows";
 COMFYATMOSPHERE_SHADOW_LOCK    = "Lock Shadow Angle";
 COMFYATMOSPHERE_SHADOW_TILT    = "Shadow Angle";
+COMFYATMOSPHERE_SHADOW_RISE_FROM = "Low Sun From";
+COMFYATMOSPHERE_SHADOW_RISE_TO = "Low Sun Height";
 COMFYATMOSPHERE_SUNLIGHT       = "Sunlight";
 COMFYATMOSPHERE_TREE_SHADE     = "Tree Shadow Strength";
 COMFYATMOSPHERE_FOLIAGE_SIZE   = "Foliage Shade Size";
@@ -563,6 +565,30 @@ local ENTRIES = {
 		minval = 0,
 		maxval = 60,
 		step = 5,
+		numberLabels = 1,
+	},
+	{
+		-- Degrees: [sunshadows] riseFrom (2026-10-14).
+		name = "COMFYATMOSPHERE_SHADOW_RISE_FROM",
+		desc = "With the sun or moon lower than this, in degrees, the shadows' light climbs back up as it sinks, over the next 12 degrees down, so the shadows stay short. 0 is never.",
+		type = "slider",
+		cvar = "comfyShadowRiseFrom",
+		dependency = { "comfySunShadows", "1", "comfyShadowLock", "0" },
+		minval = 0,
+		maxval = 30,
+		step = 1,
+		numberLabels = 1,
+	},
+	{
+		-- Degrees: [sunshadows] riseTo (2026-10-14).
+		name = "COMFYATMOSPHERE_SHADOW_RISE_TO",
+		desc = "How high the shadows' light stands, in degrees, at the end of the climb, 12 degrees under Low Sun From. Lower gives longer shadows at sunrise and sunset; 90 is straight down.",
+		type = "slider",
+		cvar = "comfyShadowRiseTo",
+		dependency = { "comfySunShadows", "1", "comfyShadowLock", "0" },
+		minval = 10,
+		maxval = 89,
+		step = 1,
 		numberLabels = 1,
 	},
 	{
@@ -1919,11 +1945,12 @@ local ENTRIES = {
 			.. "30 grass: the bend (black still, white the tips; blue where it comes from the texture)\n"
 			.. "31 clouds: the shapes (red), the layer (blue)\n"
 			.. "32 water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)\n"
-			.. "33 water: the game's rain splashes left out; its other particles red under the water, green above",
+			.. "33 water: the game's rain splashes left out; its other particles red under the water, green above\n"
+			.. "34 sun: dots where the effects take it: yellow the light, red the shadows' sun, blue the other moon, white the sky's own sprites",
 		type = "slider",
 		cvar = "comfyDebugView",
 		minval = 0,
-		maxval = 33,
+		maxval = 34,
 		step = 1,
 		numberLabels = 1,
 	},
@@ -2227,7 +2254,7 @@ local WINDOW_SECTIONS = {
 	{ "Lamps", { "comfyLamps", "comfyLampGlow", "comfyLampDistance", "comfyLanternLight", "comfyTorchLight",
 	             "comfyIndoorLamps", "comfyLampsDay", "comfyLighthouses", "comfyLighthouseBeam", "comfyLighthouseBeacon", "comfyLighthouseLength", "comfyLighthouseDistance", "comfyLighthouseWidth", "comfyLighthouseSpread", "comfyLighthouseSpeed", "comfyLighthouseTwoBeams", "comfyLighthouseGlint", "comfyLighthouseFace", "comfyLighthouseFaceTilt", "comfyLighthouseFaceSoft", "comfyLighthouseWaterWidth" } },
 	{ "Shadows", { "comfySunShadows", "comfySunShadowsWorld", "comfySunShadowsUnits", "comfyShadowLock",
-	               "comfyShadowTilt", "comfySunShadowStrength", "comfySunShadowsNight",
+	               "comfyShadowTilt", "comfyShadowRiseFrom", "comfyShadowRiseTo", "comfySunShadowStrength", "comfySunShadowsNight",
 	               "comfySunShadowsUnitStrength", "comfySunShadowsBody", "comfyShadowOnWater", "comfySunGlide", "comfyTreeShade", "comfyFoliageShadeSize", "comfyFoliageShadeEdge", "comfyFoliageSelfShade", "comfyFoliageCreatureShadow", "comfySunlight", "comfyShadeTint",
 	               "comfySunTint", "comfyShadowResolution", "comfyShadowSoftness", "comfyShadowEvery",
 	               "comfyShadowNear" } },

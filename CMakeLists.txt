@@ -24,6 +24,7 @@ add_library(comfyatmos SHARED
     src/bench.cpp
     src/sun.cpp
     src/sunpath.cpp
+    src/sundot.cpp
     src/bodymask.cpp
     src/cover.cpp
     src/lamps.cpp

@@ -3760,3 +3760,28 @@ tilt of 3 degrees). Real light bends down where it enters the water (Snell, inde
 over the cosine of the bent angle: 1.39 and 1.41 times the depth, and never more than 1.5. The shader now takes that,
 for the depth from the depth copy and for the map's depth on far terrain alike, so no seam shows where they meet.
 Shallow water seen low or from far off shows more of its bed than before.
+
+## Where the effects take the sun: Debug View 34 (2026-10-14, the owner)
+
+Debug View 34 (`[sun] debug 1`, `src/sundot.cpp`) draws dots over the normal picture: yellow the light the effects
+follow (`SunDirection`), red the shadows' sun (`ShadowSunDirection`), blue the other moon at night, white each sprite
+the sky drew this frame. With the table right, the white dot of the body followed sits inside the yellow one. A dot
+off screen is drawn at half size at the edge, above the action bars. In Booty Bay at 06:40 the yellow dot sat on the
+sun's glow and the red one far higher: below `riseFrom` the shadows' sun climbs.
+
+## Low Sun From and Low Sun Height (2026-10-14, the owner)
+
+The owner saw the shadows nearly straight down with the sun about to set. `[sunshadows] riseFrom` and `riseTo` have
+sliders now: Low Sun From and Low Sun Height. The climb ended at the horizon, so it spread over riseFrom degrees, and
+at Low Sun From 1 the shadows' sun went from the real sun to riseTo in one degree, a few game minutes. It now spreads
+over the 12 degrees under riseFrom whatever riseFrom is (`kRiseSpan`, `sun.cpp`): from 12 it ends at the horizon as
+before, from 3 at -9, where the sun is still the light followed.
+
+## The owner's defaults (2026-10-14)
+
+From the owner's controls in the test client: Fog Density 15 (0.0025 to 0.0015), Fog Brightness 45 (1.2 to 0.45),
+Fog Sunlight 15 (4.0 to 1.5), Fog Toward the Sun 40 (0.3 to 0.4), Light Strength 20 (25), Light Density 12 (0.016 to
+0.012), Wet Sand 45 (0.2 to 0.45), Low Sun From 3 (12), Low Sun Height 89 (85), Zone Saturation 165 and Zone Hue 20.
+The Booty Bay fog that looked too dense was the dawn thickening at 06:40 (Fog Morning: 1.9 times), with the water's
+and the low ground's on top. The tests' expected shots were taken with the old defaults where a test does not set
+the controls itself.

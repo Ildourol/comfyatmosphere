@@ -98,6 +98,8 @@ namespace
         { "water.wetSandReach",  "Wet Sand Distance" },
         { "water.zoneSaturation", "Zone Saturation" },
         { "water.zoneHue",       "Zone Hue" },
+        { "sunShadows.riseFrom", "Low Sun From" },
+        { "sunShadows.riseTo",   "Low Sun Height" },
         { "lighthouse.enabled",  "Lighthouses" },
         { "lighthouse.beam",     "Lighthouse Beam" },
         { "lighthouse.beacon",   "Lighthouse Beacon" },

@@ -8,6 +8,7 @@
 void SunSetTransform(D3DTRANSFORMSTATETYPE state, const D3DMATRIX* m);
 void SunFrameStart();                        // a new frame: forget the last frame's sky quads
 void SunProbe();                             // the probe's lines: the table's sun and moons against the sky's quads
+int  SunSkyQuads(float dirs[][3], int max);  // the sky's sun-shaped sprites this frame, world directions (sundot.cpp)
 void SunSetView(const float v[3], unsigned texWidth = 0);  // a sun-shaped sky quad in camera space; once per quad
 bool SunDirection(float dir[3]);             // world direction TO the sun (or the moon followed); false without the clock
 bool ShadowSunDirection(float dir[3]);       // the same for the shadows: [sunshadows] lock sets its tilt

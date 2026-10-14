@@ -41,6 +41,7 @@
 #include "shadercache.h"
 #include "shadow.h"
 #include "sun.h"
+#include "sundot.h"
 #include "sunshadows.h"
 #include "gameglow.h"
 #include "terrainshade.h"
@@ -957,6 +958,8 @@ namespace
         BenchSectionEnd(dev, kBenchGrade, graded);
         if (graded && g_probe.active)
             Log("  [draw %4u] SATURATION     x %.2f", g_probe.draws, GradeSaturationNow());
+        // The sun's dots last, over everything ([sun] debug, sundot.cpp).
+        SunDotDraw(dev);
         if (haveVp)
             dev->lpVtbl->SetViewport(dev, &oldVp);
         g_inPass = false;
@@ -1222,6 +1225,7 @@ namespace
             SpellsDrop();
             WaterReset();
             GradeReset();
+        SunDotReset();
             CloudsReset();
             ForgetMistTextures();
             BeaconReset();
@@ -1369,6 +1373,7 @@ namespace
         SpellsDrop();
         WaterReset();
         GradeReset();
+        SunDotReset();
         BeaconReset();
         GrassReset();
         MapTerrainDetach();
@@ -1628,6 +1633,7 @@ namespace
         SpellsDrop();
         WaterReset();
         GradeReset();
+        SunDotReset();
         CloudsReset();
         ForgetMistTextures();
         BeaconReset();
