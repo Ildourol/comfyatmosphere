@@ -1251,9 +1251,13 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // over the cosine of the bent angle: at most 1.5 times the depth. Taken straight along the line of sight, it
     // was the depth over the sine of the view's slope: 2.56 times the depth at 23 degrees and 2.92 at 20, and a
     // small tilt changed the water's colour at once.
+    // Only where the line of sight comes down to the surface (2026-10-14): with a wave as high as the camera or higher
+    // (relN 0 or over, Wave Height 30 off Westfall), -relN made the path negative, the absorption grew without end,
+    // and the wave showed in flat red, blue, magenta and cyan. There the straight path stands, as before.
     float  sv   = saturate(-relN / max(dist, 1e-3));          // the sine of the line of sight's slope
     float  cosT = sqrt(1.0 - (1.0 - sv * sv) * 0.5653);       // the bent line's cosine; 0.5653 = 1 / 1.33^2
-    float  path = lerp(max(zg / zw - 1.0, 0.0) * -relN, gd, mapK) / cosT;
+    float  past = max(zg / zw - 1.0, 0.0);                    // the line of sight past the surface, per yard to it
+    float  path = lerp(lerp(dist * past, past * max(-relN, 0.0) / cosT, smoothstep(0.0, 0.03, sv)), gd / cosT, mapK);
     // A body under the water is covered more than the bed beside it ([water] cover, Underwater Cover): at 0.5
     // three times the water it is seen through, and at least half a yard of it. By the bare distance, legs just under the surface showed in their full
     // colour, as if they stood beside the water rather than in it (2026-10-02).

@@ -3761,6 +3761,13 @@ over the cosine of the bent angle: 1.39 and 1.41 times the depth, and never more
 for the depth from the depth copy and for the map's depth on far terrain alike, so no seam shows where they meet.
 Shallow water seen low or from far off shows more of its bed than before.
 
+The first version made the path from -relN, the surface's depth under the camera. With a wave as high as the camera
+or higher (relN 0 or over: westfall-under-the-swell, Wave Height 30), the path came out negative, the absorption grew
+without end, and the waves along the horizon showed in flat red, blue, magenta and cyan (the owner: "showing a depth
+map"). The bent path now holds only where the line of sight comes down to the surface; level or rising, the straight
+path stands, as before, with a blend over the first 0.03 of the slope's sine. 5 more instruction slots, the defs still
+in c0 to c107.
+
 ## Where the effects take the sun: Debug View 34 (2026-10-14, the owner)
 
 Debug View 34 (`[sun] debug 1`, `src/sundot.cpp`) draws dots over the normal picture: yellow the light the effects
