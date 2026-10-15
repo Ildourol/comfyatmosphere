@@ -106,7 +106,7 @@ namespace
                 kHotkeys, kWaterZone, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
                 kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing,
                 kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
-                kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kZoneHue, kRiseFrom, kRiseTo,
+                kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kZoneHue, kRiseFrom, kHighest,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -282,9 +282,9 @@ namespace
         // Zone Saturation and Zone Hue (2026-10-14): [water] zoneSaturation as a percentage, zoneHue in degrees.
         "comfyWaterZoneSaturation",
         "comfyWaterZoneHue",
-        // Low Sun From and Low Sun Height (2026-10-14): [sunshadows] riseFrom and riseTo, in degrees.
+        // Low Sun From (2026-10-14) and Highest Sun (2026-10-15): [sunshadows] riseFrom and highest, in degrees.
         "comfyShadowRiseFrom",
-        "comfyShadowRiseTo",
+        "comfyShadowHighest",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -554,7 +554,7 @@ namespace
         case kZoneSaturation: snprintf(out, cap, "%.0f", s.water.zoneSaturation * 100.0f); break;   // percent
         case kZoneHue:        snprintf(out, cap, "%.0f", s.water.zoneHue); break;   // degrees
         case kRiseFrom:       snprintf(out, cap, "%.0f", s.sunShadows.riseFrom); break;   // degrees
-        case kRiseTo:         snprintf(out, cap, "%.0f", s.sunShadows.riseTo); break;   // degrees
+        case kHighest:        snprintf(out, cap, "%.0f", s.sunShadows.highest); break;  // degrees
         case kColour:         snprintf(out, cap, "%d", s.colour.enabled ? 1 : 0); break;
         case kFog:            snprintf(out, cap, "%d", s.fog.enabled ? 1 : 0); break;
         // Ten-thousandths a yard (40 is 0.004), yards, and percentages.
@@ -713,7 +713,7 @@ namespace
         if (c[kZoneSaturation].seen)  s.water.zoneSaturation = Clamp(c[kZoneSaturation].value * 0.01f, 0.0f, 3.0f);
         if (c[kZoneHue].seen)         s.water.zoneHue = Clamp(c[kZoneHue].value, -90.0f, 90.0f);
         if (c[kRiseFrom].seen)        s.sunShadows.riseFrom = Clamp(c[kRiseFrom].value, 0.0f, 60.0f);
-        if (c[kRiseTo].seen)          s.sunShadows.riseTo = Clamp(c[kRiseTo].value, 10.0f, 89.0f);
+        if (c[kHighest].seen)         s.sunShadows.highest = Clamp(c[kHighest].value, 10.0f, 89.0f);
         if (c[kColour].seen)         s.colour.enabled = c[kColour].value != 0.0f;
         if (c[kFog].seen)            s.fog.enabled    = c[kFog].value != 0.0f;
         if (c[kFogDensity].seen)     s.fog.density    = Clamp(c[kFogDensity].value * 0.0001f, 0.0f, 0.1f);

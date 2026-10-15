@@ -99,7 +99,7 @@ namespace
         { "water.zoneSaturation", "Zone Saturation" },
         { "water.zoneHue",       "Zone Hue" },
         { "sunShadows.riseFrom", "Low Sun From" },
-        { "sunShadows.riseTo",   "Low Sun Height" },
+        { "sunShadows.highest",  "Highest Sun" },
         { "lighthouse.enabled",  "Lighthouses" },
         { "lighthouse.beam",     "Lighthouse Beam" },
         { "lighthouse.beacon",   "Lighthouse Beacon" },

@@ -3,7 +3,7 @@
 //
 //   yellow  the light the effects follow (SunDirection): the volumetric light, the fog's sunlight, the water's glint
 //   red     the sun the shadow maps are drawn with (ShadowSunDirection): below [sunshadows] riseFrom it climbs
-//           back toward riseTo, and [sunshadows] lock tilts it, so it can stand apart from the yellow dot
+//           back toward highest, and [sunshadows] lock tilts it, so it can stand apart from the yellow dot
 //   blue    the other moon at night (SunSecondDirection), which casts rays of its own
 //   white   each sun-shaped sprite the sky drew this frame. With the table right (sunpath.cpp), the white dot of
 //           the body followed sits inside the yellow one

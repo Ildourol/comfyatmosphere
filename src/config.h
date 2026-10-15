@@ -100,7 +100,7 @@ struct ColourSettings
     bool  enabled = true;       // the Color Effects box: off, the pass is not even considered
     float day   = 100.0f;       // 0..200: the saturation by day (Day Saturation)
     float night = 100.0f;       // 0..200: the saturation at full night (Night Saturation)
-    float gameGlow = 100.0f;    // 0..200: the game's Full Screen Glow, in % of its own (Game Glow, gameglow.cpp).
+    float gameGlow = 80.0f;     // 0..200: the game's Full Screen Glow, in % of its own (Game Glow, gameglow.cpp).
                                 // Not under the Color Effects box: it is the game's pass, not ours
 };
 
@@ -279,13 +279,15 @@ struct SunShadowSettings
     float night      = 100.0f;
     // A low sun or moon (2026-09-30): the test's slack grows as the light gets lower (against flat ground
     // shading itself in stripes) and pushes each shadow away from what casts it, 0.5 yards on the near map
-    // and 2 on the far one at 10 degrees. Below riseFrom the shadows' light climbs back toward riseTo as
+    // and 2 on the far one at 10 degrees. Below riseFrom the shadows' light climbs back toward highest as
     // the real light sinks, as the owner asked: at the horizon, and with neither sun nor moon up, the
     // shadows are short, as at noon. A steep light needs little slack. Until then they faded out between
     // 6 and 0 degrees.
     float riseFrom   = 3.0f;      // degrees: the real light's height below which the shadows' light climbs, over the
                                   // next 12 degrees down (Low Sun From)
-    float riseTo     = 89.0f;     // degrees: the shadows' light at the end of the climb (Low Sun Height)
+    float highest    = 80.0f;     // degrees: the highest the shadows' light stands, at noon and at the end of
+                                  // the climb (Highest Sun, 2026-10-15). The sun reaches 85 at noon, where a
+                                  // character's shadow is a dot under its feet
     // The characters' shadows darker than the world's (2026-09-30). In Darkshire the buildings' shade took
     // so much of the street that a player's shadow was lost in it: a shaded pixel is shaded once, whatever
     // shades it. Players and creatures are drawn a second time into a map of their own, and their shade

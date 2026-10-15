@@ -53,7 +53,7 @@ COMFYATMOSPHERE_SHADOWS_UNITS  = "Player / Creature Shadows";
 COMFYATMOSPHERE_SHADOW_LOCK    = "Lock Shadow Angle";
 COMFYATMOSPHERE_SHADOW_TILT    = "Shadow Angle";
 COMFYATMOSPHERE_SHADOW_RISE_FROM = "Low Sun From";
-COMFYATMOSPHERE_SHADOW_RISE_TO = "Low Sun Height";
+COMFYATMOSPHERE_SHADOW_HIGHEST = "Highest Sun";
 COMFYATMOSPHERE_SUNLIGHT       = "Sunlight";
 COMFYATMOSPHERE_TREE_SHADE     = "Tree Shadow Strength";
 COMFYATMOSPHERE_FOLIAGE_SIZE   = "Foliage Shade Size";
@@ -580,11 +580,11 @@ local ENTRIES = {
 		numberLabels = 1,
 	},
 	{
-		-- Degrees: [sunshadows] riseTo (2026-10-14).
-		name = "COMFYATMOSPHERE_SHADOW_RISE_TO",
-		desc = "How high the shadows' light stands, in degrees, at the end of the climb, 12 degrees under Low Sun From. Lower gives longer shadows at sunrise and sunset; 90 is straight down.",
+		-- Degrees: [sunshadows] highest (2026-10-15).
+		name = "COMFYATMOSPHERE_SHADOW_HIGHEST",
+		desc = "The highest the shadows' light stands, in degrees: at noon, and at the end of the climb under Low Sun From. Lower gives longer shadows; 90 is straight down.",
 		type = "slider",
-		cvar = "comfyShadowRiseTo",
+		cvar = "comfyShadowHighest",
 		dependency = { "comfySunShadows", "1", "comfyShadowLock", "0" },
 		minval = 10,
 		maxval = 89,
@@ -2254,7 +2254,7 @@ local WINDOW_SECTIONS = {
 	{ "Lamps", { "comfyLamps", "comfyLampGlow", "comfyLampDistance", "comfyLanternLight", "comfyTorchLight",
 	             "comfyIndoorLamps", "comfyLampsDay", "comfyLighthouses", "comfyLighthouseBeam", "comfyLighthouseBeacon", "comfyLighthouseLength", "comfyLighthouseDistance", "comfyLighthouseWidth", "comfyLighthouseSpread", "comfyLighthouseSpeed", "comfyLighthouseTwoBeams", "comfyLighthouseGlint", "comfyLighthouseFace", "comfyLighthouseFaceTilt", "comfyLighthouseFaceSoft", "comfyLighthouseWaterWidth" } },
 	{ "Shadows", { "comfySunShadows", "comfySunShadowsWorld", "comfySunShadowsUnits", "comfyShadowLock",
-	               "comfyShadowTilt", "comfyShadowRiseFrom", "comfyShadowRiseTo", "comfySunShadowStrength", "comfySunShadowsNight",
+	               "comfyShadowTilt", "comfyShadowRiseFrom", "comfyShadowHighest", "comfySunShadowStrength", "comfySunShadowsNight",
 	               "comfySunShadowsUnitStrength", "comfySunShadowsBody", "comfyShadowOnWater", "comfySunGlide", "comfyTreeShade", "comfyFoliageShadeSize", "comfyFoliageShadeEdge", "comfyFoliageSelfShade", "comfyFoliageCreatureShadow", "comfySunlight", "comfyShadeTint",
 	               "comfySunTint", "comfyShadowResolution", "comfyShadowSoftness", "comfyShadowEvery",
 	               "comfyShadowNear" } },

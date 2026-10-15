@@ -293,12 +293,15 @@ float NightScale(float percent)
 
 // The shadows' sun: the sun, or with [sunshadows] lock the sun's azimuth at lockTilt degrees from straight
 // down. With the sun overhead, whose azimuth says nothing, the client's 45 degrees.
-// Below [sunshadows] riseFrom degrees the shadows' light climbs back toward riseTo as the real light sinks
-// (2026-09-30), on a smoothstep: at the horizon and under it, the shadows are short, as at noon.
+// Below [sunshadows] riseFrom degrees the shadows' light climbs back toward [sunshadows] highest as the real
+// light sinks (2026-09-30), on a smoothstep: at the horizon and under it, the shadows are short, as at noon.
 // Over 12 degrees of the real light's height from riseFrom down (2026-10-14, the owner). The climb ended at the
-// horizon, so with riseFrom 1 it went from the real sun to riseTo within one degree, a few game minutes. The span
-// is now the same whatever riseFrom is: from 12 (the default until 2026-10-14) it still ends at the horizon, from 1 at -11, where
-// the sun is still the light followed (the moons take over about 21:45).
+// horizon, so with riseFrom 1 it went from the real sun to its end within one degree, a few game minutes. The
+// span is now the same whatever riseFrom is: from 12 (the default until 2026-10-14) it still ends at the horizon,
+// from 1 at -11, where the sun is still the light followed (the moons take over about 21:45).
+// The shadows' light never stands higher than highest (Highest Sun, 2026-10-15, the owner): the sun reaches 85
+// degrees at noon, and a character's shadow was a dot under its feet. The climb ends there too. It was its own
+// setting (riseTo, Low Sun Height, 89) for a day.
 constexpr float kRiseSpan = 12.0f;
 static bool ShadowTarget(float dir[3])
 {
@@ -310,13 +313,19 @@ static bool ShadowTarget(float dir[3])
     if (!ss.lock)
     {
         const float el = asinf(dir[2] < -1.0f ? -1.0f : dir[2] > 1.0f ? 1.0f : dir[2]) * 57.29578f;
-        if (ss.riseFrom <= 0.0f || el >= ss.riseFrom)
+        float up = el;
+        if (ss.riseFrom > 0.0f && el < ss.riseFrom)
+        {
+            float t = (ss.riseFrom - el) / kRiseSpan;
+            t = t > 1.0f ? 1.0f : t;
+            t = t * t * (3.0f - 2.0f * t);
+            const float lifted = el > 0.0f ? el : 0.0f;
+            up = lifted + (ss.highest - lifted) * t;
+        }
+        up = (std::min)(up, ss.highest);
+        if (up == el)
             return true;
-        float t = (ss.riseFrom - el) / kRiseSpan;
-        t = t > 1.0f ? 1.0f : t;
-        t = t * t * (3.0f - 2.0f * t);
-        const float lifted = el > 0.0f ? el : 0.0f;
-        const float up = (lifted + ((std::max)(ss.riseTo, ss.riseFrom) - lifted) * t) * 0.01745329f;
+        up *= 0.01745329f;
         dir[0] = cosf(up) * ax;
         dir[1] = cosf(up) * ay;
         dir[2] = sinf(up);
@@ -330,7 +339,7 @@ static bool ShadowTarget(float dir[3])
 }
 
 // Turned toward ShadowTarget at most kTurnRate degrees a second, once a frame (2026-09-30). A moon can
-// first show well above the horizon, where the shadows' light stood at riseTo, and the shadows turned at
+// first show well above the horizon, where the shadows' light stood at highest, and the shadows turned at
 // once: the sun's own glide in SunDirection lets a change of more than 5 degrees through at once, for the
 // time set by hand. Here such a change sweeps over. A slow change passes as it is, so [sun] glide alone
 // sets how far the shadows lag the sun. This was an ease of 1.5 seconds first, and with Sun Smoothing at 2
