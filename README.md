@@ -68,7 +68,7 @@ Download the zip from [Releases](https://github.com/aloofbit/comfyatmosphere/rel
 
 ## Options
 
-Use `/atmos options` in game to enable/disable and tune features of the mod.
+Use `/atmos` in game to enable/disable and tune features of the mod.
 
 <img src="media/options.png"/>
 
@@ -91,8 +91,8 @@ Without the addon, set `[time] enabled = 0` in `comfyatmos.ini` for the server's
 
 | Command | |
 | --- | --- |
-| `/atmos` | The commands and the sections |
-| `/atmos options` | Open or close the settings window |
+| `/atmos` | Open or close the settings window (`/atmos options` does the same) |
+| `/atmos help` | The commands and the sections |
 | `/atmos debug` | Open or close the debug panel (below) |
 | `/atmos stats` | Show or hide the stats panel (below) |
 | `/atmos probe` | Log one frame to `Logs\comfyatmos.log`, as F12 does, and copy those lines to the clipboard |

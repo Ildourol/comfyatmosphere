@@ -3125,7 +3125,9 @@ end
 
 SlashCmdList["COMFYATMOS"] = function(msg)
 	local command = string.lower((string.gsub(msg or "", "^%s*(.-)%s*$", "%1")));
-	if command == "options" then
+	-- /atmos alone opens the settings window, as /atmos options does (2026-10-14, the owner); /atmos help lists the
+	-- commands.
+	if command == "" or command == "options" then
 		WindowToggle();
 		return;
 	end
@@ -3137,8 +3139,8 @@ SlashCmdList["COMFYATMOS"] = function(msg)
 		ComfyAtmosphere_DebugToggle();
 		return;
 	end
-	if command == "" then
-		Say("/atmos options: the settings window. /atmos debug: buttons for finding faults. /atmos stats: figures on screen.");
+	if command == "help" then
+		Say("/atmos: the settings window. /atmos debug: buttons for finding faults. /atmos stats: figures on screen.");
 	end
 	if not HasCVar("comfyTune") then
 		Say("this comfyatmos.dll has no /atmos. It needs the version from 2026-09-29 or later.");
@@ -3202,7 +3204,7 @@ frame:SetScript("OnEvent", function()
 	if not AddControls() then
 		DEFAULT_CHAT_FRAME:AddMessage(
 			"|cff88cc88comfyatmosphere|r: this client's options panel has no page for the settings. "
-			.. "Type /atmos options to open them.");
+			.. "Type /atmos to open them.");
 	end
 	syncFrame:Show();
 end);

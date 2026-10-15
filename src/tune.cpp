@@ -1,6 +1,6 @@
 // tune: the /atmos command, for tuning any comfyatmos.ini value from the game.
 //
-//   /atmos                          the commands
+//   /atmos help                     the commands (the addon opens the settings window for /atmos alone)
 //   /atmos <section>                every value in a section
 //   /atmos <section>.<key>          one value, and where it came from
 //   /atmos <section>.<key> <value>  set it, at once; the key alone will do when no other section has it
