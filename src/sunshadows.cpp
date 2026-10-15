@@ -622,6 +622,11 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
     float unit = 0.0, unitShade = 0.0;
     [branch] if (gU.w > 0.5 && wn > 0.0)
     {
+        // No normal offset for the units' shade (2026-10-15, the owner). The offset is against a surface shading
+        // itself, and this map holds no ground; on a body it was 0 already (offK). It moved the lookup by each
+        // triangle's facing, so the player's shadow down a bank turned from the sun was choppy.
+        float3 Qu = P + gSun.xyz * gT.y;
+        sn = Qu.x * gN0 + Qu.y * gN1 + Qu.z * gN2 + gN3;
         // The unit's depth from the four texels around the point, blended by where it falls between them,
         // leaving out texels with no unit (2026-10-01). One texel alone stepped away, below and along at
         // each texel of the half-size map: blocks on the character's shaded side.
@@ -663,8 +668,10 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
         // facing counts only where the surface cannot be the unit's own:
         // - it faces down, half a yard or more under the unit (the deck's underside);
         // - it faces away from the sun, 1.5 yards or more behind the unit along the sun, more than a
-        //   character is thick (the side of the bridge).
-        // The ground faces up and keeps it.
+        //   character is thick, and is steeper than about 60 degrees (the side of the bridge).
+        // The ground faces up and keeps it. A bank that falls away from a low sun keeps it too (2026-10-15, the
+        // owner): the player's shadow down the canal's bank outside Stormwind ended at the first triangle that
+        // faced away from the sun, 35 degrees up.
         float along = below / max(gSun.z, 0.1);
         [branch] if (unit > 0.0 && (below > 0.3 || along > 1.5))
         {
@@ -676,7 +683,8 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
                 Nu = dot(Nu, P) > 0.0 ? -Nu : Nu;
             }
             float off = max(smoothstep(0.5, 0.8, -Nu.z) * smoothstep(0.3, 0.8, below),
-                            (1.0 - smoothstep(-0.02, 0.03, dot(Nu, gSun.xyz))) * smoothstep(1.5, 2.5, along));
+                            (1.0 - smoothstep(-0.02, 0.03, dot(Nu, gSun.xyz))) * smoothstep(1.5, 2.5, along) *
+                            (1.0 - smoothstep(0.4, 0.55, Nu.z)));
             unit *= 1.0 - off;
         }
     }

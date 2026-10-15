@@ -3850,3 +3850,34 @@ A sprite on a player or a creature is now never a lamp (OnCharacter): within 1.5
 from 0.5 yards under its feet to 3 over them. A lamppost's glow hangs about 4 yards up its post. The units are read
 once a frame (ClientUnits), at the first sprite that passes the other tests. After: no yellow with Mana Shield on,
 and the lampposts at the bridge still glow at night, gone with Lamps off.
+
+## The player's shadow down a bank turned from the sun (2026-10-15, the owner)
+
+On the canal's bank outside Stormwind, with the sun 35 degrees up, the player's shadow down the bank ended in a
+step, and once it went on, it was choppy. Debug View 5 showed both. The cause was the facing, which the pass takes
+from the depth one pixel each side: on the ground that is each triangle's own, flat facing, and it jumps at each
+triangle's edge. Two things in the units' shade followed it:
+
+- The cut that keeps a unit's shade off the side of a bridge (a face turned from the sun, 1.5 yards or more
+  behind the unit along the sun). Each triangle of the bank steeper than the sun's height took it, so the shadow
+  stopped at a triangle's edge. The cut now needs a face steeper than about 60 degrees (`Nu.z` under 0.4 full,
+  none over 0.55). A bridge's side is vertical; a bank is not.
+- The normal offset (normalBias), which moves each point along its facing before the maps are read. It moved the
+  units' lookup by each triangle's facing: the choppy shadow. The units' shade now takes no normal offset. The
+  offset is against a surface shading itself, and the units' map holds no ground; on a body it was 0 already (offK).
+
+A tree's shade down the same bank is jagged for the same reason (the world's maps take the offset by each
+triangle's facing). That is not fixed. Tried and taken out the same day:
+
+- **The facing over about 2 yards each side** (as the water's bed slope, "Pyramids in the foam near the shore"),
+  used where it agreed with the pixel's own within 35 degrees. It reads the screen 2 yards each side, so it took
+  the facing from whatever stood in front of the surface there. Near the player: a copy of the player, in the
+  player's pose and 1 to 2 yards off, following the camera, inside the player's shadow on banks turned from the
+  sun (Debug View 26 showed it in red). Masking the bodies left their soft edge as an outline. In Stormwind's trade
+  district: a lit patch in a barrel's shape on the shaded wall behind it (Debug View 24: a hole in the solid
+  shade), moving with the camera. No depth or plane test tells a barrel a yard before a wall from a bend in the
+  ground, so any facing read from the screen over yards has this fault.
+- A change to the hill check (no shade taken off where a unit's shade falls). Debug View 25 had nothing at the
+  copy of the player; it changed nothing.
+
+A facing for the ground that holds still would come from the map files' heights, not the screen.
