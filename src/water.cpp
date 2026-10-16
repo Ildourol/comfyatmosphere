@@ -2673,50 +2673,38 @@ float4 main(float2 vpos : VPOS) : COLOR
             float target[3];
             const float scale = L / luma(g_easedSky);
             for (int i = 0; i < 3; ++i)
-                target[i] = L + (g_easedSky[i] * scale - L) * w.zoneSaturation;
-            if (w.skyFromGame && g_easedSkySet && luma(g_easedGlow) > 0.02f)
+        // How low the sun is (2026-10-16): 1 with the sun under 10 degrees, none over 25. 1 without the clock.
+        float lowSun = 1.0f;
+        {
+            float sd[3];
+            if (SunDirection(sd))
             {
-                const float gl = luma(g_easedGlow);
-                for (int i = 0; i < 3; ++i)
-                    target[i] *= 1.0f + (g_easedGlow[i] / gl - 1.0f) * 0.8f;
-                const float lt = luma(target);
-                for (int i = 0; i < 3; ++i)
-                    target[i] *= lt > 1e-4f ? L / lt : 1.0f;
+                const float e = asinf((std::min)((std::max)(sd[2], -1.0f), 1.0f)) * 57.29578f;
+                const float s = (std::min)((std::max)((e - 10.0f) / 15.0f, 0.0f), 1.0f);
+                lowSun = 1.0f - s * s * (3.0f - 2.0f * s);
             }
-            for (int i = 0; i < 3; ++i)
-                deep[i] = (std::min)((std::max)(target[i], 0.0f), 1.0f);
         }
-        // The sunset (2026-10-07, the owner: still too blue at sunset). The glow's tint above multiplies the colour,
-        // and blue water has next to no red to multiply. So the water is also mixed toward the glow's own colour, at
-        // its brightness and 1.3 times its saturation, by how warm the glow is: red over blue, 0 for a white or a
-        // cool glow at noon, 1 at a Stormwind dusk (C28A40), times [water] sunset. The reflection grows with it.
+        // Never greener than blue (2026-10-16, the owner: the water still too green). Stormwind's sky in the tables is a
+        // green-teal at many hours (336C68 at 05:15, 3F97A8 at 09:00), and water of that hue read green. Green above
+        // blue is brought down to blue, and the colour back to the same brightness: teal stays teal, never green.
+        // The glow no longer tints the body, nor is the body mixed toward it at sunset: an orange glow mixed into teal
+        // gave a muddy olive (the owner, 05:15 in Stormwind). The dusk's colour is the reflection's, which grows with
+        // the sunset below; the body keeps its hue and darkens with the hour.
+                target[i] = (std::max)(L + (g_easedSky[i] * scale - L) * w.zoneSaturation, 0.0f);
+            target[1] = (std::min)(target[1], target[2]);
+            const float lt = luma(target);
+            for (int i = 0; i < 3; ++i)
+                deep[i] = (std::min)(lt > 1e-4f ? target[i] * L / lt : target[i], 1.0f);
+        }
+        // The sunset (2026-10-07): by how warm the glow is, red over blue, 0 for a white or a cool glow at noon, 1 at a
+        // Stormwind dusk (C28A40), times [water] sunset and how low the sun is: the reflection grows with it (k[191]),
+        // and shows the glow.
         float sunset = 0.0f;
         if (w.skyFromGame && g_easedSkySet && g_easedGlow[0] > 0.02f)
         {
             const float* gc = g_easedGlow;
             const float warm = (std::min)((std::max)(1.5f * (gc[0] - gc[2]) / gc[0], 0.0f), 1.0f);
-            const float amount = warm * w.sunset;
-            sunset = (std::min)(amount, 1.0f);
-            // Past the glow's own colour (2026-10-07, the owner: no redder after about 150%): the rest of the slider
-            // turns it redder than the glow, with more saturation and the hue pushed from blue to red.
-            const float extra = (std::max)(amount - 1.0f, 0.0f);
-            const float gl = luma(gc);
-            if (sunset > 0.0f && gl > 0.02f)
-            {
-                const float L = luma(deep);
-                const float sat = 1.3f + extra;
-                float g[3];
-                for (int i = 0; i < 3; ++i)
-                    g[i] = (std::max)(L + (gc[i] * L / gl - L) * sat, 0.0f);
-                g[0] *= 1.0f + 0.6f * extra;
-                g[2] /= 1.0f + 0.6f * extra;
-                const float lg = luma(g);
-                for (int i = 0; i < 3; ++i)
-                {
-                    const float v = lg > 1e-4f ? g[i] * L / lg : g[i];
-                    deep[i] += ((std::min)(v, 1.0f) - deep[i]) * sunset;
-                }
-            }
+            sunset = (std::min)(warm * w.sunset * lowSun, 1.0f);
         }
         k[172] = deep[0] * day;
         k[173] = deep[1] * day;

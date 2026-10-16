@@ -4013,3 +4013,12 @@ the dark frame had no world end at all, so no effect was drawn in it. The world 
 a bird) and a switch to 2D counted as the world's end only after 16 draws (`[general] minWorldDraws`, against the
 switch the client makes at the top of the frame). It now counts also once the frame has had a depth-writing draw
 outside the portrait (`WorldBegun`: `g_skyPhase` over).
+
+**Never greener than blue; the dusk from the reflection (2026-10-16, the owner: still too green in Stormwind).** The
+light tables' sky over Stormwind is a green-teal at many hours (band 3: 336C68 at 05:15, 3F97A8 at 09:00), and its
+horizon a warm sand even in the morning (DABF80 at 09:00, the sun 42 degrees up). The glow's tint on the body and the
+sunset mix went by the glow's colour alone, so at 09:00 the sunset came to 0.78, and orange mixed into teal gave a
+muddy olive (deep water 0.077 0.090 0.040 at 05:15). Now the body's green is never above its blue (brought down, the
+brightness kept), and neither the glow's tint nor the sunset mix touches the body: the dusk's colour is the
+reflection's, which grows by the sunset (by how warm the glow is, times Sunset Water, times how low the sun is: all
+of it under 10 degrees, none over 25). Sunset Water is 0 to 100% now.

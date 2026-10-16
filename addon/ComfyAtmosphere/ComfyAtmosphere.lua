@@ -727,12 +727,12 @@ local ENTRIES = {
 	{
 		-- A percentage: comfyatmos.dll divides it by 100 for [water] sunset (2026-10-07).
 		name = "COMFYATMOSPHERE_WATER_SUNSET",
-		desc = "How red the water turns with the sun low, from the sky's glow over the horizon, and how much more of the sky it shows. 0 is none.",
+		desc = "How much more of the sky's red glow the water reflects with the sun low. 0 is none.",
 		type = "slider",
 		cvar = "comfyWaterSunset",
 		dependency = { "comfyWater", "1" },
 		minval = 0,
-		maxval = 300,
+		maxval = 100,
 		step = 10,
 		numberLabels = 1,
 	},
