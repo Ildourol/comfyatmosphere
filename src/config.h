@@ -602,6 +602,7 @@ struct WaterSettings
                                  // take their place
     DWORD foamColor = 0xEEF4F6;  // the foam's colour by day; the night darkens it
     float fadeEnd   = 150.0f;    // yards: the foam fades out over the last 40% of this distance
+    float trace     = 0.0f;      // seconds: set above 0, each frame's water constants are logged that long (a debug key)
     int   debug     = 0;         // 1 = the water as drawn, marked over what lies under it (Debug View 16);
                                  // 2 = the foam alone, white on black; 3 = the wet sand alone; 10 = the depth
                                  // under the water on a doubling scale (Debug View 29)

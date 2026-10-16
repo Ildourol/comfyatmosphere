@@ -308,6 +308,7 @@ void LoadSettings(const wchar_t* ini)
     s.water.foamSpeed   = Clamp(GetF(kWater, L"foamSpeed", s.water.foamSpeed, ini), 0.0f, 10.0f);
     s.water.foamColor   = GetX(kWater, L"foamColor", s.water.foamColor, ini) & 0xFFFFFF;
     s.water.fadeEnd     = Clamp(GetF(kWater, L"fadeEnd",   s.water.fadeEnd,   ini), 10.0f, 2000.0f);
+    s.water.trace       = Clamp(GetF(kWater, L"trace",     s.water.trace,     ini), 0.0f, 60.0f);
     s.water.debug       = GetI(kWater, L"debug", s.water.debug, ini);
     s.water.debugSkip   = GetI(kWater, L"debugSkip", s.water.debugSkip, ini);
     s.depth.enabled     = GetB(kDepth, L"enabled", s.depth.enabled, ini);

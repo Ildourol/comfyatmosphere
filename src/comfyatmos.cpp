@@ -3434,6 +3434,19 @@ void BenchArm()
     g_benchArmed = true;
 }
 
+// The fog the client has set now (2026-10-16): at the water's first draw, the fog it set for its own water, which
+// our water replaces. WorldFog is the start in effect at the world's last fog end, and the client sets other fog for
+// other draws (start 0 or 95 yards in Stormwind, the end the same): which came last changed with a small turn of the
+// camera, and the water's fog with it, lighter or darker (the owner).
+bool CurrentFog(float& start, float& end)
+{
+    if (!g_fog.haveStart || !g_fog.haveEnd || g_worldEnded)
+        return false;
+    start = D2F(g_fog.start);
+    end = D2F(g_fog.end);
+    return end > 2.0f;
+}
+
 bool WorldFog(float& start, float& end)
 {
     if (!g_haveWorldFog)

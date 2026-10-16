@@ -4022,3 +4022,14 @@ muddy olive (deep water 0.077 0.090 0.040 at 05:15). Now the body's green is nev
 brightness kept), and neither the glow's tint nor the sunset mix touches the body: the dusk's colour is the
 reflection's, which grows by the sunset (by how warm the glow is, times Sunset Water, times how low the sun is: all
 of it under 10 degrees, none over 25). Sunset Water is 0 to 100% now.
+
+**The water's fog, from its own draw (2026-10-16, the owner: the water lighter or darker as the camera turned a
+little).** Everything off but the water, it still happened, and not with the mod off. Debug Views 29 (the depth),
+19 (the bed) and the new 37 (the mix: the reflection's share, what gets through, the path) all held still. A trace of
+953 frames (`[water] trace`, seconds, set with /atmos: each frame's camera, the copies, and the frame's constants that
+changed) found one value moving: c126.x and .y, the game's fog start for the water, 0 or 95.5 yards with the end at
+about 417, flipping with a turn of a few hundredths in the view's direction. It was taken from the world's last fog
+end (WorldFog), and the client sets other fog for other draws; which came last changed with the camera. At a start of
+0 the canal 30 to 60 yards off was mixed 7 to 15% toward the fog's teal. Now the water takes the fog the client has
+set at its first water draw (`CurrentFog`), the fog it set for its own water, which ours replaces; WorldFog if that
+is not known.

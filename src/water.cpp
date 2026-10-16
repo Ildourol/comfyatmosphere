@@ -1345,7 +1345,14 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
         // paint); then a reflection toward the eye, which only brightened the glint on the line to you.
     }
     // Water Brightness (2026-10-03): the bed through the water and the sky in it, not the glint or the foam.
+)HLSL"
+    R"HLSL(
     float3 water = lerp(body, sky, F) * gBright.x;
+    // debug 15 (Debug View 37, 2026-10-16, the owner: the water lighter or darker as the camera turns a little): the
+    // mix. Red the reflection's share (F, x5), green what gets through to the bed (T, its mean), blue the path under the
+    // surface (full at 10 yards).
+    if (gFoam.w > 14.5 && gFoam.w < 15.5)
+        return float4(saturate(F * 5.0), dot(T, float3(0.333, 0.333, 0.334)), saturate(path * 0.1), 1.0);
     // The ripples lit as the swell is not: brighter on the side of a ring facing the sun, darker behind it, so
     // they show from any side and not only in the glint (2026-10-02).
     float2 sunXY = gSun.xy / max(length(gSun.xy), 0.2);
@@ -1718,6 +1725,7 @@ float4 main(float2 vpos : VPOS) : COLOR
     UINT               g_sceneW = 0, g_sceneH = 0;
     D3DFORMAT          g_sceneFmt = D3DFMT_UNKNOWN;
     bool               g_sceneOk = false;        // copied this frame
+    double             g_traceUntil = 0.0;       // [water] trace runs until then
     bool               g_sceneFailLogged = false;
     IDirect3DTexture9* g_under     = nullptr;   // the depth under the water, this frame
     IDirect3DSurface9* g_underSurf = nullptr;
@@ -2516,7 +2524,7 @@ float4 main(float2 vpos : VPOS) : COLOR
         }
         k[23] = 1.0f / (0.4f * w.fadeEnd);
         float fs = 0.0f, fe = 0.0f;
-        if (WorldFog(fs, fe) && fe > fs + 1.0f)
+        if ((CurrentFog(fs, fe) || WorldFog(fs, fe)) && fe > fs + 1.0f)
         {
             k[24] = fs;
             k[25] = 1.0f / (fe - fs);
@@ -2665,14 +2673,6 @@ float4 main(float2 vpos : VPOS) : COLOR
         // from its colour ramp: olive green in Elwynn's lakes, and strengthened it turned the water green (the owner).
         ZoneColours();
         const auto luma = [](const float* c) { return 0.299f * c[0] + 0.587f * c[1] + 0.114f * c[2]; };
-        if (g_easedSkySet && luma(g_easedSky) > 0.005f)
-        {
-            static const float kRef[3] = { (kPalette[0][0] + kPalette[1][0]) * 0.5f, (kPalette[0][1] + kPalette[1][1]) * 0.5f,
-                                           (kPalette[0][2] + kPalette[1][2]) * 0.5f };
-            const float L = luma(kRef);
-            float target[3];
-            const float scale = L / luma(g_easedSky);
-            for (int i = 0; i < 3; ++i)
         // How low the sun is (2026-10-16): 1 with the sun under 10 degrees, none over 25. 1 without the clock.
         float lowSun = 1.0f;
         {
@@ -2690,6 +2690,14 @@ float4 main(float2 vpos : VPOS) : COLOR
         // The glow no longer tints the body, nor is the body mixed toward it at sunset: an orange glow mixed into teal
         // gave a muddy olive (the owner, 05:15 in Stormwind). The dusk's colour is the reflection's, which grows with
         // the sunset below; the body keeps its hue and darkens with the hour.
+        if (g_easedSkySet && luma(g_easedSky) > 0.005f)
+        {
+            static const float kRef[3] = { (kPalette[0][0] + kPalette[1][0]) * 0.5f, (kPalette[0][1] + kPalette[1][1]) * 0.5f,
+                                           (kPalette[0][2] + kPalette[1][2]) * 0.5f };
+            const float L = luma(kRef);
+            float target[3];
+            const float scale = L / luma(g_easedSky);
+            for (int i = 0; i < 3; ++i)
                 target[i] = (std::max)(L + (g_easedSky[i] * scale - L) * w.zoneSaturation, 0.0f);
             target[1] = (std::min)(target[1], target[2]);
             const float lt = luma(target);
@@ -3558,7 +3566,11 @@ void WaterBeforeDraw(IDirect3DDevice9* dev, const WaterChunk& c)
     UnbindFrame(dev);
     g_copyOk = EnsureShaders(dev) && CopyUnder(dev);
     if (!g_copyOk)
+    {
+        if (Now() < g_traceUntil)
+            Log("water trace: the depth copy failed this frame, our water not drawn");
         return;
+    }
     EnsureFoamTexture(dev);
     MakeFoamBody(dev);
     MakeNoise(dev);
@@ -3596,6 +3608,50 @@ void WaterBeforeDraw(IDirect3DDevice9* dev, const WaterChunk& c)
     g_psc[190] = before ? 1.0f : 0.0f;
     DrawWetSand(dev, c);
     g_sceneOk = CopyScene(dev);
+    // [water] trace (2026-10-16, the owner: the water lighter or darker as the camera turns a little): set to a number
+    // of seconds with /atmos, each frame's camera, whether the copies worked, and the frame's constants that changed
+    // are logged for that long. Set it again (another number, or 0 and back) for another.
+    {
+        static float  armed = 0.0f;
+        double&       until = g_traceUntil;
+        static float  prev[90 * 4];
+        static bool   havePrev = false;
+        static unsigned frames = 0;
+        const float tr = g_cfg.water.trace;
+        if (tr != armed)
+        {
+            armed = tr;
+            until = tr > 0.0f ? Now() + tr : 0.0;
+            havePrev = false;
+            frames = 0;
+            if (tr > 0.0f)
+                Log("water trace: %.0f seconds from now", tr);
+        }
+        if (Now() < until)
+        {
+            char line[1200];
+            int n = snprintf(line, sizeof(line), "water trace %u, %.3f s left: cam (%.2f %.2f %.2f) view z (%.3f %.3f %.3f), copies %d %d;",
+                             frames++, until - Now(), g_psc[28], g_psc[29], g_psc[30], g_psc[4], g_psc[5], g_psc[6], g_copyOk ? 1 : 0,
+                             g_sceneOk ? 1 : 0);
+            int listed = 0;
+            for (int i = 0; havePrev && i < 90 * 4 && listed < 24 && n > 0 && n < static_cast<int>(sizeof(line)) - 40; ++i)
+            {
+                // Left out: the time, the camera, the view's direction and the inverse of view x projection, which
+                // change with every frame or every turn.
+                if (i == 10 || (i >= 28 && i <= 31) || (i >= 4 && i <= 7) || (i >= 340 && i < 356))
+                    continue;
+                if (fabsf(g_psc[i] - prev[i]) > 1e-4f * (1.0f + fabsf(prev[i])))
+                {
+                    n += snprintf(line + n, sizeof(line) - n, " c%d.%c %.4f>%.4f", 120 + i / 4, "xyzw"[i % 4], prev[i],
+                                  g_psc[i]);
+                    ++listed;
+                }
+            }
+            Log("%s", line);
+            memcpy(prev, g_psc, sizeof(prev));
+            havePrev = true;
+        }
+    }
     g_psc[190] = g_sceneOk ? 1.0f : 0.0f;
 }
 

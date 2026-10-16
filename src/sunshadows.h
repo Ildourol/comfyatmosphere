@@ -12,3 +12,4 @@ float SunShadowsShare();                       // 0..1: how much the sun shadows
 // In comfyatmos.cpp: the game's fog as the world last set it. The colour is the last one that was not black.
 bool WorldFogColor(DWORD& color);
 bool WorldFog(float& start, float& end);   // the world's fog start and end, in yards
+bool CurrentFog(float& start, float& end); // the fog the client has set now, in yards (the water's, at its draw)
