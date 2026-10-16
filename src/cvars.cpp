@@ -328,6 +328,8 @@ namespace
         { "water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)", 0, 0, 0, 0, 0, 11 },
         { "water: the game's rain splashes left out; its other particles red under the water, green above", 0, 0, 0, 0, 0, 12 },
         { "sun: dots where the effects take it: yellow the light, red the shadows' sun, blue the other moon, white the sky's own sprites", 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+        { "water: what draws each pixel (grey our water, yellow the shore, red the bed bare under water, cyan foam, green glint, white not a number; dots in their own colour: none of ours)", 0, 0, 0, 0, 0, 13 },
+        { "water: the waves (red the slope, full at 0.2; green the swell's height, half where flat, a yard up full; blue the whitecaps)", 0, 0, 0, 0, 0, 14 },
     };
     constexpr int kDebugViewCount = sizeof(kDebugViews) / sizeof(kDebugViews[0]);
     int g_debugViewLogged = -1;

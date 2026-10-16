@@ -3707,6 +3707,31 @@ The water tests darkshore-water-split and westfall-far-waterline pass, and their
 Open: the player's tests (Glint, the small waves, the swell, Foam, Swash, Wet Sand off one at a time) and a build
 with this fix on their card.
 
+2026-10-16: a second AMD player has it on v0.15.0-alpha, so the bit-read fix did not cure it. AMD Radeon RX 7600 XT,
+AMD's Vulkan driver (`amdvlk32.dll`), DXVK 2.6.1, Windows 10, 1920x1080, MSAA 8. Seen at the Northshire river
+(chunk at -8766.7 -333.3): a band of bed-coloured dots one to three cells wide, with hard straight edges that follow
+the perspective of the water's plane, in two blocks with clean water between them. The small waves off did not
+cure it either (the owner's tests). Not reproduced on the NVIDIA card at that river or at Auberdine with MSAA 8, so
+MSAA is ruled out.
+
+Debug View 35 (water debug 13) was made to find which code path draws the dots, on the player's card: grey the
+water part, yellow the shore (the sand part, and the early return where our water is not drawn), red that early
+return over a bed more than 0.3 yards down, cyan foam, green glint, white a value that is not a number, the cells'
+edges dark and the chunks' black. Dots that keep their own colour are drawn by nothing of ours, or by a pass after
+the water. One lead that fits that case: the water part is drawn with a depth bias of -0.00002 against the depth
+the game's own water wrote ([depth] waterDepth). If AMD applies the bias differently (not checked: AMD's
+Vulkan drivers are thought to have no D24 depth format, so DXVK would use D32F there), the water part loses the depth test in a fixed z-fight pattern and the bed in the screen copy shows.
+`[water] debugSkip` (1 the sand part, 2 the water part, 4 the bodies, 8 their depth, 32 the classify draw) can
+take each draw out on the player's card. The view sets no fog debug: any fog debug value turns `EarlyPasses` off
+and moves the shadows and the fog to their old place. The fog's crack fill alone is `[fog] debug 3` (magenta).
+Debug View 36 (water debug 14) shows the waves: red the normal's slope, green the swell's height, blue the
+whitecaps.
+
+The water shader is at its 32 temporary registers. A debug branch that repeats a test from the keep step in the
+same form (`gWave.y > 0.5 && gWave.y < 1.5`, `floor(-cell * 0.24)`) made fxc keep the earlier result through the
+ripples' loop, and the compile failed (X4505). The same test in another form (`abs(gWave.y - 1.0) < 0.5`,
+`cell / -4.16667`) compiles.
+
 ## The sun from the clock's table (2026-10-14)
 
 A WOW-HC player (plain 1.12.1 WoW.exe, v0.12.0-alpha) saw the shadows change as they turned the camera. Their

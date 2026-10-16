@@ -1225,7 +1225,13 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     const bool hideGame = gWave.z > 0.5 && gWake.z > 0.5;
     float3 under0 = hideGame ? tex2Dlod(sScene, float4(uv, 0, 0)).rgb : 0.0;
     [branch] if (wv <= 0.0)
+    {
+        // debug 13 (Debug View 35): the shore without our water over it, yellow as the sand part's; red where the
+        // bed lies over 0.3 yards under the surface, so the bed shows bare where water should be.
+        if (gFoam.w > 12.5 && gFoam.w < 13.5)
+            return float4(depth > 0.3 ? float3(1.0, 0.0, 0.0) : float3(0.9, 0.8, 0.1), 1.0);
         return hideGame ? float4(lerp(under0, land, a), 1.0) : float4(land, a);
+    }
 )HLSL"
     R"HLSL(
     float3 dir = rel / max(dist, 1e-3);
@@ -1352,6 +1358,37 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     float3 fcol  = c * lit + glint * 0.25;
     fcol = lerp(water + 0.12 * c, fcol, saturate(fa * 1.6));
     water = lerp(water, fcol, saturate(fa * 1.25));
+    // debug 13 (Debug View 35, 2026-10-16): which part of the water draws each pixel and what is on it, in flat
+    // colours, to find the bands of dots on AMD cards (issue #11). Grey the water part, yellow the sand part (and
+    // the early return above), cyan foam, green a strong glint, white a value that is not a number. The cells'
+    // edges dark, the chunk's black. A dry cell is tinted blue in the sand part (the water part reads every cell
+    // wet). Dots left in their own colour are drawn by nothing of ours, or by a pass after the water. The view sets
+    // no fog debug: any fog debug value moves the shadows and the fog to their old place (EarlyPasses), which could
+    // hide the fault. The fog's cracks are [fog] debug 3, alone.
+    if (gFoam.w > 12.5 && gFoam.w < 13.5)
+    {
+        // The part and the cell are tested in another form than at the keep test (abs(gWave.y - 1.0), cell /
+        // -4.16667): in the same form, fxc kept those results from the keep test through the ripples' loop, and the
+        // shader ran out of its 32 temporary registers.
+        float3 col = abs(gWave.y - 1.0) < 0.5 ? float3(0.9, 0.8, 0.1) : float3(0.4, 0.4, 0.4);
+        col = fa > 0.05 ? float3(0.1, 0.8, 0.9) : col;
+        col = dot(glint, float3(0.299, 0.587, 0.114)) > 0.3 ? float3(0.1, 0.9, 0.1) : col;
+        const float2 g    = cell / -4.16667;
+        const float2 rc   = clamp(floor(g), 0.0, 7.0);
+        const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
+        col = BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y) > 0.5 ? col : lerp(col, float3(0.2, 0.3, 1.0), 0.5);
+        const float2 e = min(frac(g), 1.0 - frac(g));
+        col *= min(e.x, e.y) < 0.03 ? (min(min(g.x, g.y), 8.0 - max(g.x, g.y)) < 0.05 ? 0.0 : 0.6) : 1.0;
+        const bool bad = !(abs(depth) < 1e20) || !(dot(abs(N), 1.0) < 1e20) || !(dot(abs(ruv), 1.0) < 1e20) ||
+                         !(dot(abs(water), 1.0) < 1e20);
+        return float4(bad ? float3(1.0, 1.0, 1.0) : col, 1.0);
+    }
+    // debug 14 (Debug View 36, 2026-10-16): the waves. Red the slope of the surface's normal (the small waves, with the
+    // swell's, the ripples' and the wake's slope in it), full at 0.2; green the swell's height, half where the water
+    // is flat, full a yard up, none a yard down; blue the whitecaps.
+    if (gFoam.w > 13.5 && gFoam.w < 14.5)
+        return float4(saturate(length(N.xy) * 5.0), saturate(0.5 + 0.5 * (rel.z - z0)),
+                      saturate(capsD * gFD.w * 2.0), 1.0);
     // debug 4 (Debug View 19): what lies under the water, bent and tinted, by where it comes from (2026-10-06):
     // the near world as it is, the far terrain's slice of the depth range red, nothing behind (cleared depth, the
     // sky) blue.

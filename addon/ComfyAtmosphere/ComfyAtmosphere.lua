@@ -1946,11 +1946,13 @@ local ENTRIES = {
 			.. "31 clouds: the shapes (red), the layer (blue)\n"
 			.. "32 water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)\n"
 			.. "33 water: the game's rain splashes left out; its other particles red under the water, green above\n"
-			.. "34 sun: dots where the effects take it: yellow the light, red the shadows' sun, blue the other moon, white the sky's own sprites",
+			.. "34 sun: dots where the effects take it: yellow the light, red the shadows' sun, blue the other moon, white the sky's own sprites\n"
+			.. "35 water: what draws each pixel (grey our water, yellow the shore, red the bed bare under water, cyan foam, green glint, white not a number; dots in their own colour: none of ours)\n"
+			.. "36 water: the waves (red the slope, full at 0.2; green the swell's height, half where flat, a yard up full; blue the whitecaps)",
 		type = "slider",
 		cvar = "comfyDebugView",
 		minval = 0,
-		maxval = 34,
+		maxval = 36,
 		step = 1,
 		numberLabels = 1,
 	},
@@ -2799,6 +2801,9 @@ local DEBUG_VIEWS = {
 	"clouds: the shapes (red), the layer (blue)",
 	"water: each foam by its source (red the shore, green round objects, blue the wake, yellow open water, white the lip and the ripples)",
 	"water: the game's rain splashes left out; its other particles red under the water, green above",
+	"sun: dots where the effects take it: yellow the light, red the shadows' sun, blue the other moon, white the sky's own sprites",
+	"water: what draws each pixel (grey our water, yellow the shore, red the bed bare under water, cyan foam, green glint, white not a number; dots in their own colour: none of ours)",
+	"water: the waves (red the slope, full at 0.2; green the swell's height, half where flat, a yard up full; blue the whitecaps)",
 };
 
 local PANEL_BACKDROP = {
