@@ -1761,6 +1761,8 @@ namespace
     bool g_filesUnitStealthed[512];       // stealthed (by its flag), the player too
     unsigned g_filesUnitBytes1[512];      // UNIT_FIELD_BYTES_1 as read, for the probe
     bool g_filesUnitSelf[512];
+    bool g_filesUnitDead[512];            // a corpse, or the player's ghost (ClientUnit::dead)
+    bool g_selfDead = false;              // the player is dead or a ghost (DeadSelfPart)
     int g_filesUnitCount = 0;
 
     void TakeUnits()
@@ -1770,6 +1772,7 @@ namespace
         static ClientUnit list[512];
         const int n = ClientUnitList(list, 512);
         g_filesUnitCount = n;
+        g_selfDead = false;
         for (int i = 0; i < n; ++i)
         {
             memcpy(g_filesUnits[i], list[i].pos, sizeof(list[i].pos));
@@ -1783,6 +1786,8 @@ namespace
             g_filesUnitStealthed[i] = list[i].stealthed;
             g_filesUnitBytes1[i] = list[i].bytes1;
             g_filesUnitSelf[i] = list[i].self;
+            g_filesUnitDead[i] = list[i].dead;
+            g_selfDead = g_selfDead || (list[i].self && list[i].dead);
             // Each unit's model is asked for as the unit is first seen (2026-10-05). The read is a job on the
             // map thread, and it was first asked for when a unit was already stealthed (ShadowIsStealthedUnitDraw,
             // UnitStealthedNear): a Pinto that stealthed in view kept its shadow for half a second, until the
@@ -1919,6 +1924,40 @@ namespace
             }
         }
         return stealthed;
+    }
+
+    // A part of the player while dead (2026-10-16, the owner: the ghost cast a shadow on the ground). The player's
+    // corpse and ghost cast no shadow: the units' maps leave out the models the player wears and the models drawn at
+    // the player that no unit wears (the weapons, the helmet), as AttachedToStealthed takes a stealthed unit's.
+    bool DeadSelfPart(const Rec& r, const float pos[3])
+    {
+        if (!g_selfDead)
+            return false;
+        const UINT verts = RecVertices(r);
+        if (!verts)
+            return false;
+        float best = kUnitModelReach * kUnitModelReach;
+        int wearer = -1;
+        bool attached = false;
+        for (int i = 0; i < g_filesUnitCount; ++i)
+        {
+            const float dx = pos[0] - g_filesUnits[i][0], dy = pos[1] - g_filesUnits[i][1],
+                        dz = pos[2] - g_filesUnits[i][2];
+            const float d2 = dx * dx + dy * dy;
+            if (d2 >= kUnitModelReach * kUnitModelReach || dz < -kUnitModelReach || dz > kUnitModelReach)
+                continue;
+            if (WearsModel(i, verts))
+            {
+                if (d2 < best)
+                {
+                    best = d2;
+                    wearer = i;
+                }
+            }
+            else if (g_filesUnitSelf[i] && d2 <= kAttachReach * kAttachReach && dz > -1.0f && dz < 4.0f)
+                attached = true;
+        }
+        return wearer >= 0 ? g_filesUnitSelf[wearer] : attached;
     }
 
     bool UnitAt(const float pos[3])
@@ -4247,6 +4286,8 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
             return false;
         if (unitPass && !(r.vs && e.unit))
             return false;
+        if (e.unit && r.vs && DeadSelfPart(r, e.pos))
+            return false;
         // Only the models are culled. Terrain and buildings are fixed-function, there are a couple of
         // hundred of them rather than thousands, and one chunk covers so much ground that the point we
         // hold for it can sit well outside the map while its geometry crosses the middle: culling those
@@ -4569,10 +4610,11 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
             const float dx = g_filesUnits[i][0] - pl[0], dy = g_filesUnits[i][1] - pl[1];
             if (dx * dx + dy * dy > 40.0f * 40.0f)
                 continue;
-            Log("shadow:   unit at (%.1f %.1f %.1f), %.1f yd: display %u, mount %u, UNIT_FIELD_BYTES_1 0x%08X%s%s",
+            Log("shadow:   unit at (%.1f %.1f %.1f), %.1f yd: display %u, mount %u, UNIT_FIELD_BYTES_1 0x%08X%s%s%s",
                 g_filesUnits[i][0], g_filesUnits[i][1], g_filesUnits[i][2], sqrtf(dx * dx + dy * dy),
                 g_filesUnitModels[i][0], g_filesUnitModels[i][1], g_filesUnitBytes1[i],
-                g_filesUnitStealthed[i] ? ", stealthed" : "", g_filesUnitSelf[i] ? ", you" : "");
+                g_filesUnitStealthed[i] ? ", stealthed" : "", g_filesUnitDead[i] ? ", dead" : "",
+                g_filesUnitSelf[i] ? ", you" : "");
         }
         // The object table (2026-10-04): each record within 300 yards and its parts.
         {

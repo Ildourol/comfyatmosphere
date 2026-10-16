@@ -4087,3 +4087,14 @@ end (WorldFog), and the client sets other fog for other draws; which came last c
 0 the canal 30 to 60 yards off was mixed 7 to 15% toward the fog's teal. Now the water takes the fog the client has
 set at its first water draw (`CurrentFog`), the fog it set for its own water, which ours replaces; WorldFog if that
 is not known.
+
+## No shadow from your corpse or your ghost (2026-10-16, the owner)
+
+While dead, the player's character cast its shadow on the ground. Now the units' maps leave out the player's
+models while the player is dead (`DeadSelfPart`, shadow.cpp): the models the player wears (the nearest unit
+wearing a model with that many vertices is the player), and the models drawn within 1.5 yards of the player that
+no unit wears (weapons, helmet), as `AttachedToStealthed` takes them for a stealthed unit.
+
+Dead, from the unit's fields (`ClientUnitList`): `UNIT_FIELD_HEALTH` (0x16) is 0 for a corpse, and a ghost has
+health but `PLAYER_FLAGS` (0xBE) has `PLAYER_FLAGS_GHOST` (0x10). The probe's unit lines say `, dead`. Other
+corpses still cast.

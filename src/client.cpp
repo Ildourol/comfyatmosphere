@@ -214,6 +214,15 @@ int ClientUnitList(ClientUnit* out, int max)
                 u.bytes1    = f[7];
                 u.stealthed = ((f[7] >> 24) & 0x02) != 0;
                 u.self      = SafeCopy(obj + 0x30, guid, 8) && guid[0] == me[0] && guid[1] == me[1];
+                // Dead: no health, or the local player's ghost flag (a ghost has health).
+                DWORD health = 1, playerFlags = 0;
+                if (fields)
+                {
+                    SafeCopy(fields + 0x16 * 4, &health, 4);
+                    if (u.self)
+                        SafeCopy(fields + 0xBE * 4, &playerFlags, 4);
+                }
+                u.dead      = health == 0 || (playerFlags & 0x10) != 0;
                 ++n;
             }
             DWORD next = 0;

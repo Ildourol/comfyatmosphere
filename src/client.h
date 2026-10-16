@@ -9,8 +9,10 @@ bool ClientHour(float& hour);         // the game's time of day, 0..24
 void ClientFrameEnd();                // at Present: the player's object is looked up again next frame
 // A unit or player with its model (2026-10-04): UNIT_FIELD_DISPLAYID (0x83) and UNIT_FIELD_MOUNTDISPLAYID (0x85),
 // both CreatureDisplayInfo.dbc rows; mount 0 on foot. stealthed: UNIT_FIELD_BYTES_1 (0x8A) byte 3 has
-// UNIT_BYTE1_FLAGS_CREEP (0x02), which the server sets with a stealth aura. self: the local player.
-struct ClientUnit { float pos[3]; unsigned display, mount, bytes1; bool stealthed, self; };
+// UNIT_BYTE1_FLAGS_CREEP (0x02), which the server sets with a stealth aura. self: the local player. dead
+// (2026-10-16): UNIT_FIELD_HEALTH (0x16) is 0, a corpse; or, for the local player, PLAYER_FLAGS (0xBE) has
+// PLAYER_FLAGS_GHOST (0x10), a ghost after the release.
+struct ClientUnit { float pos[3]; unsigned display, mount, bytes1; bool stealthed, self, dead; };
 int  ClientUnitList(ClientUnit* out, int max);   // every unit and player with its display ids; the count
 int  ClientUnits(float (*out)[3], int max);   // every unit and player's world position (feet); the count
 bool ClientMapName(char* out, int size);   // the current map's folder name ("Azeroth", "Kalimdor")
