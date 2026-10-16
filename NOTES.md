@@ -3727,6 +3727,21 @@ and moves the shadows and the fog to their old place. The fog's crack fill alone
 Debug View 36 (water debug 14) shows the waves: red the normal's slope, green the swell's height, blue the
 whitecaps.
 
+The player's View 35 at the Northshire river (2026-10-16): the dots fill single cells exactly, bounded by the cells'
+edges. In them about 15% of the pixels are the bare bed (drawn by nothing of ours) and about 13% are the water
+part's grey with the dry-cell tint, though the water part is drawn with every cell wet (65535). No red, no white.
+View 36: the waves run on through the cells unbroken. So the cell read gave wrong answers pixel by pixel. The
+lead: fxc writes the cell row floor(cell * -0.24) as `mul`, `frc`, `add` (g - frc(g)), and a compiler that fuses
+the `mul` into the `add` (AMD's is known to, also where the product has other uses) leaves the row up to half an
+ulp under the whole number in about half the pixels. Under an even row (2, 4, 6) Mod2 gave about 2, the bit index
+jumped by 16 past the 16 bits, the read gave 0 (dry), and the keep test dropped the pixel. Not explained yet: by
+this, every cell in rows 2, 4 and 6 could show it, and the shot has two dotted cells.
+
+The fix sent to the player: Mod2(x) = x - 2 floor(x / 2 + 0.25), and the component picks at rows 1.5, 3.5 and 5.5,
+so a whole number a hair off reads right. The vertex shader's row is floor(p * -0.24 + 0.5), the floor of an add,
+so a fused multiply cannot move it. Still open, if the fix holds: the foam's Lace and the rain rings hash
+floor(q) of a product (Hash1, Hash2), and there a row a hair off changes the hash.
+
 The water shader is at its 32 temporary registers. A debug branch that repeats a test from the keep step in the
 same form (`gWave.y > 0.5 && gWave.y < 1.5`, `floor(-cell * 0.24)`) made fxc keep the earlier result through the
 ripples' loop, and the compile failed (X4505). The same test in another form (`abs(gWave.y - 1.0) < 0.5`,

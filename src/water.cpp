@@ -84,8 +84,13 @@ namespace
     // BitAt16 adds half a step: for 16 bits, any exp2 within 2^-17 of the truth then gives the exact bit, in 2 more
     // instructions. BitAt, for the 24-bit sea mask, builds the power of two from exact halvings (some 40
     // instructions, in the vertex shader alone). Shared by the water's shaders that read the masks.
+    // Mod2 and the component picks (rc.x < 1.5, 3.5, 5.5) take a whole number that may be a hair off (2026-10-16, a
+    // second AMD player, Debug View 35): the pixel shader's cell row is floor(cell * -0.24), which fxc writes as
+    // g - frc(g), and a compiler that fuses the multiply into the subtraction (an FMA) leaves it up to half an ulp
+    // under the whole number. Under an even row Mod2 gave 2, the bit index jumped by 16 past the 16 bits, and the
+    // water part read a wet cell as dry and dropped the pixel: the bed showed as dots in whole cells.
 #define COMFY_BIT_AT_HLSL \
-    "float Mod2(float x) { return x - 2.0 * floor(x * 0.5); }\n" \
+    "float Mod2(float x) { return x - 2.0 * floor(x * 0.5 + 0.25); }\n" \
     "float BitAt16(float bits, float n) { float s = exp2(-n); return Mod2(floor(bits * s + 0.5 * s)); }\n" \
     "float BitAt(float bits, float n)\n" \
     "{\n" \
@@ -182,7 +187,7 @@ O main(float3 p : POSITION, float2 uv : TEXCOORD0)
             const float2 rc = g - float2(i / 2, i % 2);
             if (all(rc >= 0.0) && all(rc <= 7.0))
             {
-                const float bits = rc.x < 2.0 ? gCellsV.x : rc.x < 4.0 ? gCellsV.y : rc.x < 6.0 ? gCellsV.z : gCellsV.w;
+                const float bits = rc.x < 1.5 ? gCellsV.x : rc.x < 3.5 ? gCellsV.y : rc.x < 5.5 ? gCellsV.z : gCellsV.w;
                 touchesWet = touchesWet || BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y) > 0.5;
             }
         }
@@ -511,7 +516,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     if (gFoam.w > 6.5 && gFoam.w < 7.5)
     {
         const float2 rc  = clamp(floor(-cell * 0.24), 0.0, 7.0);
-        const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
+        const float  bits = rc.x < 1.5 ? gCells.x : rc.x < 3.5 ? gCells.y : rc.x < 5.5 ? gCells.z : gCells.w;
         const float  wetC = BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y);
         const float  h    = -depth;
         const float  band = frac(abs(h) * 10.0);
@@ -555,7 +560,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // level is ours to fill either.
     {
         const float2 rc  = clamp(floor(-cell * 0.24), 0.0, 7.0);     // row, column (4.1667 yards a cell)
-        const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
+        const float  bits = rc.x < 1.5 ? gCells.x : rc.x < 3.5 ? gCells.y : rc.x < 5.5 ? gCells.z : gCells.w;
         const float  wet = BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y);
         keep = min(keep, wet > 0.5 ? 1.0 : -depth);
     }
@@ -1375,7 +1380,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
         col = dot(glint, float3(0.299, 0.587, 0.114)) > 0.3 ? float3(0.1, 0.9, 0.1) : col;
         const float2 g    = cell / -4.16667;
         const float2 rc   = clamp(floor(g), 0.0, 7.0);
-        const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
+        const float  bits = rc.x < 1.5 ? gCells.x : rc.x < 3.5 ? gCells.y : rc.x < 5.5 ? gCells.z : gCells.w;
         col = BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y) > 0.5 ? col : lerp(col, float3(0.2, 0.3, 1.0), 0.5);
         const float2 e = min(frac(g), 1.0 - frac(g));
         col *= min(e.x, e.y) < 0.03 ? (min(min(g.x, g.y), 8.0 - max(g.x, g.y)) < 0.05 ? 0.0 : 0.6) : 1.0;
@@ -1451,7 +1456,7 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
             float2 cell : TEXCOORD4) : COLOR
 {
     const float2 rc   = clamp(floor(-cell * 0.24), 0.0, 7.0);
-    const float  bits = rc.x < 2.0 ? gCells.x : rc.x < 4.0 ? gCells.y : rc.x < 6.0 ? gCells.z : gCells.w;
+    const float  bits = rc.x < 1.5 ? gCells.x : rc.x < 3.5 ? gCells.y : rc.x < 5.5 ? gCells.z : gCells.w;
     const float  wet  = BitAt16(bits, Mod2(rc.x) * 8.0 + rc.y);
     // Under the flat water's plane, as the water's shader (FlatAbove there).
     const float3 pf = float3(rel.xy, z0);
