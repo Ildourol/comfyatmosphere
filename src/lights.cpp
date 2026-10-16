@@ -10,7 +10,8 @@
 //                    keys over the day, in half-minutes from midnight (0 to 2880).
 //
 // Step 1 reads them and works the bands out where you stand, for the probe, to be checked against what the client
-// drew (NOTES.md, the zone's sky and water colours). Nothing uses them yet. Checked (2026-10-16) at the Goldshire
+// drew (NOTES.md, the zone's sky and water colours). The water takes its sky, its glow and its body's colour from
+// them, and the mist its glow (water.cpp, SkyGlowColour). Checked (2026-10-16) at the Goldshire
 // pool (the map's default zone), the Westfall coast, Booty Bay and Auberdine at noon: the sky's six rings and the
 // water's ramp within 2 of 255 inside a zone or in the default, 1 to 5 where two zones fade into each other.
 
@@ -234,6 +235,11 @@ namespace
         return true;
     }
 
+    // The bands where you stand, worked out four times a second (LightsFrame) for the water and the mist.
+    float  g_now[kBands][3] = {};
+    bool   g_haveNow = false;
+    double g_nextNow = 0.0;
+
     unsigned Hex(const float c[3])
     {
         auto q = [](float v) { return static_cast<unsigned>((std::min)((std::max)(v, 0.0f), 1.0f) * 255.0f + 0.5f); };
@@ -244,7 +250,16 @@ namespace
 void LightsFrame()
 {
     if (g_ready)
+    {
+        const double now = Now();
+        if (now < g_nextNow)
+            return;
+        g_nextNow = now + 0.25;
+        uint32_t map = 0;
+        float pl[3];
+        g_haveNow = ClientPlayer(pl) && MapId(map) && Blend(pl, map, HalfMinutes(), g_now);
         return;
+    }
     bool all = true;
     for (int i = 0; i < kFiles; ++i)
     {
@@ -268,11 +283,9 @@ void LightsFrame()
 
 bool LightsBand(int band, float rgb[3])
 {
-    uint32_t map = 0;
-    float pl[3], out[kBands][3];
-    if (!g_ready || band < 0 || band >= kBands || !ClientPlayer(pl) || !MapId(map) || !Blend(pl, map, HalfMinutes(), out))
+    if (!g_haveNow || band < 0 || band >= kBands)
         return false;
-    memcpy(rgb, out[band], sizeof(out[band]));
+    memcpy(rgb, g_now[band], sizeof(g_now[band]));
     return true;
 }
 

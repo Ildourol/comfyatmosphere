@@ -3992,3 +3992,17 @@ in by how far inside (all of it inside the inner radius); clear weather; the col
 Checked at noon: the Goldshire pool (the default zone), the Westfall coast (zone #4), Booty Bay (zones #39 and #9)
 within 2 of 255; Auberdine, at the edges of two zones, 1 to 5 off, so the client blends overlapping edges a little
 otherwise. The probe logs the tables, the zones round you and the 18 bands (`lights:`). Nothing uses them yet.
+
+**The water's colour from the tables (2026-10-16, the owner).** The owner found the water "overall" wrong: at the
+Goldshire pool very green with Zone Saturation 300 and Zone Hue 0. Zone Colour took the game's own water colour, read
+from its colour ramp, and Elwynn's lakes are olive in the game's data (`4E5C15` shallow, `335154` deep); strengthened,
+that turned the water green. Now:
+
+- Deep water takes the hue of the sky where you stand, from the light tables (band 3, the sky about 17 degrees up),
+  at Water Colour 25's brightness, at Water Saturation (`[water] zoneSaturation`, the owner's 145% by default). The
+  glow's tint at dusk and the sunset mix stay as they were.
+- The reflection's sky and glow come from the tables too (band 3; bands 5 and 6 averaged), and the mist's glow.
+- Removed: the reader of the sky dome (a read-only lock of the client's vertex buffer, four times a second), the
+  reader of the water ramp texture, and the controls Zone Colour, Zone Hue and Water Colour. Water Colour stays in the
+  ini as the colour until the tables are read, a second after login.
+- The owner, in game: "this looks better", at Auberdine, the Westfall coast and the Goldshire pool.

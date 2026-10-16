@@ -547,15 +547,11 @@ struct WaterSettings
     // sky in it, the sun's glint, small waves, whitecaps far out.
     float surface   = 1.0f;      // 0..1: how much of our water is drawn over the game's (0 = the game's alone)
     float clarity   = 0.5f;      // how clear the water is: the light it absorbs is divided by this
-    float colour    = 25.0f;     // 0..100: the colour deep water turns, green (0), teal (50) or blue (100)
-    // Zone Colour (2026-10-07): the colour deep water turns is the game's own water colour for the zone and the hour,
-    // warmed by the sky's glow at dusk, at our brightness, in place of Water Colour.
-    bool  zone      = true;
-    // Zone Colour's tuning (2026-10-14, the owner: the Stormwind canal too green). zoneSaturation: how much the game's
-    // hue is strengthened, 0 grey (Zone Saturation). zoneHue: degrees the hue is turned round the colour wheel, up
-    // from green toward teal and blue, down toward yellow (Zone Hue).
-    float zoneSaturation = 1.65f;
-    float zoneHue   = 20.0f;
+    float colour    = 25.0f;     // 0..100: deep water until the light tables are read: green (0), teal (50), blue (100)
+    // The colour deep water turns is the sky's (2026-10-16, the owner): the light tables' sky for the place and the
+    // hour (lights.cpp, band 3), at Water Colour 25's brightness. zoneSaturation: how strong its hue is, 0 grey, 1 the
+    // sky's own (Water Saturation).
+    float zoneSaturation = 1.45f;   // the owner's, 2026-10-16: Elwynn, Westfall and Auberdine
     // 0..3: how far deep water turns to the sky's glow at sunset, by how red the glow is, and how much more of the
     // sky it shows (2026-10-07). 0: none.
     float sunset    = 1.0f;

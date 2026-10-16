@@ -81,7 +81,6 @@
             "comfyWaveHeight": 8,
             "comfyWaveSize": 250,
             "comfyWater": 1,
-            "comfyWaterColour": 20,
             "comfyWaterClarity": 400,
             "comfyWaterReflect": 15,
             "comfyWaterBend": 25,
@@ -213,9 +212,6 @@
         },
         {
             "cvar": "comfyWaveSize 200"
-        },
-        {
-            "cvar": "comfyWaterColour 25"
         },
         {
             "cvar": "comfyWaterClarity 100"

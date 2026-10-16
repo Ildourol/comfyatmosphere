@@ -101,12 +101,12 @@ namespace
                 kShadeTint, kSunTint, kLampGlow, kLampDistance, kNightDarkness, kMoonlight, kFog, kFogDensity,
                 kFogHeight, kFogBrightness, kFogSun, kFogPatches, kFogWind, kFogWindDir, kFogReach,
                 kFogSky, kFogLow, kFogWater, kFogMorning, kFogLamps, kShadowsNight, kShadowsUnitStrength, kSunGlide, kLamps, kTorchLight, kLanternLight, kIndoorLamps, kLampsDay,
-                kShadowsBody, kShadowNear, kTreeShade, kWaveHeight, kWaveSize, kWater, kWaterColour, kWaterClarity, kWaterReflect, kWaterBend, kWaterCover, kWaterWake, kWaterFoam, kWaterSwash, kWaterGlint, kWaterMoonGlint, kWaterGlintSize, kWaterEdge, kWaterEdgeWidth, kWaterBright, kWaterRippleDepth, kWaterSwashHeight, kWaterSwashLength, kWaterSwashSpeed, kDaySaturation, kNightSaturation, kColour, kWaterRippleMoving, kWaterSpread, kWaterSpreadMoving, kFoamDrawn, kFoamSize, kFoamReach, kOpenFoam, kOpenFoamAmount, kFoamEdge, kWakeFoam, kObjectFoam, kObjectFoamWidth, kLakeSwash, kLakeFoam, kLakeWaves, kRainOnWater, kLighthouses, kLighthouseBeam, kLhBeacon, kLhLength, kLhWidth, kLhSpread, kLhSpeed, kLhTwo, kLhGlint, kLhFace, kLhTilt, kLhSoft, kLhWaterWidth, kRainDarkness, kShipWake, kShipForward, kShipDepth, kShadowWater, kWetSand, kLhReach,
+                kShadowsBody, kShadowNear, kTreeShade, kWaveHeight, kWaveSize, kWater, kWaterClarity, kWaterReflect, kWaterBend, kWaterCover, kWaterWake, kWaterFoam, kWaterSwash, kWaterGlint, kWaterMoonGlint, kWaterGlintSize, kWaterEdge, kWaterEdgeWidth, kWaterBright, kWaterRippleDepth, kWaterSwashHeight, kWaterSwashLength, kWaterSwashSpeed, kDaySaturation, kNightSaturation, kColour, kWaterRippleMoving, kWaterSpread, kWaterSpreadMoving, kFoamDrawn, kFoamSize, kFoamReach, kOpenFoam, kOpenFoamAmount, kFoamEdge, kWakeFoam, kObjectFoam, kObjectFoamWidth, kLakeSwash, kLakeFoam, kLakeWaves, kRainOnWater, kLighthouses, kLighthouseBeam, kLhBeacon, kLhLength, kLhWidth, kLhSpread, kLhSpeed, kLhTwo, kLhGlint, kLhFace, kLhTilt, kLhSoft, kLhWaterWidth, kRainDarkness, kShipWake, kShipForward, kShipDepth, kShadowWater, kWetSand, kLhReach,
                 kGrass, kGrassWind, kGrassSpeed, kGrassLean, kGrassWave, kGrassWindDir, kGrassParting, kGrassRadius,
-                kHotkeys, kWaterZone, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
+                kHotkeys, kWaterSunset, kFogToward, kFogHorizon, kFoliageRadius, kFoliageEdge, kFoliageSlack, kFoliageUnits,
                 kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing,
                 kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
-                kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kZoneHue, kRiseFrom, kHighest,
+                kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kRiseFrom, kHighest,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -167,7 +167,6 @@ namespace
         "comfyWaveHeight",
         "comfyWaveSize",
         "comfyWater",
-        "comfyWaterColour",
         "comfyWaterClarity",
         "comfyWaterReflect",
         "comfyWaterBend",
@@ -236,7 +235,6 @@ namespace
         // The debug panel's Developer keys box (2026-10-07): [general] hotkeys.
         "comfyHotkeys",
         // Zone Colour (2026-10-07): [water] zone.
-        "comfyWaterZone",
         // Sunset Water (2026-10-07): [water] sunset, as a percentage.
         "comfyWaterSunset",
         // Fog Toward the Sun (2026-10-08): [fog] toward, as a percentage.
@@ -281,7 +279,6 @@ namespace
         "comfyWaterWetSandDistance",
         // Zone Saturation and Zone Hue (2026-10-14): [water] zoneSaturation as a percentage, zoneHue in degrees.
         "comfyWaterZoneSaturation",
-        "comfyWaterZoneHue",
         // Low Sun From (2026-10-14) and Highest Sun (2026-10-15): [sunshadows] riseFrom and highest, in degrees.
         "comfyShadowRiseFrom",
         "comfyShadowHighest",
@@ -448,7 +445,6 @@ namespace
         case kWaveHeight:     snprintf(out, cap, "%.0f", s.water.waveHeight * 10.0f); break;       // tenths of a yard
         case kWaveSize:       snprintf(out, cap, "%.0f", s.water.waveScale * 100.0f); break;       // percent
         case kWater:          snprintf(out, cap, "%d", s.water.enabled ? 1 : 0); break;
-        case kWaterColour:    snprintf(out, cap, "%.0f", s.water.colour); break;
         case kWaterClarity:   snprintf(out, cap, "%.0f", s.water.clarity * 100.0f); break;     // percent
         case kWaterReflect:   snprintf(out, cap, "%.0f", s.water.reflection * 100.0f); break;  // percent
         case kWaterBend:      snprintf(out, cap, "%.0f", s.water.refraction * 200.0f); break;  // 100 = half a yard
@@ -508,7 +504,6 @@ namespace
         case kGrassParting:   snprintf(out, cap, "%.0f", s.grass.forceCenter * 100.0f); break;   // percent
         case kGrassRadius:    snprintf(out, cap, "%.0f", s.grass.radius * 10.0f); break;         // tenths of a yard
         case kHotkeys:        snprintf(out, cap, "%d", s.hotkeys ? 1 : 0); break;
-        case kWaterZone:      snprintf(out, cap, "%d", s.water.zone ? 1 : 0); break;
         case kWaterSunset:    snprintf(out, cap, "%.0f", s.water.sunset * 100.0f); break;   // percent
         case kFogToward:      snprintf(out, cap, "%.0f", s.fog.toward * 100.0f); break;     // percent
         case kFogHorizon:     snprintf(out, cap, "%.0f", s.fog.horizonGlow * 100.0f); break; // percent
@@ -554,7 +549,6 @@ namespace
         case kGameGlow:       snprintf(out, cap, "%.0f", s.colour.gameGlow); break;    // percent already
         case kWetSandReach:   snprintf(out, cap, "%.0f", s.water.wetSandReach); break;   // yards
         case kZoneSaturation: snprintf(out, cap, "%.0f", s.water.zoneSaturation * 100.0f); break;   // percent
-        case kZoneHue:        snprintf(out, cap, "%.0f", s.water.zoneHue); break;   // degrees
         case kRiseFrom:       snprintf(out, cap, "%.0f", s.sunShadows.riseFrom); break;   // degrees
         case kHighest:        snprintf(out, cap, "%.0f", s.sunShadows.highest); break;  // degrees
         case kColour:         snprintf(out, cap, "%d", s.colour.enabled ? 1 : 0); break;
@@ -609,7 +603,6 @@ namespace
         if (c[kWaveHeight].seen)     s.water.waveHeight = Clamp(c[kWaveHeight].value * 0.1f, 0.0f, 3.0f);
         if (c[kWaveSize].seen)       s.water.waveScale = Clamp(c[kWaveSize].value * 0.01f, 0.25f, 4.0f);
         if (c[kWater].seen)          s.water.enabled   = c[kWater].value != 0.0f;
-        if (c[kWaterColour].seen)    s.water.colour    = Clamp(c[kWaterColour].value, 0.0f, 100.0f);
         if (c[kWaterClarity].seen)   s.water.clarity   = Clamp(c[kWaterClarity].value * 0.01f, 0.1f, 10.0f);
         if (c[kWaterReflect].seen)   s.water.reflection = Clamp(c[kWaterReflect].value * 0.01f, 0.0f, 1.0f);
         if (c[kWaterBend].seen)      s.water.refraction = Clamp(c[kWaterBend].value * 0.005f, 0.0f, 0.5f);
@@ -669,7 +662,6 @@ namespace
         if (c[kGrassParting].seen)   s.grass.forceCenter = Clamp(c[kGrassParting].value * 0.01f, 0.0f, 3.0f);
         if (c[kGrassRadius].seen)    s.grass.radius = Clamp(c[kGrassRadius].value * 0.1f, 0.1f, 20.0f);
         if (c[kHotkeys].seen)        s.hotkeys = c[kHotkeys].value != 0.0f;
-        if (c[kWaterZone].seen)      s.water.zone = c[kWaterZone].value != 0.0f;
         if (c[kWaterSunset].seen)    s.water.sunset = Clamp(c[kWaterSunset].value * 0.01f, 0.0f, 3.0f);
         if (c[kFogToward].seen)      s.fog.toward = Clamp(c[kFogToward].value * 0.01f, 0.0f, 0.9f);
         if (c[kFogHorizon].seen)     s.fog.horizonGlow = Clamp(c[kFogHorizon].value * 0.01f, 0.0f, 2.0f);
@@ -713,7 +705,6 @@ namespace
         if (c[kGameGlow].seen)        s.colour.gameGlow = Clamp(c[kGameGlow].value, 0.0f, 200.0f);
         if (c[kWetSandReach].seen)    s.water.wetSandReach = Clamp(c[kWetSandReach].value, 20.0f, 300.0f);
         if (c[kZoneSaturation].seen)  s.water.zoneSaturation = Clamp(c[kZoneSaturation].value * 0.01f, 0.0f, 3.0f);
-        if (c[kZoneHue].seen)         s.water.zoneHue = Clamp(c[kZoneHue].value, -90.0f, 90.0f);
         if (c[kRiseFrom].seen)        s.sunShadows.riseFrom = Clamp(c[kRiseFrom].value, 0.0f, 60.0f);
         if (c[kHighest].seen)         s.sunShadows.highest = Clamp(c[kHighest].value, 10.0f, 89.0f);
         if (c[kColour].seen)         s.colour.enabled = c[kColour].value != 0.0f;

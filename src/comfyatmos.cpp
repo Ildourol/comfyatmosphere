@@ -2232,80 +2232,6 @@ namespace
             Log("  [draw %4u] SKY SUN        camera-space (%.3f %.3f %.3f)", g_probe.draws, v[0], v[1], v[2]);
     }
 
-    // The sky the water reflects (2026-10-07): the dome's colour about 20 degrees up, and its glow just over the
-    // horizon, four times a second. The glow lights the mist too, where the game's fog colour is dark (volume.cpp). The dome is the sky phase's untextured draw of format 0x42 (SkyColours): rings of
-    // one colour each, at 16.8, 9.8, 3.7 and 1.8 degrees among others in the probe. The vertices between 12 and 30
-    // degrees are averaged for the sky, and those between 1 and 6 for the glow (the orange band at dusk), so a dome
-    // with its rings elsewhere still gives both.
-    void NoteSkyDome(IDirect3DDevice9* dev, UINT first, UINT nv)
-    {
-        static double next = 0.0;
-        // For the water's sky, and for the mist's light (volume.cpp, 2026-10-07).
-        const bool wanted = (g_cfg.water.enabled && g_cfg.water.skyFromGame) || g_cfg.fog.enabled;
-        if (!g_skyPhase || g_inPass || nv <= 8 || nv > 2048 || !wanted)
-            return;
-        const double now = Now();
-        if (now < next)
-            return;
-        DWORD fvf = 0;
-        dev->lpVtbl->GetFVF(dev, &fvf);
-        if (fvf != (D3DFVF_XYZ | D3DFVF_DIFFUSE))
-            return;
-        IDirect3DBaseTexture9* tex = nullptr;
-        dev->lpVtbl->GetTexture(dev, 0, &tex);
-        if (tex)
-        {
-            tex->lpVtbl->Release(tex);
-            return;
-        }
-        next = now + 0.25;
-        IDirect3DVertexBuffer9* vb = nullptr;
-        UINT off = 0, stride = 0;
-        if (FAILED(dev->lpVtbl->GetStreamSource(dev, 0, &vb, &off, &stride)) || !vb || stride < 16)
-        {
-            if (vb) vb->lpVtbl->Release(vb);
-            return;
-        }
-        float sum[3] = {}, glow[3] = {};
-        unsigned n = 0, ng = 0;
-        void* ptr = nullptr;
-        if (SUCCEEDED(vb->lpVtbl->Lock(vb, off + first * stride, nv * stride, &ptr, D3DLOCK_READONLY)) && ptr)
-        {
-            const float lo = sinf(12.0f / 57.29578f), hi = sinf(30.0f / 57.29578f);
-            const float glo = sinf(1.0f / 57.29578f), ghi = sinf(6.0f / 57.29578f);
-            for (UINT i = 0; i < nv; ++i)
-            {
-                const uint8_t* v = static_cast<const uint8_t*>(ptr) + i * stride;
-                float p[3];
-                DWORD col = 0;
-                memcpy(p, v, sizeof(p));
-                memcpy(&col, v + 12, sizeof(col));
-                const float len = sqrtf(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
-                if (len < 1e-4f)
-                    continue;
-                const float c[3] = { ((col >> 16) & 0xFF) / 255.0f, ((col >> 8) & 0xFF) / 255.0f, (col & 0xFF) / 255.0f };
-                if (p[2] >= lo * len && p[2] <= hi * len)
-                {
-                    sum[0] += c[0]; sum[1] += c[1]; sum[2] += c[2];
-                    ++n;
-                }
-                else if (p[2] >= glo * len && p[2] <= ghi * len)
-                {
-                    glow[0] += c[0]; glow[1] += c[1]; glow[2] += c[2];
-                    ++ng;
-                }
-            }
-            vb->lpVtbl->Unlock(vb);
-        }
-        vb->lpVtbl->Release(vb);
-        if (n && ng)
-        {
-            const float high[3] = { sum[0] / n, sum[1] / n, sum[2] / n };
-            const float low[3] = { glow[0] / ng, glow[1] / ng, glow[2] / ng };
-            WaterSetSkyColour(high, low);
-        }
-    }
-
     // The lamp probe (lamps.cpp): the client's lights and its world draws, while a window is open.
     HRESULT STDMETHODCALLTYPE hkSetLight(IDirect3DDevice9* dev, DWORD index, const D3DLIGHT9* light)
     {
@@ -3029,7 +2955,6 @@ namespace
                 WaterNoteHull(dev, g_world);   // a ship's hull, for its wake (2026-10-06)
         }
         NoteSkySun(dev, prim, pc, nv);
-        NoteSkyDome(dev, static_cast<UINT>(bvi) + mvi, nv);
         const bool cloud = IsCloudDraw(dev, prim, nv);
         if (cloud)
         {

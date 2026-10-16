@@ -75,7 +75,6 @@
             "comfyWaveHeight": 10,
             "comfyWaveSize": 200,
             "comfyWater": 1,
-            "comfyWaterColour": 25,
             "comfyWaterClarity": 100,
             "comfyWaterReflect": 15,
             "comfyWaterBend": 25,
@@ -140,7 +139,6 @@
             "comfyGrassWindDir": 45,
             "comfyGrassParting": 50,
             "comfyGrassPartingRadius": 20,
-            "comfyWaterZone": 1,
             "comfyWaterSunset": 100,
             "comfyMistToward": 30,
             "comfyMistHorizon": 100

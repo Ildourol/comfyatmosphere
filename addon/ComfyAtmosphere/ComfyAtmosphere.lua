@@ -61,11 +61,8 @@ COMFYATMOSPHERE_FOLIAGE_EDGE   = "Foliage Shade Edge";
 COMFYATMOSPHERE_FOLIAGE_SELF   = "Foliage Self Shade";
 COMFYATMOSPHERE_FOLIAGE_UNITS  = "Creature Shadow on Foliage";
 COMFYATMOSPHERE_WATER          = "Water Effects";
-COMFYATMOSPHERE_WATER_COLOUR   = "Water Colour";
-COMFYATMOSPHERE_WATER_ZONE     = "Zone Colour";
 COMFYATMOSPHERE_WATER_SUNSET   = "Sunset Water";
-COMFYATMOSPHERE_WATER_ZONE_SATURATION = "Zone Saturation";
-COMFYATMOSPHERE_WATER_ZONE_HUE = "Zone Hue";
+COMFYATMOSPHERE_WATER_ZONE_SATURATION = "Water Saturation";
 COMFYATMOSPHERE_WATER_CLARITY  = "Water Clarity";
 COMFYATMOSPHERE_WATER_BRIGHT   = "Water Brightness";
 COMFYATMOSPHERE_WATER_REFLECT  = "Sky Reflection";
@@ -728,14 +725,6 @@ local ENTRIES = {
 		cvar = "comfyWater",
 	},
 	{
-		-- comfyatmos.dll takes it as [water] zone (2026-10-07).
-		name = "COMFYATMOSPHERE_WATER_ZONE",
-		desc = "The water takes the game's own water colour for the zone and the time of day, warmer with the sun low. Off, Water Colour sets it.",
-		type = "checkbutton",
-		cvar = "comfyWaterZone",
-		dependency = { "comfyWater", "1" },
-	},
-	{
 		-- A percentage: comfyatmos.dll divides it by 100 for [water] sunset (2026-10-07).
 		name = "COMFYATMOSPHERE_WATER_SUNSET",
 		desc = "How red the water turns with the sun low, from the sky's glow over the horizon, and how much more of the sky it shows. 0 is none.",
@@ -748,38 +737,14 @@ local ENTRIES = {
 		numberLabels = 1,
 	},
 	{
-		-- A percentage: comfyatmos.dll divides it by 100 for [water] zoneSaturation (2026-10-14).
+		-- A percentage: comfyatmos.dll divides it by 100 for [water] zoneSaturation (2026-10-14; the sky's colour since 2026-10-16).
 		name = "COMFYATMOSPHERE_WATER_ZONE_SATURATION",
-		desc = "How strong the zone's water colour is, with Zone Colour on. 0 is grey, 100 the game's own colour.",
+		desc = "How strong the water's colour is. The water takes the sky's colour for the place and the time of day. 0 is grey, 100 the sky's own colour.",
 		type = "slider",
 		cvar = "comfyWaterZoneSaturation",
-		dependency = { "comfyWater", "1", "comfyWaterZone", "1" },
+		dependency = { "comfyWater", "1" },
 		minval = 0,
 		maxval = 300,
-		step = 5,
-		numberLabels = 1,
-	},
-	{
-		-- Degrees: [water] zoneHue (2026-10-14).
-		name = "COMFYATMOSPHERE_WATER_ZONE_HUE",
-		desc = "Turns the zone's water colour, with Zone Colour on. Up turns green toward teal and blue, down toward yellow. 0 is the game's own hue.",
-		type = "slider",
-		cvar = "comfyWaterZoneHue",
-		dependency = { "comfyWater", "1", "comfyWaterZone", "1" },
-		minval = -60,
-		maxval = 60,
-		step = 5,
-		numberLabels = 1,
-	},
-	{
-		-- comfyatmos.dll takes it as [water] colour.
-		name = "COMFYATMOSPHERE_WATER_COLOUR",
-		desc = "The colour deep water turns, with Zone Colour off. 0 is green, 50 is teal, 100 is blue.",
-		type = "slider",
-		cvar = "comfyWaterColour",
-		dependency = { "comfyWater", "1", "comfyWaterZone", "0" },
-		minval = 0,
-		maxval = 100,
 		step = 5,
 		numberLabels = 1,
 	},
@@ -2269,7 +2234,7 @@ local WINDOW_SECTIONS = {
 	{ "Color", { "comfyColor", "comfyDaySaturation", "comfyNightSaturation", "comfyGameGlow" } },
 	{ "Grass", { "comfyGrass", "comfyGrassWind", "comfyGrassSpeed", "comfyGrassWaveLength", "comfyGrassWindDir",
 	             "comfyGrassLean", "comfyGrassParting", "comfyGrassPartingRadius", "frillDensity" } },
-	{ "Water", { "comfyWater", "comfyWaterColour", "comfyWaterZone", "comfyWaterZoneSaturation", "comfyWaterZoneHue", "comfyWaterSunset", "comfyWaterBright", "comfyWaterClarity", "comfyWaterReflect", "comfyWaterBend", "comfyWaterCover", "comfyWaterFoam", "comfyWaterFoamDrawn", "comfyWaterFoamSize", "comfyWaterFoamReach", "comfyWaterFoamEdge", "comfyWaterWakeFoam", "comfyWaterShipWake", "comfyWaterShipForward", "comfyWaterShipDepth", "comfyWaterLakeSwash", "comfyWaterLakeFoam", "comfyWaterLakeWaves", "comfyWaterRain", "comfyWaterObjectFoam", "comfyWaterObjectFoamWidth", "comfyWaterOpenFoam", "comfyWaterOpenFoamAmount", "comfyWaterSwash", "comfyWaterSwashHeight", "comfyWaterSwashLength", "comfyWaterSwashSpeed", "comfyWaterWetSand", "comfyWaterWetSandDistance", "comfyWaterWake", "comfyWaterRippleDepth", "comfyWaterRippleMoving", "comfyWaterRippleSpread", "comfyWaterRippleSpreadMoving", "comfyWaterJumpRipple",
+	{ "Water", { "comfyWater", "comfyWaterZoneSaturation", "comfyWaterSunset", "comfyWaterBright", "comfyWaterClarity", "comfyWaterReflect", "comfyWaterBend", "comfyWaterCover", "comfyWaterFoam", "comfyWaterFoamDrawn", "comfyWaterFoamSize", "comfyWaterFoamReach", "comfyWaterFoamEdge", "comfyWaterWakeFoam", "comfyWaterShipWake", "comfyWaterShipForward", "comfyWaterShipDepth", "comfyWaterLakeSwash", "comfyWaterLakeFoam", "comfyWaterLakeWaves", "comfyWaterRain", "comfyWaterObjectFoam", "comfyWaterObjectFoamWidth", "comfyWaterOpenFoam", "comfyWaterOpenFoamAmount", "comfyWaterSwash", "comfyWaterSwashHeight", "comfyWaterSwashLength", "comfyWaterSwashSpeed", "comfyWaterWetSand", "comfyWaterWetSandDistance", "comfyWaterWake", "comfyWaterRippleDepth", "comfyWaterRippleMoving", "comfyWaterRippleSpread", "comfyWaterRippleSpreadMoving", "comfyWaterJumpRipple",
 	             "comfyWaterEdge", "comfyWaterEdgeWidth",
 	             "comfyWaterGlint", "comfyWaterMoonGlint", "comfyWaterGlintSize",
 	             "comfyWaveHeight",
