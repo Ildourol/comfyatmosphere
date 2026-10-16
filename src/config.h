@@ -285,9 +285,10 @@ struct SunShadowSettings
     // 6 and 0 degrees.
     float riseFrom   = 3.0f;      // degrees: the real light's height below which the shadows' light climbs, over the
                                   // next 12 degrees down (Low Sun From)
-    float highest    = 80.0f;     // degrees: the highest the shadows' light stands, at noon and at the end of
-                                  // the climb (Highest Sun, 2026-10-15). The sun reaches 85 at noon, where a
-                                  // character's shadow is a dot under its feet
+    float highest    = 65.0f;     // degrees: the highest the shadows' light stands, at noon and at the end of
+                                  // the climb (Highest Sun, 2026-10-15; the owner's 65 since 2026-10-16, 80
+                                  // before). The sun reaches 85 at noon, where a character's shadow is a dot
+                                  // under its feet
     // The characters' shadows darker than the world's (2026-09-30). In Darkshire the buildings' shade took
     // so much of the street that a player's shadow was lost in it: a shaded pixel is shaded once, whatever
     // shades it. Players and creatures are drawn a second time into a map of their own, and their shade
