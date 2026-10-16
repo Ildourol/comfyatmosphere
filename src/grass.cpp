@@ -12,7 +12,8 @@
 // A draw is grass when it has no vertex shader, its world matrix has no rotation (grass is batched per map
 // chunk, so its world is a pure translation; trees and bushes share the vertex format but are rotated), its
 // stride is 36 (POSITION f3, NORMAL f3, COLOR, TEXCOORD0 f2), it is a triangle list, and it has 64 vertices or
-// more (about 65 small doodads share the format).
+// more (about 65 small doodads share the format). The client binds no pixel shader for it: a draw with one is a
+// building's (see OnChunkGrid).
 //
 // The wind shader writes the vertex shader constants c0 to c21. The client uploads a constant only when its
 // own copy changes, so the client's values are written back after each grass draw: rain (rain.bls) once drew
@@ -133,6 +134,13 @@ namespace
     float    g_cam[3] = {};
     bool     g_camRead = false, g_camOk = false;
     unsigned g_offGrid = 0, g_offGridLast = 0;
+
+    // A building's draw with the client's pixel shader (2026-10-16, the owner: Dire Maul's walls lit up with the grass
+    // on). Dire Maul is one building placed at the map's origin, which is on the grid, with no rotation, and its walls
+    // have the grass's format. The client's shader for them gives texture x colour x (1 + 4 x the colour's alpha);
+    // the wind shader's colour is the fixed-function light's, so the walls came out up to five times as bright.
+    // Grass is drawn with no pixel shader.
+    unsigned g_withPs = 0, g_withPsLast = 0;
 
     bool OnChunkGrid(const D3DMATRIX& w)
     {
@@ -708,6 +716,13 @@ bool GrassDraw(IDirect3DDevice9* dev, const GrassDrawArgs& d, HRESULT& hr)
     vb->lpVtbl->Release(vb);   // the device holds it for the draw
     if (g.stride && stride != g.stride)
         return false;
+    IDirect3DPixelShader9* ps = nullptr;
+    if (SUCCEEDED(dev->lpVtbl->GetPixelShader(dev, &ps)) && ps)
+    {
+        ps->lpVtbl->Release(ps);
+        ++g_withPs;
+        return false;
+    }
     if (!OnChunkGrid(*d.world))
     {
         ++g_offGrid;
@@ -868,6 +883,8 @@ void GrassFrameEnd()
     g_draws = g_verts = 0;
     g_offGridLast = g_offGrid;
     g_offGrid = 0;
+    g_withPsLast = g_withPs;
+    g_withPs = 0;
     g_frameReady = false;
     g_camRead = false;
     const GrassSettings& g = g_cfg.grass;
@@ -915,10 +932,10 @@ void GrassDetach()
 void GrassProbe()
 {
     const GrassSettings& g = g_cfg.grass;
-    Log("grass: %s; last frame %u draws, %u vertices, %u left out off the chunks' grid%s; the fill loop %s; the "
-        "wind shader %s; the parting %s",
+    Log("grass: %s; last frame %u draws, %u vertices, %u left out with a pixel shader, %u off the chunks' grid%s; "
+        "the fill loop %s; the wind shader %s; the parting %s",
         g_otherDll ? "off, comfygrass.dll draws it" : !g.enabled || !g_cfg.master ? "off" : "on", g_drawsLast,
-        g_vertsLast, g_offGridLast, g_camOk ? "" : " (no camera: the grid not tested)", g_fillPatched ? "patched (each vertex has its height)" : g_fillTried ? "NOT patched (the bend "
+        g_vertsLast, g_withPsLast, g_offGridLast, g_camOk ? "" : " (no camera: the grid not tested)", g_fillPatched ? "patched (each vertex has its height)" : g_fillTried ? "NOT patched (the bend "
         "comes from the texture)" : "not patched yet", g_windVS ? "ready" : g_windVSTried ? "FAILED" : "not made yet",
         g_anchorValid ? "on the player" : "off (no player, on a ship, or [grass] parting 0)");
 }

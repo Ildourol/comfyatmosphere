@@ -2770,6 +2770,13 @@ on the 100/3 yard grid, within a hundredth of a chunk on each axis (`OnChunkGrid
 0.001 off it, and the fountain lay 0.78 of a chunk off. At the fountain the probe gives 30 draws left out and none
 drawn. Without the camera the old tests apply alone.
 
+**Not grass: Dire Maul's walls (2026-10-16, the owner).** With the grass on, the inside of Dire Maul lit up. The
+probe gave 23 grass draws and none off the grid. Dire Maul is one building placed at the map's origin with no
+rotation, so its walls pass the grid test, and they have the grass's format. The client draws them with its own
+pixel shader (`ps_2_0`: texture x colour, plus texture x colour x the colour's alpha x 4). The wind shader's colour
+is the fixed-function light's, so the walls came out up to five times as bright. Grass is drawn with no pixel
+shader, so a draw with one is now left out. The probe's grass line counts them ("left out with a pixel shader").
+
 ## Performance: the timers, the shadow pipeline and the water (2026-10-06)
 
 The owner asked for more than 100 fps with the effects on. Three reviews of the code (the CPU hooks, the GPU passes,
