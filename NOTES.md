@@ -3785,7 +3785,8 @@ jumped by 16 past the 16 bits, the read gave 0 (dry), and the keep test dropped 
 this, every cell in rows 2, 4 and 6 could show it, and the shot has two dotted cells.
 
 The fix sent to the player: Mod2(x) = x - 2 floor(x / 2 + 0.25), and the component picks at rows 1.5, 3.5 and 5.5,
-so a whole number a hair off reads right. The vertex shader's row is floor(p * -0.24 + 0.5), the floor of an add,
+so a whole number a hair off reads right. **Confirmed (2026-10-16): the RX 7600 XT player has no bands with it**
+(build v0.15.0-alpha-2-g470ceec). The vertex shader's row is floor(p * -0.24 + 0.5), the floor of an add,
 so a fused multiply cannot move it. Still open, if the fix holds: the foam's Lace and the rain rings hash
 floor(q) of a product (Hash1, Hash2), and there a row a hair off changes the hash.
 
