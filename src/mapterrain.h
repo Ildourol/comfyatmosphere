@@ -115,6 +115,9 @@ struct BlpData;
 // A texture by name, read on the loader thread: 0 while it loads (or the loader has not started), 1 with the
 // texture in out (once), -1 if it could not be read.
 int MapRequestTexture(const char* name, BlpData& out);
+// Any file from the MPQs by name, read on the loader thread (2026-10-16, the light tables): 0 while it loads, 1 with
+// its bytes in out (once), -1 if no archive holds it. Starts the loader if it is not running.
+int MapRequestFile(const char* name, std::vector<uint8_t>& out);
 // The vertex counts of the views of a creature display's model (2026-10-04): CreatureDisplayInfo.dbc gives the
 // model's row, CreatureModelData.dbc its file, and the M2 its views. The client draws a unit's model from a
 // vertex buffer holding one view's vertices. Null while the loader reads it, or if it could not be read;

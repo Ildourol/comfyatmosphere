@@ -35,6 +35,7 @@
 #include "clouds.h"
 #include "weather.h"
 #include "grass.h"
+#include "lights.h"
 #include "lampglow.h"
 #include "lamps.h"
 #include "rays.h"
@@ -1344,6 +1345,7 @@ namespace
         BodyMarkFrameEnd(dev);
         WaterFrameEnd(dev);
         GrassFrameEnd();
+        LightsFrame();
         WeatherFrameEnd();
         MistFileReady();   // the rain mist's texture asked of the loader until it is read
         SplashFileReady(); // and the rain splash's
@@ -1445,6 +1447,7 @@ namespace
             WaterProbe();
             BeaconProbe();
             GrassProbe();
+            LightsProbe();
             WeatherProbe();
             TimeProbe();
             IDirect3DSurface9* bb = nullptr;

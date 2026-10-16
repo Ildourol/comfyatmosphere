@@ -3969,3 +3969,26 @@ triangle's facing). That is not fixed. Tried and taken out the same day:
   copy of the player; it changed nothing.
 
 A facing for the ground that holds still would come from the map files' heights, not the screen.
+
+## The light tables from the files (2026-10-16, the owner)
+
+The owner, on the water's colour: taking colours from what the game draws "has not worked in the past and isn't going
+to work now. We have the map files." `lights.cpp` reads the client's light tables through the terrain loader
+(`MapRequestFile`, which starts the loader if nothing else has):
+
+- `Light.dbc`, 474 rows of 12 fields: id, map, place (3), inner and outer radius, five LightParams sets (clear,
+  clear under water, storm, storm under water, one more). The place and the radii are in inches (36 to the yard),
+  the place from the map's corner with the axes turned, as the map files store places: world x = 17066.666 - z / 36,
+  y = 17066.666 - x / 36, z = y / 36. A map's default zone has no place and no radii (Azeroth #1, set 12;
+  Kalimdor #191, set 192).
+- `LightIntBand.dbc`, 9414 rows of 34 fields: id = (set - 1) x 18 + band + 1, a key count, 16 times in
+  half-minutes from midnight, 16 colours (0x00RRGGBB).
+- The bands, matched against the drawn sky rings and water ramps: 2 to 6 the sky at 90, 16.8, 9.8, 3.7 and 1.8
+  degrees, 7 the fog at the horizon, 14 and 15 the ocean shallow and deep, 16 and 17 a river or a lake shallow and
+  deep. 0 and 1 look like the direct and the ambient light, 9 and 10 the sun and its halo.
+
+Where you stand: the map's default zone, then each zone whose outer radius you are inside, the larger first, mixed
+in by how far inside (all of it inside the inner radius); clear weather; the colours between the keys at the hour.
+Checked at noon: the Goldshire pool (the default zone), the Westfall coast (zone #4), Booty Bay (zones #39 and #9)
+within 2 of 255; Auberdine, at the edges of two zones, 1 to 5 off, so the client blends overlapping edges a little
+otherwise. The probe logs the tables, the zones round you and the 18 bands (`lights:`). Nothing uses them yet.

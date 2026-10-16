@@ -808,7 +808,7 @@ namespace
 
     // --- the loader thread ---------------------------------------------------------------------------
 
-    enum JobKind { kJobTile, kJobBuilding, kJobTexture, kJobObject, kJobLooseTexture, kJobCreature, kJobModelViews,
+    enum JobKind { kJobTile, kJobBuilding, kJobTexture, kJobObject, kJobLooseTexture, kJobFile, kJobCreature, kJobModelViews,
                    kJobQuit };   // the hot reload's detach: the loader frees what it holds and ends
     struct Job { JobKind kind; std::string name; int a, b; unsigned gen; bool groundOnly = false; };   // name: the map, the WMO, the BLP
                                                                                                     // a: a game object's display id
@@ -876,6 +876,7 @@ namespace
     std::deque<ObjectLight> g_doneObj;
     // Textures another part asked for by name (MapRequestTexture), outside the tiles' own: kept until taken.
     std::unordered_map<std::string, std::pair<bool, BlpData>> g_looseTex;
+    std::unordered_map<std::string, std::pair<bool, std::vector<uint8_t>>> g_looseFiles;   // MapRequestFile
     bool                    g_started = false;
     unsigned                g_gen = 1;   // bumped at a map change: older results are thrown away
 
@@ -1036,6 +1037,14 @@ namespace
                 }
                 std::lock_guard<std::mutex> lock(g_mx);
                 g_doneObj.push_back(std::move(o));
+                continue;
+            }
+            if (job.kind == kJobFile)
+            {
+                std::vector<uint8_t> data;
+                const bool ok = open && MpqRead(job.name.c_str(), data);
+                std::lock_guard<std::mutex> lock(g_mx);
+                g_looseFiles[job.name] = { ok, std::move(data) };
                 continue;
             }
             if (job.kind == kJobLooseTexture)
@@ -3026,6 +3035,36 @@ const std::vector<uint32_t>* MapCreatureModelViews(unsigned display)
     g_jobs.push_front({ kJobCreature, std::string(), static_cast<int>(display), 0, g_gen });   // a small read
     g_cv.notify_one();
     return nullptr;
+}
+
+int MapRequestFile(const char* name, std::vector<uint8_t>& out)
+{
+    static std::unordered_map<std::string, int> asked;   // 0 asked, 1 taken, -1 failed
+    const std::string n = name;
+    auto a = asked.find(n);
+    if (a != asked.end() && a->second != 0)
+        return a->second;
+    if (!g_started)
+    {
+        std::thread(Loader).detach();   // the light tables are wanted with the shadows and the water off too
+        g_started = true;
+    }
+    std::lock_guard<std::mutex> lock(g_mx);
+    if (a == asked.end())
+    {
+        asked[n] = 0;
+        g_jobs.push_front({ kJobFile, n, 0, 0, g_gen });   // a small read, before the tiles
+        g_cv.notify_one();
+        return 0;
+    }
+    auto it = g_looseFiles.find(n);
+    if (it == g_looseFiles.end())
+        return 0;
+    const int r = it->second.first ? 1 : -1;
+    out = std::move(it->second.second);
+    g_looseFiles.erase(it);
+    asked[n] = r;
+    return r;
 }
 
 int MapRequestTexture(const char* name, BlpData& out)
