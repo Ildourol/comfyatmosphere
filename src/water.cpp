@@ -90,13 +90,15 @@ namespace
     // g - frc(g), and a compiler that fuses the multiply into the subtraction (an FMA) leaves it up to half an ulp
     // under the whole number. Under an even row Mod2 gave 2, the bit index jumped by 16 past the 16 bits, and the
     // water part read a wet cell as dry and dropped the pixel: the bed showed as dots in whole cells.
-    // The quarter is added to the fraction alone (2026-10-16): x * 0.5 + 0.25 rounds up to the next whole number from
-    // 2^22 on (a float holds 24 bits), and BitAt's bits 0 and 1 of a full 24-bit component (16777215, 8388607) read 0.
-    // The sea's points 0, 1, 24, 25, 48, 49, 72 and 73 of every chunk took no swell, their neighbours in the next chunk
-    // did, and the surface split there: triangles of the sea floor at a fixed place in each chunk, opening and closing
-    // with the swell (Booty Bay, the owner). x * 0.5 and its fraction are exact for any whole number up to 2^24.
+    // Mod2 is for small numbers only (2026-10-16): x * 0.5 + 0.25 rounds up to the next whole number from 2^22 on (a
+    // float holds 24 bits), and BitAt's bits 0 and 1 of a full 24-bit component (16777215, 8388607) read 0. The sea's
+    // points 0, 1, 24, 25, 48, 49, 72 and 73 of every chunk took no swell, their neighbours in the next chunk did, and
+    // the surface split there: triangles of the sea floor at a fixed place in each chunk, opening and closing with the
+    // swell (Booty Bay, the owner). BitAt's last step takes 2 frac(x / 2) instead: x is floor()'s whole number, and
+    // x / 2 and its fraction are exact up to 2^24. Not in Mod2 itself: the water's pixel shader is at its 32
+    // temporary registers, and a Mod2 with one more failed to compile it (X4505).
 #define COMFY_BIT_AT_HLSL \
-    "float Mod2(float x) { float h = x * 0.5; float f = floor(h); return x - 2.0 * (f + step(0.75, h - f)); }\n" \
+    "float Mod2(float x) { return x - 2.0 * floor(x * 0.5 + 0.25); }\n" \
     "float BitAt16(float bits, float n) { float s = exp2(-n); return Mod2(floor(bits * s + 0.5 * s)); }\n" \
     "float BitAt(float bits, float n)\n" \
     "{\n" \
@@ -109,7 +111,7 @@ namespace
     "    p *= Mod2(m) > 0.5 ? 0.00390625 : 1.0;\n" \
     "    m = floor(m * 0.5);\n" \
     "    p *= m > 0.5 ? 1.52587890625e-5 : 1.0;\n" \
-    "    return Mod2(floor(bits * p));\n" \
+    "    return 2.0 * frac(floor(bits * p) * 0.5);\n" \
     "}\n"
 
     const char* kVsHlsl = COMFY_BIT_AT_HLSL R"HLSL(

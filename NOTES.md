@@ -1694,6 +1694,25 @@ terrain's own shade needs terrainBias (1.5 yards) of depth, so nothing shaded th
 with the terrain map's texels. The check now reads the point without the offset (the sun offset only). The
 strip is gone, and Debug View 25 is black at that place.
 
+The same day, a ship's sails at Booty Bay flickered (the owner). Looking up at the sails' backs with the sun behind
+them, Debug View 5 showed one sail's back fully lit, speckle on another, and fine stripes under a yard; Debug View 24
+found no shade source on the lit one. A sail is a sheet with no thickness: in the sun's map its back is at its own
+front's depth, inside the slack (3 texels, 0.09 yards on the near map at 2048, 0.29 on the middle one), and the push
+away from the sun on a face turned from it is 0.125 yards where the face looks straight away (graze 1). The
+nine taps of the soft edge read a tilted sail's depth beside the point, and those passed in stripes that crawled as
+the sail swayed. Now on a model turned from the sun (the mask's model bit, not a body, not the ground's grass) the
+solid maps' test takes the point two slacks deeper along the sun, which keeps the texel and can only shade more,
+and follows the face's slope across the taps ([sunshadows] slope, still 0 elsewhere: on a body it made patches).
+The owner: the sails look good.
+
+**Open: the shade a moving ship casts on itself jitters.** Riding the ship out of Booty Bay, the owner saw it flicker.
+A 10-second recording (`Recordings\20261016152029-1.mp4` in the test client) shows it frame to frame, 1/30 s apart:
+the yard's shade on a sail changes width, a rope's shade line shifts, the dark area behind the rigging changes shape,
+and the bands on the rope ladder jump. The sails' own backs stay dark. So the maps hold the ship's parts a little off
+from where the frame draws them, by a different amount each frame. Not measured yet; the leads: the cached copies of
+a ship's parts (they follow the hull tracker, A ship's shade left on the water), and the camera position that turns
+the ship's camera-relative draws into world places, read at another moment than the frame's.
+
 ## Shade that left the cache in Darnassus (2026-10-03)
 
 A tree's shade on a bridge in Darnassus went now and then: after staleTime with the tree off screen, or as
@@ -3806,9 +3825,13 @@ rounds up to the next whole number from 2^22 on: a float holds 24 bits, and from
 component that is 16777215 or 8388607: Mod2 gave -1, and the bit read 0. On the open sea every point is the sea, so
 points 0, 1, 24, 25, 48, 49, 72 and 73 of each chunk read as a lake and took no swell (Lake Waves 0), and the next
 chunk lifted the same points. The flat colour (`[water] debugSkip 16`) kept the holes: no draw of ours covered them.
-Mod2 now adds the quarter to the fraction alone: h = x / 2, f = floor(h), x - 2 (f + step(0.75, h - f)). h and h - f
-are exact for any whole number up to 2^24, and a number a hair under an even row still reads 0. The wet cells'
-BitAt16 never passes Mod2 more than 65535.
+The first fix put the exact form into Mod2 itself (h = x / 2, f = floor(h), x - 2 (f + step(0.75, h - f))). That
+took one more temporary register, the water's pixel shader (at its 32) failed to compile (X4505, `water_ps failed to
+compile` in the log), and the game's own water was drawn in its place: the triangles looked gone. It shipped in the
+first v0.16.0-alpha zip. Now Mod2 is the one-register form again, for small numbers (the wet cells' BitAt16 never
+passes it more than 65535), and BitAt's last step alone takes 2 frac(x / 2): x is floor()'s whole number, and x / 2
+and its fraction are exact up to 2^24. **After any shader change, read the log for `failed to compile`**, not only the
+error count of the cache's line.
 
 What took the time: the holes come and go with the swell, and single screenshots of debug switches (the stencil
 off, the depth test off) read as fixes when the frame only had fewer holes. Count over several frames, or check the

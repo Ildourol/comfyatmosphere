@@ -452,6 +452,14 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
     // stump's top into the sun: a lit strip along the edge. Away from the sun, the stump stays between the
     // point and the sun to the edge.
     float3 offDir = normalize(lerp(N, -gSun.xyz, saturate(-ndl * 5.0)));
+    // A model turned from the sun (2026-10-16, the owner, a ship's sails at Booty Bay): a sail is a sheet with no
+    // thickness, so its back lies in the sun's map at its own front's depth, inside the slack, and read lit, in
+    // patches and stripes that crawled as the sail swayed and the maps moved. On such a face the solid maps' test
+    // takes the point two slacks deeper, straight along the sun: the same texel, so it can only shade more, and the
+    // face is in its own shade. And it follows the face's slope across the taps ([sunshadows] slope, off elsewhere),
+    // or a tilted sail is lit at the taps beside the point. Not on a body or the ground's grass (offK), nor without
+    // the mask, which tells models apart.
+    const float awayM = gBody.y > 0.5 ? saturate(-ndl * 5.0) * bodyM.y * offK : 0.0;
 
     // The near map where it reaches, blended into the far one over the band from 80% to 90% of its
     // half-width. The far map is read only where the near map does not cover all of the shade.
@@ -465,8 +473,9 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
         wn = saturate((0.9 - max(en.x, en.y)) * 10.0);
         [branch] if (wn > 0.0)
         {
-            float2 g = Slope(N, gN0, gN1, gN2, gG.y) * gT.x;
-            litN = Lit(sNear, sn, g, gNB.x, gNB.z);
+            float2 gs = Slope(N, gN0, gN1, gN2, gG.y);
+            float2 g = gs * gT.x;
+            litN = Lit(sNear, sn + float4(0.0, 0.0, awayM * 2.0 * gNB.x, 0.0), gs * max(gT.x, awayM), gNB.x, gNB.z);
             [branch] if (gCh.y > 0.5)
                 leafN = Lit5(sNearL, sn, g, gNB.x + fol * gBody.w, gNB.z);
         }
@@ -482,8 +491,8 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
         wm = saturate((0.9 - max(em.x, em.y)) * 10.0);
         [branch] if (wm > 0.0)
         {
-            float2 g = Slope(N, gM0, gM1, gM2, gG.z) * gT.x;
-            litM = Lit(sMid, sm, g, gMB.x, gMB.z);
+            float2 gs = Slope(N, gM0, gM1, gM2, gG.z);
+            litM = Lit(sMid, sm + float4(0.0, 0.0, awayM * 2.0 * gMB.x, 0.0), gs * max(gT.x, awayM), gMB.x, gMB.z);
         }
     }
 )HLSL" R"HLSL(
@@ -502,12 +511,13 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
         float4 sf = Qf.x * gSh0 + Qf.y * gSh1 + Qf.z * gSh2 + gSh3;
         float2 ef = abs(sf.xy);
         float  fade = saturate((1.0 - max(ef.x, ef.y)) * 10.0);
-        float2 g = Slope(N, gSh0, gSh1, gSh2, gG.x) * gT.x;
+        float2 gs = Slope(N, gSh0, gSh1, gSh2, gG.x);
+        float2 g = gs * gT.x;
         // More slack with distance ([sunshadows] lodBias): the ground the client draws far off is coarser
         // than the terrain in the map.
         float  bF = gB.x + gLod.x * max(length(P) - gLod.y, 0.0);
         [branch] if (wn < 1.0 && wm < 1.0)
-            litF = lerp(1.0, Lit(sShadow, sf, g, bF, gB.z), fade);
+            litF = lerp(1.0, Lit(sShadow, sf + float4(0.0, 0.0, awayM * 2.0 * bF, 0.0), gs * max(gT.x, awayM), bF, gB.z), fade);
         [branch] if (wn < 1.0 && gCh.z > 0.5)
             leafF = lerp(1.0, Lit5(sFarL, sf, g, bF + fol * gBody.w, gB.z), fade);
         [branch] if (gTr.y > 0.5)
