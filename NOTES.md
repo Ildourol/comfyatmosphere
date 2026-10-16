@@ -1685,6 +1685,15 @@ taken all cast shade off a face turned from the sun, and a back wall is shaded b
 face turned from the sun only joins the depth test above, and the shade goes only where the terrain lies
 nearer the sun than the point by the same margin. No hill stands in front of a back wall.
 
+2026-10-16, the owner at Shadow Resolution 2048: a lit strip, flickering, along the foot of Stormwind's outer
+wall (sun 65 degrees up, behind the wall). Debug View 25 showed the check taking off the wall's shade there.
+The check read the point after the normal offset. On a face turned from the sun the offset points straight
+away from the sun (2026-10-05) and is normalBias x graze, here 0.125 x 3.7 = 0.46 yards. At the wall's foot
+that put the point under the ground in front of the wall, so the ground counted as a hill before it. The
+terrain's own shade needs terrainBias (1.5 yards) of depth, so nothing shaded the strip, and its edge moved
+with the terrain map's texels. The check now reads the point without the offset (the sun offset only). The
+strip is gone, and Debug View 25 is black at that place.
+
 ## Shade that left the cache in Darnassus (2026-10-03)
 
 A tree's shade on a bridge in Darnassus went now and then: after staleTime with the tree off screen, or as

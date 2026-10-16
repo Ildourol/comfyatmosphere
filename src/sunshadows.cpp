@@ -530,13 +530,19 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
         // slope that faced away from the sun: two long dark strips through the hill's shade. No sun reaches
         // there to cast them. A fence or a tree beside you in a mountain's shade keeps its outline; the
         // shade fades out from hillCarry yards between the caster and the point to twice that.
+        // The check reads the point itself, without the normal offset (2026-10-16). On a face turned from the
+        // sun the offset moves the point up to half a yard straight away from the sun, and at the foot of a
+        // wall that put it under the ground in front: the ground then counted as a hill before the point, the
+        // wall's shade was taken off, and a lit strip, flickering with the maps, ran along the wall's foot.
         [branch] if (gTr.y > 0.5 && max(terr, away) > 0.0)
         {
-            float2 uvf = float2(sf.x * 0.5 + 0.5, 0.5 - sf.y * 0.5);
+            float3 Qt  = P + gSun.xyz * gT.y;
+            float4 st  = Qt.x * gSh0 + Qt.y * gSh1 + Qt.z * gSh2 + gSh3;
+            float2 uvf = float2(st.x * 0.5 + 0.5, 0.5 - st.y * 0.5);
             float  o   = gB.z * max(gB.w, 0.5) * 2.0;
             float  dT  = R1(sTerr, uvf);
             float  m   = 1.0 / (gTr.z * 0.1);
-            float  gate = max(terr, away) * saturate((sf.z - dT) * m - 1.0);
+            float  gate = max(terr, away) * saturate((st.z - dT) * m - 1.0);
             gateV = gate;
             [branch] if (gCh.z > 0.5)
             {
@@ -545,16 +551,16 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
                                        R1(sFarL, uvf + float2( o, -o)))),
                                min(R1(sFarL, uvf + float2(-o,  o)),
                                    R1(sFarL, uvf + float2( o,  o))));
-                through = max(saturate((dT - dL) * m - 1.0), saturate((sf.z - dL) / gTr.w - 1.0)) * gate;
+                through = max(saturate((dT - dL) * m - 1.0), saturate((st.z - dL) / gTr.w - 1.0)) * gate;
             }
             float dS = min(min(R1(sShadow, uvf),
                                min(R1(sShadow, uvf + float2(-o, -o)),
                                    R1(sShadow, uvf + float2( o, -o)))),
                            min(R1(sShadow, uvf + float2(-o,  o)),
                                R1(sShadow, uvf + float2( o,  o))));
-            throughS = max(saturate((dT - dS) * m - 1.0), saturate((sf.z - dS) / gTr.w - 1.0)) * gate;
+            throughS = max(saturate((dT - dS) * m - 1.0), saturate((st.z - dS) / gTr.w - 1.0)) * gate;
             // In units of the margin (0.1 of terrainBias): 100 of them full.
-            depthsV = float3(saturate((dT - dS) * m * 0.01), saturate((dS - dT) * m * 0.01), saturate((sf.z - dT) * m * 0.01));
+            depthsV = float3(saturate((dT - dS) * m * 0.01), saturate((dS - dT) * m * 0.01), saturate((st.z - dT) * m * 0.01));
         }
     }
 )HLSL" R"HLSL(
