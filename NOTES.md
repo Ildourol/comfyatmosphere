@@ -4006,3 +4006,10 @@ that turned the water green. Now:
   reader of the water ramp texture, and the controls Zone Colour, Zone Hue and Water Colour. Water Colour stays in the
   ini as the colour until the tables are read, a second after login.
 - The owner, in game: "this looks better", at Auberdine, the Westfall coast and the Goldshire pool.
+
+**No world end with little world drawn (2026-10-16, the owner).** Looking up at the sky in Westfall, a slight turn
+of the camera made the whole screen darker or lighter. Two probes: "no world end found" in 591 of 775 frames, and
+the dark frame had no world end at all, so no effect was drawn in it. The world was a dozen draws (the sky, the sun,
+a bird) and a switch to 2D counted as the world's end only after 16 draws (`[general] minWorldDraws`, against the
+switch the client makes at the top of the frame). It now counts also once the frame has had a depth-writing draw
+outside the portrait (`WorldBegun`: `g_skyPhase` over).

@@ -365,6 +365,17 @@ namespace
     D3DMATRIX g_viewAll   = {};
     D3DMATRIX g_projAll   = {};
 
+    // Enough of the world drawn for a switch to 2D, a render target switch or a copy to be where it ends: 16 draws
+    // ([general] minWorldDraws, against the switch the client makes at the top of the frame), or a depth-writing draw
+    // outside the portrait since the frame began (g_skyPhase over). Looking up at the sky, the whole world can be a
+    // dozen draws, the sky and a bird; under 16 the switch did not count, no effect was drawn that frame, and a small
+    // turn of the camera made the whole screen darker or lighter as the count crossed it (2026-10-16, the owner, in
+    // Westfall: "no world end found" in 591 of 775 frames).
+    bool WorldBegun()
+    {
+        return g_frameDraws >= static_cast<uint32_t>(g_cfg.minWorldDraws) || !g_skyPhase;
+    }
+
     UINT VertsForPrims(D3DPRIMITIVETYPE prim, UINT primCount)
     {
         switch (prim)
@@ -1598,7 +1609,7 @@ namespace
                 Log("  [draw %4u] PROJECTION     %s (m33=%.3f)", g_probe.draws,
                     persp ? "perspective" : "NOT perspective", m->m[3][3]);
 
-            if (!persp && g_lastPersp && g_frameDraws >= static_cast<uint32_t>(g_cfg.minWorldDraws))
+            if (!persp && g_lastPersp && WorldBegun())
             {
                 WorldEnded(dev, "switch to 2D");   // glow off: the world ends here instead
                 // The rays wait for the first UI draw (see FireRays).
@@ -2052,8 +2063,7 @@ namespace
         FlushWater(dev);
         // With Full Screen Glow the world is drawn into its own render target, and the first switch away
         // from it, still under the world's perspective projection, is where the world ends.
-        if (idx == 0 && !g_inPass && !g_worldEnded && g_lastPersp &&
-            g_frameDraws >= static_cast<uint32_t>(g_cfg.minWorldDraws))
+        if (idx == 0 && !g_inPass && !g_worldEnded && g_lastPersp && WorldBegun())
         {
             IDirect3DSurface9* cur = nullptr;
             dev->lpVtbl->GetRenderTarget(dev, 0, &cur);
@@ -2077,8 +2087,7 @@ namespace
         // multisampled. The world goes to the multisampled back buffer and is copied out here, and the glow
         // composite later paints over the whole back buffer. Anything drawn after this copy is lost, so a
         // copy of the world's own render target is where the world ends.
-        if (!g_inPass && !g_worldEnded && g_lastPersp && src &&
-            g_frameDraws >= static_cast<uint32_t>(g_cfg.minWorldDraws))
+        if (!g_inPass && !g_worldEnded && g_lastPersp && src && WorldBegun())
         {
             IDirect3DSurface9* cur = nullptr;
             dev->lpVtbl->GetRenderTarget(dev, 0, &cur);
