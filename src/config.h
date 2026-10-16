@@ -100,8 +100,9 @@ struct ColourSettings
     bool  enabled = true;       // the Color Effects box: off, the pass is not even considered
     float day   = 100.0f;       // 0..200: the saturation by day (Day Saturation)
     float night = 100.0f;       // 0..200: the saturation at full night (Night Saturation)
-    float gameGlow = 80.0f;     // 0..200: the game's Full Screen Glow, in % of its own (Game Glow, gameglow.cpp).
-                                // Not under the Color Effects box: it is the game's pass, not ours
+    float gameGlow = 15.0f;     // 0..200: the game's Full Screen Glow, in % of its own (Game Glow, gameglow.cpp).
+                                // Not under the Color Effects box: it is the game's pass, not ours. 15 since
+                                // 2026-10-16 (the owner), 80 before
 };
 
 // A readable depth buffer (depth.cpp), which the volumetric light reads. Off unless enabled.
