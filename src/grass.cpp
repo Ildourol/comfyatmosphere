@@ -124,6 +124,34 @@ namespace
         g_anchorValid = d2 < 80.0f * 80.0f;
     }
 
+    // On a map chunk's corner (2026-10-16, the owner: Stormwind's fountain bent in the wind, its falling water
+    // discoloured). The fountain's water is a fixed-function draw of the grass's format, stride 36 and placed with
+    // no rotation, so the tests in IsGrass took it for grass. A grass batch's world origin plus the camera is its
+    // map chunk's corner, on the 100/3 yard grid (comfygrass src/README.md, measured 0.001 off). The fountain's lay
+    // 0.78 of a chunk off it. A hundredth of a chunk (a third of a yard) on each axis is allowed. Without the
+    // camera, the old tests alone.
+    float    g_cam[3] = {};
+    bool     g_camRead = false, g_camOk = false;
+    unsigned g_offGrid = 0, g_offGridLast = 0;
+
+    bool OnChunkGrid(const D3DMATRIX& w)
+    {
+        if (!g_camRead)
+        {
+            g_camRead = true;
+            g_camOk = ClientCamera(g_cam);
+        }
+        if (!g_camOk)
+            return true;
+        for (int i = 0; i < 2; ++i)
+        {
+            const double a = (static_cast<double>(w.m[3][i]) + g_cam[i]) * (3.0 / 100.0);
+            if (fabs(a - floor(a + 0.5)) > 0.01)
+                return false;
+        }
+        return true;
+    }
+
     // ---------------------------------------------------------------------------------------------
     // the fallback bend: the texture's v, for a vertex without a height (see "detail models")
     //
@@ -680,6 +708,11 @@ bool GrassDraw(IDirect3DDevice9* dev, const GrassDrawArgs& d, HRESULT& hr)
     vb->lpVtbl->Release(vb);   // the device holds it for the draw
     if (g.stride && stride != g.stride)
         return false;
+    if (!OnChunkGrid(*d.world))
+    {
+        ++g_offGrid;
+        return false;
+    }
     if (!EnsureWindShader(dev))
         return false;
 
@@ -833,7 +866,10 @@ void GrassFrameEnd()
     g_drawsLast = g_draws;
     g_vertsLast = g_verts;
     g_draws = g_verts = 0;
+    g_offGridLast = g_offGrid;
+    g_offGrid = 0;
     g_frameReady = false;
+    g_camRead = false;
     const GrassSettings& g = g_cfg.grass;
     if (!g_attached || g_otherDll || !g.enabled || !g_cfg.master)
         return;
@@ -879,9 +915,10 @@ void GrassDetach()
 void GrassProbe()
 {
     const GrassSettings& g = g_cfg.grass;
-    Log("grass: %s; last frame %u draws, %u vertices; the fill loop %s; the wind shader %s; the parting %s",
+    Log("grass: %s; last frame %u draws, %u vertices, %u left out off the chunks' grid%s; the fill loop %s; the "
+        "wind shader %s; the parting %s",
         g_otherDll ? "off, comfygrass.dll draws it" : !g.enabled || !g_cfg.master ? "off" : "on", g_drawsLast,
-        g_vertsLast, g_fillPatched ? "patched (each vertex has its height)" : g_fillTried ? "NOT patched (the bend "
+        g_vertsLast, g_offGridLast, g_camOk ? "" : " (no camera: the grid not tested)", g_fillPatched ? "patched (each vertex has its height)" : g_fillTried ? "NOT patched (the bend "
         "comes from the texture)" : "not patched yet", g_windVS ? "ready" : g_windVSTried ? "FAILED" : "not made yet",
         g_anchorValid ? "on the player" : "off (no player, on a ship, or [grass] parting 0)");
 }

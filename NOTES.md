@@ -2734,6 +2734,14 @@ left the character (Westfall), and the test's move to the harbour loaded a secon
 now signs in first and moves to the start before the restart. Then: the effects at 21.2 s, the worst frame 839 ms,
 6 over 40 ms (the runs before the merge: 929 to 952 ms, 8).
 
+**Not grass: Stormwind's fountain (2026-10-16, the owner).** The falling water of the fountain in the trade
+district changed colour with the grass on, and Debug View 30 coloured it. Its water is a fixed-function
+draw of the grass's format (stride 36, a triangle list of 64 vertices or more), placed with no rotation, so the draw
+test took it for grass. Now a draw is grass only if its world origin plus the camera lies on a map chunk's corner,
+on the 100/3 yard grid, within a hundredth of a chunk on each axis (`OnChunkGrid`): comfygrass measured real grass
+0.001 off it, and the fountain lay 0.78 of a chunk off. At the fountain the probe gives 30 draws left out and none
+drawn. Without the camera the old tests apply alone.
+
 ## Performance: the timers, the shadow pipeline and the water (2026-10-06)
 
 The owner asked for more than 100 fps with the effects on. Three reviews of the code (the CPU hooks, the GPU passes,
