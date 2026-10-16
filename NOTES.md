@@ -3799,6 +3799,21 @@ so a whole number a hair off reads right. **Confirmed (2026-10-16): the RX 7600 
 so a fused multiply cannot move it. Still open, if the fix holds: the foam's Lace and the rain rings hash
 floor(q) of a product (Hash1, Hash2), and there a row a hair off changes the hash.
 
+**That Mod2 broke the swell (2026-10-16, Booty Bay, the owner).** Triangles of the sea floor showed in the open sea at
+a fixed place in every chunk (every 8 cells), opening and closing with the swell; none at Wave Height 0. x / 2 + 0.25
+rounds up to the next whole number from 2^22 on: a float holds 24 bits, and from 2^22 to 2^23 its step is 0.5, so
+8388607.75 is a tie that goes to 8388608. BitAt ends in Mod2(floor(bits * p)), and for bits 0 and 1 of a full 24-bit
+component that is 16777215 or 8388607: Mod2 gave -1, and the bit read 0. On the open sea every point is the sea, so
+points 0, 1, 24, 25, 48, 49, 72 and 73 of each chunk read as a lake and took no swell (Lake Waves 0), and the next
+chunk lifted the same points. The flat colour (`[water] debugSkip 16`) kept the holes: no draw of ours covered them.
+Mod2 now adds the quarter to the fraction alone: h = x / 2, f = floor(h), x - 2 (f + step(0.75, h - f)). h and h - f
+are exact for any whole number up to 2^24, and a number a hair under an even row still reads 0. The wet cells'
+BitAt16 never passes Mod2 more than 65535.
+
+What took the time: the holes come and go with the swell, and single screenshots of debug switches (the stencil
+off, the depth test off) read as fixes when the frame only had fewer holes. Count over several frames, or check the
+math first.
+
 The water shader is at its 32 temporary registers. A debug branch that repeats a test from the keep step in the
 same form (`gWave.y > 0.5 && gWave.y < 1.5`, `floor(-cell * 0.24)`) made fxc keep the earlier result through the
 ripples' loop, and the compile failed (X4505). The same test in another form (`abs(gWave.y - 1.0) < 0.5`,

@@ -90,8 +90,13 @@ namespace
     // g - frc(g), and a compiler that fuses the multiply into the subtraction (an FMA) leaves it up to half an ulp
     // under the whole number. Under an even row Mod2 gave 2, the bit index jumped by 16 past the 16 bits, and the
     // water part read a wet cell as dry and dropped the pixel: the bed showed as dots in whole cells.
+    // The quarter is added to the fraction alone (2026-10-16): x * 0.5 + 0.25 rounds up to the next whole number from
+    // 2^22 on (a float holds 24 bits), and BitAt's bits 0 and 1 of a full 24-bit component (16777215, 8388607) read 0.
+    // The sea's points 0, 1, 24, 25, 48, 49, 72 and 73 of every chunk took no swell, their neighbours in the next chunk
+    // did, and the surface split there: triangles of the sea floor at a fixed place in each chunk, opening and closing
+    // with the swell (Booty Bay, the owner). x * 0.5 and its fraction are exact for any whole number up to 2^24.
 #define COMFY_BIT_AT_HLSL \
-    "float Mod2(float x) { return x - 2.0 * floor(x * 0.5 + 0.25); }\n" \
+    "float Mod2(float x) { float h = x * 0.5; float f = floor(h); return x - 2.0 * (f + step(0.75, h - f)); }\n" \
     "float BitAt16(float bits, float n) { float s = exp2(-n); return Mod2(floor(bits * s + 0.5 * s)); }\n" \
     "float BitAt(float bits, float n)\n" \
     "{\n" \
