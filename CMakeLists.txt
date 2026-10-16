@@ -30,7 +30,6 @@ add_library(comfyatmos SHARED
     src/lamps.cpp
     src/lampglow.cpp
     src/sunshadows.cpp
-    src/spells.cpp
     src/tune.cpp
     src/terrainshade.cpp
     src/gameglow.cpp

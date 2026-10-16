@@ -475,9 +475,7 @@ float4 gA    : register(c7);        // the sky's colour on the fog; a = fog debu
 float4 gDisc0 : register(c8);       // the way to the sun (by night the larger moon), 1 when known
 float4 gDisc1 : register(c9);       // the way to the other moon, 1 by night when known
 float4 gH    : register(c10);       // the sky's colour just over the horizon, at full brightness; w 1 when known
-float4 gW    : register(c11);       // the water's height from the camera (yards), 1 when known, 1 when sScene is bound;
-                                    // w: 0 the whole composite, 1 the shade alone (the world through the fog, and the
-                                    // sky's light on it), 2 the sun's light alone, added (2026-10-12, spells.cpp)
+float4 gW    : register(c11);       // the water's height from the camera (yards), 1 when known, 1 when sScene is bound
 float3 Tap(float2 base, float2 o, float2 f, float dist, inout float wsum)
 {
     float4 s  = tex2Dlod(sGlow, float4((base + o + 0.5) * gT.zw, 0, 0));
@@ -585,10 +583,7 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
     // made the thick fog on the far sea darker than the sky over it and the water under it.
     float  farV = raw > worldEnd ? 1.0 : smoothstep(300.0, 1000.0, dist);
     float3 skyA = lerp(gA.rgb, gH.rgb, farV * gH.w);
-    float3 sunRgb = gC.rgb * m.r * lerp(1.0, tex2Dlod(sCover, float4(0.5, 0.5, 0, 0)).r, gC.a);
-    if (gW.w > 1.5)
-        return float4(sunRgb, 1.0);                                        // the sun's light alone, after the spells
-    float3 rgb  = (gW.w > 0.5 ? 0.0 : sunRgb) + skyA * m.g;
+    float3 rgb  = gC.rgb * m.r * lerp(1.0, tex2Dlod(sCover, float4(0.5, 0.5, 0, 0)).r, gC.a) + skyA * m.g;
     // A crack: the colour beside it through the fog, or without the copy the fog's light alone.
     [branch] if (raw < rawIn)
         return float4(rgb + (gW.z > 0.5 ? T * tex2Dlod(sScene, float4(fillAt, 0, 0)).rgb : 0.0), 0.0);
@@ -622,20 +617,6 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
     int    g_histCur = 0;                     // which of the two holds the last result
     bool   g_histValid = false;
     unsigned  g_frameNo   = 0;                // counted at Present
-
-    // The composite in two parts (2026-10-12, spells.cpp): at the world's end the shade alone (part 1), the world
-    // through the fog and the sky's light on it, so the game's additive draws go on after it; later the sun's light
-    // alone (VolumeDrawLight), from what part 1 kept. 0: the whole composite at once, as before.
-    int g_part = 0;
-    struct LightPart
-    {
-        unsigned           frame = ~0u;
-        IDirect3DTexture9* glow  = nullptr;   // the march's result, after the temporal pass
-        IDirect3DTexture9* cover = nullptr;
-        IDirect3DTexture9* depth = nullptr;
-        float              kc[48] = {};
-        UINT               w = 0, h = 0;
-    } g_light;
     unsigned  g_histFrame = 0;                // the frame the last result was made in
     D3DMATRIX g_histVP = {};                  // ...its camera view-projection
     float     g_histCam[3] = {};              // ...and its camera position, world yards
@@ -2067,7 +2048,6 @@ bool VolumeDraw(IDirect3DDevice9* dev)
         const bool scene = (!fogDebug || fogDebug == 3) && kc[45] > 0.5f && EnsureScene(dev, wd) &&
                            SUCCEEDED(d->StretchRect(dev, world, nullptr, g_scene.surf, nullptr, D3DTEXF_NONE));
         kc[46] = scene ? 1.0f : 0.0f;
-        kc[47] = g_part == 1 ? 1.0f : 0.0f;
         d->SetTexture(dev, 3, reinterpret_cast<IDirect3DBaseTexture9*>(scene ? g_scene.tex : nullptr));
         d->SetSamplerState(dev, 3, D3DSAMP_ADDRESSU,  D3DTADDRESS_CLAMP);
         d->SetSamplerState(dev, 3, D3DSAMP_ADDRESSV,  D3DTADDRESS_CLAMP);
@@ -2080,16 +2060,6 @@ bool VolumeDraw(IDirect3DDevice9* dev)
         d->SetTexture(dev, 3, nullptr);
         d->SetTexture(dev, 1, nullptr);
         d->SetVertexShader(dev, nullptr);
-        if (g_part == 1)
-        {
-            g_light.frame = g_frameNo;
-            g_light.glow  = src->tex;
-            g_light.cover = cover;
-            g_light.depth = depth;
-            memcpy(g_light.kc, kc, sizeof(kc));
-            g_light.w = wd.Width;
-            g_light.h = wd.Height;
-        }
     }
 
     d->SetTexture(dev, 2, nullptr);
@@ -2139,97 +2109,6 @@ bool VolumeDraw(IDirect3DDevice9* dev)
         else
             Log("fog: off ([fog] enabled %d, density %.4f)", fs.enabled ? 1 : 0, fs.density);
     }
-    return true;
-}
-
-bool VolumeDrawShade(IDirect3DDevice9* dev)
-{
-    g_part = 1;
-    g_light.frame = ~0u;
-    const bool drawn = VolumeDraw(dev);
-    g_part = 0;
-    return drawn;
-}
-
-bool VolumeDrawLight(IDirect3DDevice9* dev)
-{
-    const LightPart& L = g_light;
-    if (L.frame != g_frameNo || !L.glow || !L.depth || (L.kc[24] <= 0.0f && L.kc[25] <= 0.0f && L.kc[26] <= 0.0f))
-        return false;
-    auto* d = dev->lpVtbl;
-    IDirect3DSurface9* target = nullptr;
-    d->GetRenderTarget(dev, 0, &target);
-    if (!target)
-        return false;
-    IDirect3DSurface9* oldDS = nullptr;
-    d->GetDepthStencilSurface(dev, &oldDS);
-    g_sb->lpVtbl->Capture(g_sb);
-    DWORD saved[kTouchedCount];
-    for (int i = 0; i < kTouchedCount; ++i)
-        d->GetRenderState(dev, kTouched[i], &saved[i]);
-    IDirect3DBaseTexture9*       oldTex0 = nullptr;
-    IDirect3DVertexShader9*      oldVS   = nullptr;
-    IDirect3DVertexDeclaration9* oldDecl = nullptr;
-    DWORD                        oldFVF  = 0;
-    d->GetTexture(dev, 0, &oldTex0);
-    d->GetVertexShader(dev, &oldVS);
-    d->GetVertexDeclaration(dev, &oldDecl);
-    d->GetFVF(dev, &oldFVF);
-
-    d->SetDepthStencilSurface(dev, nullptr);   // the scene's depth is read
-    d->SetRenderState(dev, D3DRS_ZENABLE,           D3DZB_FALSE);
-    d->SetRenderState(dev, D3DRS_ZWRITEENABLE,      FALSE);
-    d->SetRenderState(dev, D3DRS_ALPHATESTENABLE,   FALSE);
-    d->SetRenderState(dev, D3DRS_CULLMODE,          D3DCULL_NONE);
-    d->SetRenderState(dev, D3DRS_FOGENABLE,         FALSE);
-    d->SetRenderState(dev, D3DRS_STENCILENABLE,     FALSE);
-    d->SetRenderState(dev, D3DRS_SCISSORTESTENABLE, FALSE);
-    d->SetRenderState(dev, D3DRS_SRGBWRITEENABLE,   FALSE);
-    d->SetRenderState(dev, D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN |
-                                                   D3DCOLORWRITEENABLE_BLUE);
-    d->SetRenderState(dev, D3DRS_ALPHABLENDENABLE, TRUE);
-    d->SetRenderState(dev, D3DRS_SRCBLEND,         D3DBLEND_ONE);
-    d->SetRenderState(dev, D3DRS_DESTBLEND,        D3DBLEND_SRCALPHA);
-    d->SetRenderState(dev, D3DRS_BLENDOP,          D3DBLENDOP_ADD);
-    d->SetTexture(dev, 0, reinterpret_cast<IDirect3DBaseTexture9*>(L.glow));
-    d->SetTexture(dev, 1, reinterpret_cast<IDirect3DBaseTexture9*>(L.depth));
-    d->SetTexture(dev, 2, reinterpret_cast<IDirect3DBaseTexture9*>(L.cover));
-    d->SetTexture(dev, 3, nullptr);
-    for (DWORD st = 0; st < 3; ++st)
-    {
-        d->SetSamplerState(dev, st, D3DSAMP_ADDRESSU,  D3DTADDRESS_CLAMP);
-        d->SetSamplerState(dev, st, D3DSAMP_ADDRESSV,  D3DTADDRESS_CLAMP);
-        d->SetSamplerState(dev, st, D3DSAMP_MINFILTER, D3DTEXF_POINT);
-        d->SetSamplerState(dev, st, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
-        d->SetSamplerState(dev, st, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
-        d->SetSamplerState(dev, st, D3DSAMP_SRGBTEXTURE, 0);
-    }
-    float kc[48];
-    memcpy(kc, L.kc, sizeof(kc));
-    kc[46] = 0.0f;   // no screen copy
-    kc[47] = 2.0f;   // the sun's light alone
-    d->SetVertexShader(dev, g_vsMarch);
-    d->SetPixelShader(dev, g_psComp);
-    d->SetPixelShaderConstantF(dev, 0, kc, 12);
-    ClipQuad(dev, L.w, L.h);
-    for (DWORD st = 1; st < 4; ++st)
-        d->SetTexture(dev, st, nullptr);
-
-    for (int i = 0; i < kTouchedCount; ++i)
-        d->SetRenderState(dev, kTouched[i], saved[i]);
-    d->SetTexture(dev, 0, oldTex0);
-    d->SetVertexShader(dev, oldVS);
-    d->SetFVF(dev, oldFVF);
-    if (oldDecl)
-        d->SetVertexDeclaration(dev, oldDecl);
-    d->SetRenderTarget(dev, 0, target);
-    d->SetDepthStencilSurface(dev, oldDS);
-    g_sb->lpVtbl->Apply(g_sb);
-    SafeRelease(oldTex0);
-    SafeRelease(oldVS);
-    SafeRelease(oldDecl);
-    SafeRelease(oldDS);
-    target->lpVtbl->Release(target);
     return true;
 }
 

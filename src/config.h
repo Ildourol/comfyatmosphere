@@ -743,10 +743,6 @@ struct Settings
     int   scanKey     = VK_F12;     // with Ctrl: search memory for the game clock (read-only)
     int   dayNightKey = VK_END;     // with Ctrl: switch between [time] dayHour and nightHour
     int   chainWaitMs = 10000;      // how long to wait for an old comfygrass.dll to finish patching first
-    bool  spellsOnTop = true;       // the game's additive draws (spells, glows) held until the sun shadows and the fog's
-                                    // shade are on the world, and drawn over them (spells.cpp, 2026-10-12)
-    int   skipAfterAdd = 0;         // 1: leave out every alpha-blended model draw after the world's first additive
-                                    // one (2026-10-12): what would draw over the shade if the passes ran there
     int   minWorldDraws = 16;       // world draws needed before a switch to 2D counts as the end of the
                                     // world (depth, shadows and volumetric light run there)
 };

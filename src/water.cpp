@@ -1367,9 +1367,8 @@ float4 main(float3 rel : TEXCOORD0, float amp : TEXCOORD1, float gd : TEXCOORD2,
     // colours, to find the bands of dots on AMD cards (issue #11). Grey the water part, yellow the sand part (and
     // the early return above), cyan foam, green a strong glint, white a value that is not a number. The cells'
     // edges dark, the chunk's black. A dry cell is tinted blue in the sand part (the water part reads every cell
-    // wet). Dots left in their own colour are drawn by nothing of ours, or by a pass after the water. The view sets
-    // no fog debug: any fog debug value moves the shadows and the fog to their old place (EarlyPasses), which could
-    // hide the fault. The fog's cracks are [fog] debug 3, alone.
+    // wet). Dots left in their own colour are drawn by nothing of ours, or by a pass after the water. The fog's cracks
+    // are [fog] debug 3.
     if (gFoam.w > 12.5 && gFoam.w < 13.5)
     {
         // The part and the cell are tested in another form than at the keep test (abs(gWave.y - 1.0), cell /

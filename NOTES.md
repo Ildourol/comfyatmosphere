@@ -3668,6 +3668,36 @@ The client's Full Screen Glow then blooms the spells as before.
   brighter, "it might be ok". If it is too bright, the next step is to split the sun shadows as the fog is: the
   shade at the world's end, the Sunlight brightening where it was, after the glow.
 
+**Removed (2026-10-16, the owner): Stormwind's fountain blinked white.** With the fog or the volumetric light on, the
+water of the fountain in the trade district (-8859.4 648.8) flared white and dropped back, frame by frame.
+`spellsOnTop 0` stopped it every time; so did the fog and the light off. What was found, in the test client:
+
+- **What blinks.** Eight shots a quarter second apart, the basin's mean brightness: held, 176 to 182 in seven and
+  145 in one; `spellsOnTop 0`, 145 to 147 in all eight. The stones, the bricks and the pillar were the same within
+  3 in both. So the held order lit the basin's water up, in most frames but not all; the old order is the steady
+  one. Game Glow 0 did not stop it.
+- **Not drawn early.** A tally over 602 frames: the fountain's five draws (texture 128x128 DXT1, the model at the
+  map's doodad at -8859.5 648.9 96.4) were held 3010 times and drawn early 0. 106 frames drew other held draws early,
+  each time before a write with D3DLOCK_DISCARD (particles). Drawing only the draws that read the written buffer
+  early did not stop it.
+- **The fountain's own draws in place did not stop it.** Each additive draw at a doodad the map files place was
+  left in place (the first bone through the shadow cache's camera, within 1 yard across and from 3 under to 8 over
+  the place): all five matched, and the blink stayed, with the light on as with the fog. The other held draws there
+  are fixed-function particles (the fountain's spray, as it seems): they carry their vertices in world space with
+  an empty world matrix, so by place they cannot be told from a spell's.
+- **Ruled out or not found.** A block in the pool that held no vertex declaration (a slot first recorded for an FVF
+  draw) was set right; the blink stayed and faint rings showed round the basins, so that was taken back. The glow's
+  copy of the world gets the held draws first (the StretchRect hook flushes them). The light's own glow (Debug
+  View 1) adds nothing bright on the basin, but any light debug view turned the held draws off, so it did not show
+  the held path.
+
+Why a replayed particle lights the water up was not found. The owner had it removed: `spells.cpp`, the early
+shade at the world's end (`EarlyPasses`, `VolumeDrawShade` and `VolumeDrawLight`), `[general] spellsOnTop` and
+`skipAfterAdd`, and the tests fargodeep-spell-shade and outdoor-spell-order, all from 7a6dc5f. The fog and the light
+are drawn whole before the UI again, and spells in caves and shade are darkened as before 2026-10-12. To try again,
+start from 7a6dc5f and a burst of shots at the fountain with Debug View 0: a probe logs one frame, and the blink is
+not in every frame.
+
 ## Game Glow: the game's Full Screen Glow, turned down (2026-10-13, the owner)
 
 "The full screen glow is quite bright." With Full Screen Glow on, the client draws three passes after the world
