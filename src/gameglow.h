@@ -6,4 +6,5 @@
 // The shader to bind in place of ps: a copy of the client's glow composite that scales both of its glow amounts by
 // `scale` (1 = the game's own), or ps itself when ps is not that shader or scale is 1.
 IDirect3DPixelShader9* GameGlowSwap(IDirect3DDevice9* dev, IDirect3DPixelShader9* ps, float scale);
+bool GameGlowIsCopy(IDirect3DPixelShader9* ps);   // ps is our copy of the composite
 void GameGlowReset();   // before Reset, and for a new device

@@ -1543,6 +1543,33 @@ namespace
         return g_oSetRS(dev, st, value);
     }
 
+    // Game Glow ([colour] gameGlow): the Full Screen Glow's composite, scaled (gameglow.cpp). Only under a 2D
+    // projection (2026-10-16, the owner: squares round Stormwind's lamps with Game Glow under 100). The client binds
+    // the same shader in the world for a lamp's flame sprite, with v0.z at 1 to take its second texture alone; the
+    // copy scaled v0.z down and mixed in the first texture, a DXT3 whose colour is yellow under its clear part, and
+    // the sprite's whole quad was added. The client may leave a shader bound across the switch without setting it
+    // again, so the switch itself puts the right one in place (hkSetTransform).
+    IDirect3DPixelShader9* g_psClient = nullptr;   // the client's last pixel shader, before any swap; compared only
+    float GameGlowScale()
+    {
+        return g_cfg.master ? g_cfg.colour.gameGlow * 0.01f : 1.0f;
+    }
+    void GameGlowOnSwitch(IDirect3DDevice9* dev, bool persp)
+    {
+        IDirect3DPixelShader9* cur = nullptr;
+        if (FAILED(dev->lpVtbl->GetPixelShader(dev, &cur)) || !cur)
+            return;
+        if (persp && GameGlowIsCopy(cur) && g_psClient)
+            g_oSetPS(dev, g_psClient);
+        else if (!persp && cur == g_psClient)
+        {
+            IDirect3DPixelShader9* swapped = GameGlowSwap(dev, cur, GameGlowScale());
+            if (swapped != cur)
+                g_oSetPS(dev, swapped);
+        }
+        cur->lpVtbl->Release(cur);
+    }
+
     // Where the world ends and the UI begins. A probe of this client shows the world drawn under a
     // perspective projection, then (in the same call sequence that parks fog at start 0 / end 1 /
     // magenta) the first switch to an orthographic one, after which it is all UI. With Full Screen Glow
@@ -1585,6 +1612,8 @@ namespace
                     }
                 }
             }
+            if (persp != g_lastPersp)
+                GameGlowOnSwitch(dev, persp);
             g_lastPersp = persp;
         }
         return g_oSetTransform(dev, st, m);
@@ -1596,11 +1625,12 @@ namespace
     {
         if (!g_inPass && sh)
         {
+            g_psClient = sh;
             const float share = g_cfg.master ? SunShadowsShare() : 0.0f;
             const float keep  = 1.0f - (1.0f - g_cfg.sunShadows.baked) * share;
             sh = TerrainShadeSwap(dev, sh, keep);
-            // Game Glow ([colour] gameGlow): the Full Screen Glow's composite, scaled (gameglow.cpp).
-            sh = GameGlowSwap(dev, sh, g_cfg.master ? g_cfg.colour.gameGlow * 0.01f : 1.0f);
+            if (!g_lastPersp)
+                sh = GameGlowSwap(dev, sh, GameGlowScale());
         }
         return g_oSetPS(dev, sh);
     }

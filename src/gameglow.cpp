@@ -126,6 +126,11 @@ IDirect3DPixelShader9* GameGlowSwap(IDirect3DDevice9* dev, IDirect3DPixelShader9
     return copy;
 }
 
+bool GameGlowIsCopy(IDirect3DPixelShader9* ps)
+{
+    return ps && ps == g_copy;
+}
+
 void GameGlowReset()
 {
     if (g_copy)

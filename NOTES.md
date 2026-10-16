@@ -3725,6 +3725,15 @@ client pixel shaders dumped over past sessions, 477 match, all the same 204 byte
 `tests/stormwind-game-glow.json` takes shots at 100, 50, 0 and 200 on the bridge into Stormwind. Its first run
 (2026-10-13) found the composite and made the copy; at 200 the bridge is washed out, at 0 it is clear.
 
+**Squares round the lamps (2026-10-16, the owner).** With Game Glow under 100, Stormwind's lamp flames stood in hard
+yellow squares; at 80 faint, at 0 bright, and with Full Screen Glow off a ghost flame beside the real one. The client
+binds the same 204-byte shader in the world for a lamp's flame sprite (32x32 DXT3, additive, a vertex shader), with
+v0.z at 1 to take its second texture alone. The copy, bound for every use, scaled v0.z down and mixed in the first
+texture, whose colour is yellow under its clear part, and the shader writes alpha 1 (the game's does too), so the
+whole quad was added. Now the copy is bound only under a 2D projection, and at each switch of projection the bound
+shader is set right (`GameGlowOnSwitch`), as the client may not set it again. Measured at the lamp: no square at 0,
+80 or 200; the frame's mean 76.8, 83.0 and 90.9, so the copy still scales the composite.
+
 ## Bands of the sand's colour over the sea on an AMD card (2026-10-13, issue #11)
 
 A player on an AMD Radeon RX 9060 XT (AMD's own Vulkan driver, v0.13.0-alpha) saw straight, evenly spaced bands
