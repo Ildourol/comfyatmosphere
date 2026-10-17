@@ -3158,6 +3158,112 @@ syncFrame:SetScript("OnUpdate", function()
 	SyncUnitShadow(false);
 end);
 
+-- The minimap button (2026-10-17, the owner). Left-click opens the settings window, as /atmos does.
+-- Right-click opens a menu: the settings window, the debug panel, the stats and the probe. Drag moves
+-- the button around the minimap's edge, and ComfyAtmosphereDB.minimapAngle keeps the place, in degrees
+-- from the right, counter-clockwise. The button is made only when the DLL is loaded, as the page is.
+local MINIMAP_RADIUS = 80;
+local minimapButton = nil;
+
+local function MinimapButtonPlace()
+	local angle = math.rad(ComfyAtmosphereDB.minimapAngle);
+	minimapButton:ClearAllPoints();
+	minimapButton:SetPoint("CENTER", Minimap, "CENTER",
+		MINIMAP_RADIUS * math.cos(angle), MINIMAP_RADIUS * math.sin(angle));
+end
+
+local function MinimapMenuInit()
+	local entries = {
+		{ "Options", WindowToggle, window and window:IsShown() },
+		{ "Debug", ComfyAtmosphere_DebugToggle, debugFrame and debugFrame:IsShown() },
+		{ "Stats", ComfyAtmosphere_StatsToggle, statsFrame and statsFrame:IsShown() },
+		{ "Probe", ComfyAtmosphere_Probe },
+	};
+	-- Every row keeps the room for a tick, Probe and the title too: the client moves the text of a row
+	-- with notCheckable 27 pixels to the left, out of line with the others.
+	local info = UIDropDownMenu_CreateInfo();
+	info.text = "Atmosphere";
+	info.isTitle = 1;
+	UIDropDownMenu_AddButton(info);
+	for _, entry in ipairs(entries) do
+		info = UIDropDownMenu_CreateInfo();
+		info.text = entry[1];
+		info.func = entry[2];
+		info.checked = entry[3] and 1 or nil;
+		UIDropDownMenu_AddButton(info);
+	end
+end
+
+local function MinimapButtonBuild()
+	if minimapButton then
+		return;
+	end
+	if not ComfyAtmosphereDB then
+		ComfyAtmosphereDB = {};
+	end
+	if not ComfyAtmosphereDB.minimapAngle then
+		ComfyAtmosphereDB.minimapAngle = 200;
+	end
+
+	local b = CreateFrame("Button", "ComfyAtmosphereMinimapButton", Minimap);
+	minimapButton = b;
+	b:SetWidth(31);
+	b:SetHeight(31);
+	b:SetFrameStrata("MEDIUM");
+	b:SetFrameLevel(8);
+	b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight");
+	local icon = b:CreateTexture(nil, "BACKGROUND");
+	icon:SetTexture("Interface\\Icons\\Spell_Nature_MoonGlow");
+	icon:SetWidth(20);
+	icon:SetHeight(20);
+	icon:SetPoint("TOPLEFT", b, "TOPLEFT", 7, -5);
+	local border = b:CreateTexture(nil, "OVERLAY");
+	border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder");
+	border:SetWidth(53);
+	border:SetHeight(53);
+	border:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0);
+
+	local menu = CreateFrame("Frame", "ComfyAtmosphereMinimapMenu", UIParent, "UIDropDownMenuTemplate");
+	UIDropDownMenu_Initialize(menu, MinimapMenuInit, "MENU");
+
+	b:RegisterForClicks("LeftButtonUp", "RightButtonUp");
+	b:RegisterForDrag("LeftButton");
+	b:SetScript("OnClick", function()
+		GameTooltip:Hide();
+		if arg1 == "RightButton" then
+			ToggleDropDownMenu(1, nil, menu, "cursor");
+		else
+			CloseDropDownMenus();
+			WindowToggle();
+		end
+	end);
+	b:SetScript("OnDragStart", function()
+		GameTooltip:Hide();
+		this:SetScript("OnUpdate", function()
+			local mx, my = Minimap:GetCenter();
+			local px, py = GetCursorPosition();
+			local scale = Minimap:GetEffectiveScale();
+			ComfyAtmosphereDB.minimapAngle = math.deg(math.atan2(py / scale - my, px / scale - mx));
+			MinimapButtonPlace();
+		end);
+	end);
+	b:SetScript("OnDragStop", function()
+		this:SetScript("OnUpdate", nil);
+	end);
+	b:SetScript("OnEnter", function()
+		GameTooltip:SetOwner(this, "ANCHOR_LEFT");
+		GameTooltip:SetText("Atmosphere", 1, 1, 1);
+		GameTooltip:AddLine("Click: settings", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b);
+		GameTooltip:AddLine("Right-click: options, debug, stats, probe",
+			NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b);
+		GameTooltip:AddLine("Drag: move", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b);
+		GameTooltip:Show();
+	end);
+	b:SetScript("OnLeave", function() GameTooltip:Hide(); end);
+
+	MinimapButtonPlace();
+end
+
 local frame = CreateFrame("Frame");
 frame:RegisterEvent("VARIABLES_LOADED");
 frame:RegisterEvent("PLAYER_LOGOUT");
@@ -3178,5 +3284,6 @@ frame:SetScript("OnEvent", function()
 			"|cff88cc88comfyatmosphere|r: this client's options panel has no page for the settings. "
 			.. "Type /atmos to open them.");
 	end
+	MinimapButtonBuild();
 	syncFrame:Show();
 end);

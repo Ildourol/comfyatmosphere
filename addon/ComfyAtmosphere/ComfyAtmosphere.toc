@@ -2,5 +2,6 @@
 ## Title: comfyatmosphere
 ## Notes: Fog, light, shadow, water and grass controls on Video > Atmosphere, and in /atmos options. Needs comfyatmos.dll.
 ## Author: comfy-wow
+## SavedVariables: ComfyAtmosphereDB
 
 ComfyAtmosphere.lua

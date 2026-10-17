@@ -70,6 +70,9 @@ Download the zip from [Releases](https://github.com/aloofbit/comfyatmosphere/rel
 
 Use `/atmos` in game to enable/disable and tune features of the mod.
 
+The minimap button does the same. Click it to open the settings window. Right-click it for a menu: Options, Debug,
+Stats and Probe. Drag it to move it around the minimap.
+
 <img src="media/options.png"/>
 
 ### Time of day
