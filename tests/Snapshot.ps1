@@ -39,7 +39,9 @@ $log = @('Logs\comfyatmos.log', 'comfyatmos.log') | ForEach-Object { Join-Path $
 if (-not $log) { $log = Join-Path $Client 'Logs\comfyatmos.log' }
 
 $script = Join-Path $env:TEMP 'comfy-snapshot.txt'
-[IO.File]::WriteAllText($script, "pos snapshot`r`nlook`r`natmos probe`r`nwait 3`r`n")
+# Two looks (2026-10-16): after a login comfyStats is empty, the first read sets it again, and the DLL fills it
+# within a second. The first look then has no camera.
+[IO.File]::WriteAllText($script, "pos snapshot`r`nlook`r`nwait 1.2`r`nlook`r`natmos probe`r`nwait 3`r`n")
 $out = & (Join-Path $tool 'Run-Test.ps1') $script -Client $Client 6>&1 | Out-String
 
 # The ground under you is '-' when the tool cannot read it (2026-10-11).
