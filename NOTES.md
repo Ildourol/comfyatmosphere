@@ -4206,5 +4206,5 @@ to Booty Bay. Three causes, found in this order.
   held the ship where it was, 0.4 yards back at 18 yards a second. While a ship under way is within a map's reach
   (`WaterShipWithin`), that map is redrawn on each rebuild. The owner: "I think we did it".
 
-Tried on the way and left out: Leaves off, Shadow Softness 2 and `minGap` 0.6 changed nothing. Not measured yet: the
+Tried on the way and left out: Leaves off, Shadow Softness 2 and `modelGap` 0.6 changed nothing. Not measured yet: the
 frame time while a ship sails near, and whether the hull, now a model while it moves, takes the foam round objects.
