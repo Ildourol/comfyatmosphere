@@ -275,6 +275,10 @@ namespace
                     L.colour[2] = (c & 0xFF) / 255.0f * inten;
                     L.reach = (std::max)(end, 5.0f);
                     L.set = 0;
+                    // It lights surfaces and draws no glow (2026-10-17, the owner: a light floating under the roof of
+                    // a building in Auberdine). No lamp stands at it, so its glow was a ball in the air. A lamp at the
+                    // same place replaces it below.
+                    L.fill = true;
                     strncpy_s(L.what, "BUILDING", _TRUNCATE);
                     out.lights.push_back(L);
                 }

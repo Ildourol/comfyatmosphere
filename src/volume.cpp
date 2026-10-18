@@ -1905,8 +1905,8 @@ bool VolumeDraw(IDirect3DDevice9* dev)
 
     // --- how much of the sun is in view on screen ([volume] occlusion, cover.cpp) -------------------
     // The shadow map holds only what lies within [shadow] depth of you, so a sun setting behind the far
-    // horizon kept lighting the fog. With the sun on screen, the depth buffer shows whether terrain covers
-    // it, however far away. Off screen, or in a debug view, it is not tested and counts as in view.
+    // horizon kept lighting the fog. With the sun on screen, the depth buffer shows whether terrain past the map
+    // covers it. Off screen, or in a debug view, it is not tested and counts as in view.
     IDirect3DTexture9* cover = nullptr;
     {
         float s4[4] = { sunDir[0], sunDir[1], sunDir[2], 0.0f }, clip[4];
@@ -1920,6 +1920,10 @@ bool VolumeDraw(IDirect3DDevice9* dev)
         in.test   = v.occlusion && !v.debug && fabsf(nx) <= 1.0f && fabsf(ny) <= 1.0f;
         in.aspect = wd.Height ? static_cast<float>(wd.Width) / static_cast<float>(wd.Height) : 1.0f;
         in.depth  = depth;
+        // Only what lies past the shadow map's reach: the march shades the fog behind anything nearer (2026-10-17).
+        in.coverFrom = g_cfg.shadow.range;
+        in.zMin = minZ; in.zInv = (maxZ - minZ) > 1e-6f ? 1.0f / (maxZ - minZ) : 1.0f;
+        in.proj33 = proj.m[2][2]; in.proj43 = proj.m[3][2];
         cover = CoverMeasure(dev, kCoverVolume, in, g_cfg.rays.coverTime);
     }
 

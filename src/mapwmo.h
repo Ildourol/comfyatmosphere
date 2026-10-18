@@ -13,7 +13,7 @@ struct WmoLight
     float    colour[3];  // 0..1
     uint16_t set;        // the doodad set it belongs to (0 is shown with every placement)
     char     what[12];   // the keyword it was taken by, for the probe
-    bool     fill;       // the building's light under a lamp, for the floor: lights surfaces, draws no glow
+    bool     fill;       // the building's own light (MOLT): lights surfaces, draws no glow
 };
 
 // A building's floors, for the fog's ground under the terrain (MapFloorHeight): its opaque triangles that lie

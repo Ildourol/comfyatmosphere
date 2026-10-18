@@ -215,6 +215,12 @@ namespace
             if (d < e)
                 in.push_back({ &l, d <= s ? 1.0f : (e > s ? (e - d) / (e - s) : 1.0f) });
         }
+        // A map with no light zones (the Deeprun Tram, 2026-10-17) is lit by light #1, Azeroth's default, as the game
+        // does: its fog band at 06:25 was 5C7D6F, and the game drew 5B7C6F there.
+        if (!def && in.empty())
+            for (const Light& l : g_lights)
+                if (l.id == 1)
+                    def = &l;
         if (!def && in.empty())
             return false;
         std::sort(in.begin(), in.end(), [](const auto& a, const auto& b) { return a.first->end > b.first->end; });

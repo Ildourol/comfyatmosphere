@@ -59,25 +59,39 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
 }
 )HLSL";
 
-    // Each point is weighted by the kept sky's brightness there, so the sun's own disc counts most.
+    // Each point is weighted by the kept sky's brightness, so the sun's own disc counts most. For the volumetric light
+    // only what lies past its shadow map covers (coverFrom, 2026-10-17): the march shades the fog behind a nearer
+    // thing itself, and a pole near the camera faded the whole light. A point counts as sky when
+    // the sky shows at it or [rays] occlusionThin to its left or right (2026-10-17): a pole or a trunk across the sun
+    // hid the heaviest point, and the rays over the whole view went down by a third as you walked past it. A ridge or
+    // a roof is wider than that and still covers the sun.
     const char* kDepthHlsl = R"HLSL(
 sampler2D s0 : register(s0);   // the world's depth (INTZ), full resolution
 sampler2D s1 : register(s1);   // the sky before the clouds, downsampled: the weights
 float4 gV    : register(c0);   // sun uv.xy, 1 / the share that counts as fully in view, 1 = no test
-float4 gW    : register(c1);   // 1 = weight by the sky's brightness, 0 = all points the same
+float4 gW    : register(c1);   // x: 1 = weight by the sky's brightness, 0 = all points the same; y: occlusionThin in uv
 float4 gO[8] : register(c2);   // the other eight points, as offsets from the sun
+float Open(float raw)          // 1: the sky, or a thing nearer than coverFrom (gW.z: its depth, -1 = none)
+{
+    return (raw >= 0.99 || raw < gW.z) ? 1.0 : 0.0;
+}
+float Sky(float2 p)
+{
+    float2 dx = float2(gW.y, 0.0);
+    return max(Open(tex2D(s0, p).r), max(Open(tex2D(s0, p - dx).r), Open(tex2D(s0, p + dx).r)));
+}
 float4 main(float2 uv : TEXCOORD0) : COLOR
 {
     const float3 k = float3(0.299, 0.587, 0.114);
     float w    = lerp(1.0, dot(tex2D(s1, gV.xy).rgb, k) + 0.05, gW.x);
     float all  = w;
-    float kept = w * step(0.99, tex2D(s0, gV.xy).r);
+    float kept = w * Sky(gV.xy);
     for (int i = 0; i < 8; ++i)
     {
         float2 p = gV.xy + gO[i].xy;
         w     = lerp(1.0, dot(tex2D(s1, p).rgb, k) + 0.05, gW.x);
         all  += w;
-        kept += w * step(0.99, tex2D(s0, p).r);
+        kept += w * Sky(p);
     }
     float v = saturate(kept / all * gV.z);
     v = max(v * v, gV.w);
@@ -256,8 +270,12 @@ IDirect3DTexture9* CoverMeasure(IDirect3DDevice9* dev, CoverSlot slot, const Cov
 
     const bool byDepth = in.depth != nullptr;
     const bool test = in.test && (byDepth || (in.sky && in.scene));
+    // coverFrom as a depth: the projection gives d = _33 + _43 / z, and the viewport squeezes d into its range.
+    float rawFrom = -1.0f;
+    if (in.coverFrom > 0.0f && in.zInv > 0.0f)
+        rawFrom = in.zMin + (in.proj33 + in.proj43 / in.coverFrom) / in.zInv;
     float c[4 * 10] = { in.px, in.py, 1.0f / r.occlusionFull, test ? 0.0f : 1.0f,
-                        in.sky ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+                        in.sky ? 1.0f : 0.0f, r.occlusionThin / (in.aspect > 0.0f ? in.aspect : 1.0f), rawFrom, 0.0f };
     for (int i = 0; i < 8; ++i)
     {
         // Four points at half the radius, four at the full radius between them.

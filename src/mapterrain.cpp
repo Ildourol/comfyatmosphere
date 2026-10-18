@@ -261,6 +261,56 @@ namespace
         }
     }
 
+    // A map with no tiles (a dungeon, the Deeprun Tram) places its one building in its .wdt (2026-10-17): MPHD
+    // flag 0x1, then MWMO and MODF, as in a tile but with no MWID, so the name's index counts the names. A
+    // building at x = z = 0 stands at the world's centre, and its box moves with it: the core's vmap extractor
+    // (vmapextract/wmo.cpp, WMOInstance) and TileAssembler.cpp do the same.
+    void WdtBuildings(const std::string& map, std::vector<Placement>& out)
+    {
+        char name[160];
+        _snprintf_s(name, sizeof(name), _TRUNCATE, "World\\Maps\\%s\\%s.wdt", map.c_str(), map.c_str());
+        std::vector<uint8_t> d;
+        if (!MpqRead(name, d))
+            return;
+        uint32_t flags = 0;
+        size_t mwmo = 0, mwmoSize = 0, modf = 0, modfSize = 0;
+        for (size_t o = 0; o + 8 <= d.size();)
+        {
+            const uint32_t tag = U32(d, o), size = U32(d, o + 4);
+            if (o + 8 + static_cast<size_t>(size) > d.size())
+                break;
+            if (tag == 0x4D504844 && size >= 4) flags = U32(d, o + 8);    // "MPHD"
+            if (tag == 0x4D574D4F) { mwmo = o + 8; mwmoSize = size; }   // "MWMO"
+            if (tag == 0x4D4F4446) { modf = o + 8; modfSize = size; }   // "MODF"
+            o += 8 + static_cast<size_t>(size);
+        }
+        if (!(flags & 1) || !mwmoSize || !modfSize)
+            return;
+        for (size_t o = modf; o + 64 <= modf + modfSize; o += 64)
+        {
+            float raw[3], box[6];
+            memcpy(raw, &d[o + 8], 12);
+            memcpy(box, &d[o + 32], 24);
+            if (raw[0] != 0.0f || raw[2] != 0.0f)
+                continue;
+            raw[0] = raw[2] = kMid;
+            box[0] += kMid; box[2] += kMid; box[3] += kMid; box[5] += kMid;
+            memcpy(&d[o + 8], raw, 12);
+            memcpy(&d[o + 32], box, 24);
+        }
+        // An MWID for Buildings, after the file: each name's offset in MWMO.
+        const size_t mwid = d.size();
+        for (size_t k = 0; k < mwmoSize;)
+        {
+            const uint32_t off = static_cast<uint32_t>(k);
+            d.insert(d.end(), reinterpret_cast<const uint8_t*>(&off), reinterpret_cast<const uint8_t*>(&off) + 4);
+            while (k < mwmoSize && d[mwmo + k])
+                ++k;
+            ++k;
+        }
+        Buildings(d, mwmo, mwmoSize, mwid, d.size() - mwid, modf, modfSize, out);
+    }
+
     // --- doodads, on the loader thread ---
 
     std::unordered_map<std::string, std::shared_ptr<M2Model>> g_m2;   // loader thread only
@@ -270,6 +320,11 @@ namespace
     std::unordered_map<unsigned, unsigned>    g_displayModel;
     std::unordered_map<unsigned, std::string> g_modelName;
     bool                                      g_creatureDbcRead = false;
+    // Each creature model file's view sizes, read once (2026-10-17). A display names a model file, and many share
+    // one: at Stormwind's Trade District fountain 148 displays were 20 files, HumanMale.m2 read 64 times, each a
+    // whole file of several megabytes, and the map's tiles waited behind them. Gear and skin change textures and
+    // which parts show, not the file's views. Loader thread only.
+    std::unordered_map<std::string, std::vector<uint32_t>> g_creatureFileViews;
     std::unordered_map<unsigned, std::string> g_objectDisplays;
     bool                                      g_objectDbcRead = false;
     std::unordered_map<std::string, float> g_m2Reach;   // each model's reach from its origin, yards at scale 1
@@ -884,6 +939,9 @@ namespace
     {
         bool open = false, tried = false;
         std::vector<uint8_t> file;
+        bool                   wdtRead = false;   // wdtWmos holds map gen wdtGen's buildings from its .wdt
+        unsigned               wdtGen = 0;
+        std::vector<Placement> wdtWmos;
         for (;;)
         {
             Job job;
@@ -976,13 +1034,20 @@ namespace
                     if (dot != std::string::npos)
                         name = name.substr(0, dot);
                     name += ".m2";   // the DBC says .mdx; the archives hold .m2
-                    std::vector<uint8_t> f;
-                    // The views: their count at 0x4C and offset at 0x50, 44 bytes each, the vertex count first.
-                    if (MpqRead(name.c_str(), f) && f.size() >= 0x54 && U32(f, 0) == 0x3032444D)   // "MD20"
+                    const auto known = g_creatureFileViews.find(name);
+                    if (known != g_creatureFileViews.end())
+                        c.views = known->second;
+                    else
                     {
-                        const uint32_t nViews = U32(f, 0x4C), ofs = U32(f, 0x50);
-                        for (uint32_t v = 0; v < nViews && v < 8 && ofs + (v + 1) * 44 <= f.size(); ++v)
-                            c.views.push_back(U32(f, ofs + v * 44));
+                        std::vector<uint8_t> f;
+                        // The views: their count at 0x4C and offset at 0x50, 44 bytes each, the vertex count first.
+                        if (MpqRead(name.c_str(), f) && f.size() >= 0x54 && U32(f, 0) == 0x3032444D)   // "MD20"
+                        {
+                            const uint32_t nViews = U32(f, 0x4C), ofs = U32(f, 0x50);
+                            for (uint32_t v = 0; v < nViews && v < 8 && ofs + (v + 1) * 44 <= f.size(); ++v)
+                                c.views.push_back(U32(f, ofs + v * 44));
+                        }
+                        g_creatureFileViews[name] = c.views;
                     }
                     c.ok = !c.views.empty();
                 }
@@ -1100,6 +1165,21 @@ namespace
                     m.v.clear();
                     m.idx.clear();
                     m.wmos.clear();
+                    // A map with no tiles: its building from the .wdt, on each tile asked for. RebuildInstances
+                    // keeps one, by its unique id.
+                    if (!m.groundOnly)
+                    {
+                        if (!wdtRead || wdtGen != job.gen)
+                        {
+                            wdtRead = true;
+                            wdtGen = job.gen;
+                            wdtWmos.clear();
+                            WdtBuildings(job.name, wdtWmos);
+                            for (const Placement& p : wdtWmos)
+                                Log("map terrain: %s has its building in its .wdt: %s", job.name.c_str(), p.name.c_str());
+                        }
+                        m.wmos = wdtWmos;
+                    }
                 }
             }
             m.ms = 1000.0 * (Now() - t0);
@@ -1401,6 +1481,11 @@ namespace
             }
             const ObjectLight& L = it->second;
             if (!L.word)
+                continue;
+            // A candle the server spawns gives no light (2026-10-17, the owner): at Hallow's End some 33 stand round
+            // Stormwind's Trade District fountain, more than a screen tile's 32 lights, and lights went on and off
+            // as you moved. The candles the map files place, in buildings, keep theirs.
+            if (strcmp(L.word, "CANDLE") == 0)
                 continue;
             ++g_objLit;
             const float c = cosf(o.facing), sn = sinf(o.facing);
@@ -3032,7 +3117,9 @@ const std::vector<uint32_t>* MapCreatureModelViews(unsigned display)
         return nullptr;
     g_creatureModels[display].display = display;
     std::lock_guard<std::mutex> lock(g_mx);
-    g_jobs.push_front({ kJobCreature, std::string(), static_cast<int>(display), 0, g_gen });   // a small read
+    // At the back (2026-10-17): it read a whole model file, and in a crowd well over a hundred came first, so 90
+    // seconds after a login in Stormwind no tile had been read and nothing from the map files was lit.
+    g_jobs.push_back({ kJobCreature, std::string(), static_cast<int>(display), 0, g_gen });
     g_cv.notify_one();
     return nullptr;
 }

@@ -1155,8 +1155,20 @@ Two faults found while reading the code, not fixed:
   it has both 0x40 and 0x8000 keeps every other measured case as it is (Ironforge 0xa005 and the Undercity
   0x3a05 stay indoors). The core's own rule, `(flags & 0xf000) != 0x2000` is outdoors, would put Ironforge and
   the Undercity outdoors.
-- Dungeons never count as indoors. The loader reads only the buildings the `.adt` tiles place. A dungeon's one
-  building is placed in the map's `.wdt` (MODF), which nothing reads.
+- Dungeons never counted as indoors. The loader read only the buildings the `.adt` tiles place. A dungeon's one
+  building is placed in the map's `.wdt` (MODF). Fixed 2026-10-17 (the owner, in the Deeprun Tram): see below.
+
+**A map with no tiles (2026-10-17).** In the Deeprun Tram the stats panel said "no building here". The map has
+no `.adt` tiles: its `.wdt` has MPHD flag 0x1 and places one building, `SUBWAY.WMO`, in its own MWMO and MODF.
+When a tile is not found, the loader now reads the `.wdt` once for the map (`WdtBuildings`) and gives its
+buildings to that tile; `RebuildInstances` keeps one by its unique id. The `.wdt`'s MODF has no MWID: the name's
+index counts the names. A building at x = z = 0 stands at the world's centre, and its box moves with it, as in
+the core's vmap extractor. Offline: the tram's box holds the teleport point (34.6, 2505.4, -4.3), and 19 of
+its 20 groups are indoor (0x2000, 0xa000). The owner: the tram now counts as indoors.
+
+A map with tiles is not changed. Windhorn Canyon (map 820, `MooCanyon`) has 9 tiles and MPHD 0xa, and its
+building comes from the tiles as before. Of `GRANDMOOCANYON.WMO`'s 32 groups, 10 are 0x1049 (exterior, 0x8),
+which never count as indoor; the other 22 (0x2005, 0x3005) count only with a ceiling over the player.
 
 **Candles from the files.** Inside a building the client has no point lights and its candles are particles
 (the Darkshire inn probe), so the lamps never found them. A building's root file places its own doodads
@@ -4098,3 +4110,63 @@ no unit wears (weapons, helmet), as `AttachedToStealthed` takes them for a steal
 Dead, from the unit's fields (`ClientUnitList`): `UNIT_FIELD_HEALTH` (0x16) is 0 for a corpse, and a ghost has
 health but `PLAYER_FLAGS` (0xBE) has `PLAYER_FLAGS_GHOST` (0x10). The probe's unit lines say `, dead`. Other
 corpses still cast.
+
+## The fog's colour from the zone, not the view (2026-10-17)
+
+In the Deeprun Tram the fog lit up or went dark as the camera moved (the owner, two probes). The game sets
+FOGCOLOR more than once a frame: `1E3564` for the tram building's rooms (its MFOG, fog end 278) and `5B7C6F` for
+the rest. Our fog took the last one set before the world ended, and that changed with what the camera saw. A
+count of the triangles drawn with each colour was steadier, but still followed the view. The owner: base it on the
+sky, set per zone.
+
+`WorldFogColor` now takes the light tables' horizon fog band (LightParams band 7, `LightsBand(7)`) where the player
+stands, at the hour. The tally of the colours drawn is the fallback when there are no light tables. The water's far
+colour and the clouds' fog take the same colour. A map with no Light.dbc rows (the tram) uses light 1, Azeroth's
+default, as the game does: its band 7 at 06:25 is `5C7D6F`, and the game drew `5B7C6F`. Inside a building's rooms
+the game fades the walls to the building's own MFOG colour, so there the walls and our fog can differ. The probe's
+`fog colour:` line gives both.
+
+## A pole across the sun (2026-10-17)
+
+Walking past a pole with the sun behind it, the whole view went darker (the owner, Darkshore, snapshot
+`20261017-182115`). Two tests fade an effect when the sun is covered (`cover.cpp`), and both did it here.
+
+- **The rays.** Their nine points are weighted by the sky's brightness, so the sun's centre counts most. A pole
+  across it gave 0.64, and the rays over the whole view fell by a third. A point now counts as sky when sky shows
+  `[rays] occlusionThin` (0.03 screen heights) to its left or right. A ridge or a roof is wider and still covers.
+- **The volumetric light.** Its test faded all of the light when a pole near the camera hid the sun: near, the
+  pole is wider on screen than occlusionThin. The march shades the fog behind a pole itself, from the shadow map;
+  the test was for a sun setting past the map's reach. Now only what lies past `[shadow] range` (250 yards) covers
+  the sun for the light. The distance goes to the shader as a depth, worked out on the CPU, which keeps
+  `cover_depth` in ps_2_b (326 slots; with the distance worked out in the shader it took 543).
+
+Ctrl+F11 (rays off) and Alt+F11 (light off) told the two apart: the owner found the light still darkened after
+the first fix. A possible fault: with the sun behind a hill 190 to 250 yards off, a little glow can show round it,
+since the march reaches 190 yards and counts the fog past that as in sun.
+
+## Hallow's End candles, full tiles and building lights (2026-10-17)
+
+At Stormwind's Trade District fountain some 33 Hallow's End candles (game objects, `CANDLE01` to `CANDLE03`,
+reach 6) gave a light each. The probe: 70 lights in view, the fullest screen tile at its limit of 32, 1228 left
+out. Tried and dropped: one light for the candles in each 3- or 6-yard cell (the light sat between the candles),
+a 2-yard reach and half brightness (better, but a light left out of a full tile and drawn in the next ended in a
+straight line: boxes of light).
+
+- **A light goes into every tile it reaches or into none** (`lampglow.cpp`). In a crowded view the farthest
+  lights go out whole. The owner then saw lights going on and off as they moved round the fountain.
+- **A full tile is drawn as its four quarters**, each with up to 32 lights of its own. Only crowded tiles pay
+  for the extra draws. The probe's `lampglow:` line counts the tiles split.
+- **A candle the server spawns gives no light** (`RebuildObjectLights`), the owner's choice. The candles the map
+  files place keep 6 yards and full brightness.
+- **A building's own light (MOLT) draws no glow** (`fill`). In Auberdine a light floated under a building's roof:
+  the file places it to bake the building's light, and no lamp stands there. A lamp at the same place still
+  replaces it. A fireplace with no lamp model (the Goldshire inn) keeps its light on the walls and loses its glow.
+
+## The loader and a crowd (2026-10-17)
+
+After a login at the fountain the map files' lights came back only after a minute or two: 90 seconds in, no
+tile had been read. For each creature display the loader read the creature's whole model file, to count its
+views' vertices, and those reads went to the front of the queue. Stormwind's crowd gave 148 reads of some 20
+files (HumanMale.m2 64 times, HumanFemale.m2 48). The view sizes depend on the file only: gear and skin change
+textures and which parts show. Each file's views are now kept (`g_creatureFileViews`), and creature reads go to
+the back of the queue. After the change the game objects' models were read 7 seconds after the login.

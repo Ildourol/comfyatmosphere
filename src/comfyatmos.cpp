@@ -293,8 +293,63 @@ namespace
     // has parked its fog for the UI (start 0, end 1). Taken from each end the client sets during the world.
     DWORD     g_worldFogStart = 0, g_worldFogEnd = 0;
     bool      g_haveWorldFog  = false;
-    DWORD     g_worldFogColor = 0;          // the last fog colour the world set that was not black
+    DWORD     g_worldFogColor = 0;          // the world's fog colour, chosen at its end (FogColourChoose)
     bool      g_haveWorldFogColor = false;
+
+    // The world's fog colour (2026-10-17): of the colours the world drew with fog on, the one with the most
+    // triangles. Until then it was the last colour the world set, but the client sets more than one: in the Deeprun
+    // Tram 0x1E3564 for the tunnel and 0x5B7C6F for the models near you, and a model drawn late set the tunnel's
+    // again or not, by a small turn of the camera. The fog, the clouds' fog and the water's far colour went light
+    // and dark with it (the owner). With no fogged draw counted, the last colour set stays the answer.
+    struct FogTally { DWORD color; unsigned tris; };
+    FogTally  g_fogTally[8] = {};
+    int       g_fogTallyN = 0;
+    DWORD     g_lastFogColor = 0;           // the last colour the world set that was not black
+    bool      g_haveLastFogColor = false;
+
+    void FogColourDraw(DWORD color, UINT tris)
+    {
+        for (int i = 0; i < g_fogTallyN; ++i)
+            if (g_fogTally[i].color == color)
+            {
+                g_fogTally[i].tris += tris;
+                return;
+            }
+        if (g_fogTallyN < 8)
+            g_fogTally[g_fogTallyN++] = { color, tris };
+    }
+
+    void FogColourChoose(bool log)
+    {
+        unsigned best = 0;
+        for (int i = 0; i < g_fogTallyN; ++i)
+            if (g_fogTally[i].tris > best)
+            {
+                best = g_fogTally[i].tris;
+                g_worldFogColor = g_fogTally[i].color;
+            }
+        if (!best && g_haveLastFogColor)
+            g_worldFogColor = g_lastFogColor;
+        if (best || g_haveLastFogColor)
+            g_haveWorldFogColor = true;
+        if (log)
+        {
+            char text[256] = {};
+            size_t n = 0;
+            for (int i = 0; i < g_fogTallyN && n < sizeof(text); ++i)
+                n += _snprintf_s(text + n, sizeof(text) - n, _TRUNCATE, "%s0x%06lX %u", i ? ", " : "",
+                                 g_fogTally[i].color & 0xFFFFFF, g_fogTally[i].tris);
+            float zone[3];
+            if (LightsBand(7, zone))
+                Log("fog colour: the light tables' fog band (%.3f %.3f %.3f); the game drew most with 0x%06lX, of "
+                    "(triangles): %s", zone[0], zone[1], zone[2], g_worldFogColor & 0xFFFFFF,
+                    g_fogTallyN ? text : "none, the last colour set");
+            else
+                Log("fog colour: 0x%06lX (the light tables are not read yet), of the colours drawn with fog on "
+                    "(triangles): %s", g_worldFogColor & 0xFFFFFF, g_fogTallyN ? text : "none, the last colour set");
+        }
+        g_fogTallyN = 0;
+    }
 
 
     // ---------------------------------------------------------------------------------------------
@@ -667,6 +722,7 @@ namespace
         if (g_worldEnded)
             return;
         g_worldEnded = true;
+        FogColourChoose(g_probe.active);
         {
             IDirect3DSurface9* rt = nullptr;
             dev->lpVtbl->GetRenderTarget(dev, 0, &rt);
@@ -1099,6 +1155,8 @@ namespace
             g_fog       = ClientFog();
             g_haveWorldFog = false;
             g_haveWorldFogColor = false;
+            g_haveLastFogColor = false;
+            g_fogTallyN = 0;
             g_fogEnable = 0;
             g_vshader   = nullptr;
             g_worldRt   = nullptr;
@@ -1363,6 +1421,7 @@ namespace
         g_frameDraws = 0;
         g_lastPersp  = false;
         g_worldEnded = false;
+        g_fogTallyN  = 0;   // a frame with no world end counts again from nothing
         g_skyPhase  = true;
         g_skySunSeen = false;
         g_cloudsDone = false;
@@ -1503,6 +1562,8 @@ namespace
             g_fog      = ClientFog();
             g_haveWorldFog = false;
             g_haveWorldFogColor = false;
+            g_haveLastFogColor = false;
+            g_fogTallyN = 0;
             g_fogEnable = 0;
             g_vshader  = nullptr;
             Log("device reset: fog mirror cleared");
@@ -1536,8 +1597,8 @@ namespace
             g_fog.color = value; g_fog.haveColor = true;
             if (!g_worldEnded && (value & 0xFFFFFF) != 0)
             {
-                g_worldFogColor = value;
-                g_haveWorldFogColor = true;
+                g_lastFogColor = value;
+                g_haveLastFogColor = true;
             }
             break;
 
@@ -2172,6 +2233,8 @@ namespace
         // Not the portrait's draws before the sky (SmallViewport): the sky's phase ends by the count too.
         if (!g_skyPhase || g_inPass || !SmallViewport(dev))
             g_frameDraws++;
+        if (!g_worldEnded && !g_inPass && g_fogEnable && g_fog.haveColor && (g_fog.color & 0xFFFFFF))
+            FogColourDraw(g_fog.color, pc);
         if (!g_probe.active)
             return;
         ProbeWeatherDraw(dev, kind, pc, nv);
@@ -3411,8 +3474,19 @@ namespace
     }
 }
 
+// The fog's colour (2026-10-17, the owner: "set per the zone"): the light tables' fog band where you stand, for the
+// zone and the hour, which is the colour the game fogs the open air with. It does not change with the view. In a
+// building's room the game fogs the room with the building's own colour (MFOG; the Deeprun Tram's 1E3564), and the
+// fog here keeps the zone's. Until the tables are read, the colour the world drew the most with (FogColourChoose).
 bool WorldFogColor(DWORD& color)
 {
+    float rgb[3];
+    if (LightsBand(7, rgb))
+    {
+        const auto q = [](float v) { return static_cast<DWORD>((std::min)((std::max)(v, 0.0f), 1.0f) * 255.0f + 0.5f); };
+        color = 0xFF000000 | (q(rgb[0]) << 16) | (q(rgb[1]) << 8) | q(rgb[2]);
+        return true;
+    }
     if (!g_haveWorldFogColor)
         return false;
     color = g_worldFogColor;

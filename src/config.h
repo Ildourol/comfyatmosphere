@@ -466,6 +466,9 @@ struct RaysSettings
     float occlusionRadius = 0.08f;   // screen heights around the sun that are tested
     float occlusionFull   = 0.35f;   // share of that sky in view that gives full rays; less fades them.
                                      // Under 1, so a canopy with gaps still casts in full
+    float occlusionThin   = 0.03f;   // screen heights: a point counts as sky when sky shows this far to its left or
+                                     // right, so a pole or a trunk across the sun does not fade the rays over the
+                                     // whole view (2026-10-17). 0 = every point by itself
 };
 
 struct SkySettings

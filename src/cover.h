@@ -14,6 +14,10 @@ struct CoverInput
     IDirect3DTexture9* depth;     // the world's depth (depth.cpp), or null: then by brightness
     IDirect3DTexture9* sky;       // the sky before the clouds (rays.cpp), or null
     IDirect3DTexture9* scene;     // the finished frame, for the brightness test; null = no brightness test
+    // By depth only: a point covers the sun only when what is there lies at least coverFrom yards away (0 = at any
+    // distance). The depth's viewport range (zMin, zInv = 1 / (MaxZ - MinZ)) and the projection's _33 and _43
+    // turn the depth into yards.
+    float coverFrom, zMin, zInv, proj33, proj43;
 };
 
 // Measures on the GPU and eases the result into the slot's 1x1 texture, which it returns (r = 0..1) for a

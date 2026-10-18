@@ -32,7 +32,8 @@
 // Two passes at full resolution, drawn tile by tile (2026-10-01). The screen is cut into kTilesX x kTilesY
 // tiles, and each tile draws only the lights whose reach can show in it: the box round each light's sphere,
 // projected, says which. A tile takes up to [lamps] maxLights of them (32 at most), nearest first, through a
-// shader built for 4, 8, 16 or 32, so a tile with two candles does not pay for 32. Until then both passes
+// shader built for 4, 8, 16 or 32, so a tile with two candles does not pay for 32. A tile that more lights reach
+// is drawn as its four quarters, each with up to 32 of its own (2026-10-17). Until then both passes
 // covered the whole screen with the nearest 16 lights in front of the camera, and Stormwind's streets and
 // inns hold far more than 16.
 //
@@ -72,6 +73,7 @@ namespace
 {
     constexpr int kTileLights = 32;  // the most lights a tile draws; [lamps] maxLights is clamped to this
     constexpr int kTilesX = 8, kTilesY = 6;
+    constexpr int kFineX = kTilesX * 2, kFineY = kTilesY * 2;   // a full tile is drawn as its four quarters
     constexpr int kVariants = 5;     // the shaders, by how many lights they loop over
     const int     kVariantLights[kVariants] = { 0, 4, 8, 16, 32 };
     const char*   kVariantText[kVariants]   = { "0", "4", "8", "16", "32" };
@@ -410,8 +412,8 @@ bool LampGlowWantsLights()
 
 namespace
 {
-    // Which tiles a light's reach can show in: the box round its sphere, projected. With any corner at or
-    // behind the near plane, the whole screen. False when it shows in none.
+    // Which quarter tiles (kFineX x kFineY) a light's reach can show in: the box round its sphere, projected. With
+    // any corner at or behind the near plane, the whole screen. False when it shows in none.
     bool TileSpan(const D3DMATRIX& vp, const float pos[3], float reach, int span[4])
     {
         float lo[2] = { 1.0f, 1.0f }, hi[2] = { -1.0f, -1.0f };
@@ -437,7 +439,7 @@ namespace
         }
         if (all)
         {
-            span[0] = 0; span[1] = kTilesX - 1; span[2] = 0; span[3] = kTilesY - 1;
+            span[0] = 0; span[1] = kFineX - 1; span[2] = 0; span[3] = kFineY - 1;
             return true;
         }
         if (hi[0] < -1.0f || lo[0] > 1.0f || hi[1] < -1.0f || lo[1] > 1.0f)
@@ -448,10 +450,10 @@ namespace
             const int i = static_cast<int>(floorf(t * count));
             return i < 0 ? 0 : (i >= count ? count - 1 : i);
         };
-        span[0] = tile(lo[0], kTilesX, false);
-        span[1] = tile(hi[0], kTilesX, false);
-        span[2] = tile(hi[1], kTilesY, true);
-        span[3] = tile(lo[1], kTilesY, true);
+        span[0] = tile(lo[0], kFineX, false);
+        span[1] = tile(hi[0], kFineX, false);
+        span[2] = tile(hi[1], kFineY, true);
+        span[3] = tile(lo[1], kFineY, true);
         return true;
     }
 
@@ -581,42 +583,93 @@ bool LampGlowDraw(IDirect3DDevice9* dev)
 
     // Each tile's lights: the glow's and the surfaces'.
     const int perTile = l.maxLights < kTileLights ? l.maxLights : kTileLights;
-    static TileList glowTiles[kTilesX * kTilesY], surfTiles[kTilesX * kTilesY];
-    for (int t = 0; t < kTilesX * kTilesY; ++t)
-        glowTiles[t].count = surfTiles[t].count = 0;
+    // A tile that more than perTile lights reach is split: drawn as its four quarters, each with its own list
+    // (2026-10-17, the owner: the Hallow's End candles on Stormwind's Trade District fountain filled one tile). Only
+    // crowded tiles pay for the extra draws.
+    struct Layer
+    {
+        TileList tiles[kTilesX * kTilesY], fine[kFineX * kFineY];
+        int  want[kTilesX * kTilesY];
+        bool split[kTilesX * kTilesY];
+    };
+    static Layer glowL, surfL;
+    static int  spans[kLampsMax][4];
+    static bool spanned[kLampsMax];
+    for (Layer* L : { &glowL, &surfL })
+    {
+        for (int t = 0; t < kTilesX * kTilesY; ++t)
+            L->tiles[t].count = L->want[t] = 0;
+        for (int t = 0; t < kFineX * kFineY; ++t)
+            L->fine[t].count = 0;
+    }
     int glowing = 0, shining = 0, overflow = 0;
     for (int i = 0; i < found; ++i)
     {
-        if (!glows[i] && !shines[i])
-            continue;
-        int span[4];
-        if (!TileSpan(camVP, lights[i].pos, lights[i].reach, span))
+        spanned[i] = (glows[i] || shines[i]) && TileSpan(camVP, lights[i].pos, lights[i].reach, spans[i]);
+        if (!spanned[i])
             continue;
         glowing += glows[i] ? 1 : 0;
         shining += shines[i] ? 1 : 0;
-        for (int ty = span[2]; ty <= span[3]; ++ty)
-            for (int tx = span[0]; tx <= span[1]; ++tx)
+        for (int ty = spans[i][2] / 2; ty <= spans[i][3] / 2; ++ty)
+            for (int tx = spans[i][0] / 2; tx <= spans[i][1] / 2; ++tx)
             {
-                const int t = ty * kTilesX + tx;
-                if (glows[i])
-                {
-                    if (glowTiles[t].count < perTile)
-                        glowTiles[t].index[glowTiles[t].count++] = i;
-                    else
-                        ++overflow;
-                }
-                if (shines[i])
-                {
-                    if (surfTiles[t].count < perTile)
-                        surfTiles[t].index[surfTiles[t].count++] = i;
-                    else
-                        ++overflow;
-                }
+                if (glows[i])  ++glowL.want[ty * kTilesX + tx];
+                if (shines[i]) ++surfL.want[ty * kTilesX + tx];
             }
     }
+    int splitCount = 0;
+    for (Layer* L : { &glowL, &surfL })
+        for (int t = 0; t < kTilesX * kTilesY; ++t)
+        {
+            L->split[t] = L->want[t] > perTile;
+            splitCount += L->split[t] ? 1 : 0;
+        }
+    // A light goes into every tile it reaches or into none (2026-10-17, the owner: boxes of light round the same
+    // candles). Left out of a full tile and drawn in the one beside it, its light ended in a straight line on the
+    // tile's edge. The lights come nearest first, so where even a quarter is full the farthest go out whole. The
+    // count is of lights left out. In a split tile a light takes the quarters its reach shows in.
+    for (int i = 0; i < found; ++i)
+    {
+        if (!spanned[i])
+            continue;
+        const int* sp = spans[i];
+        auto each = [&](Layer& L, auto&& fn) {
+            for (int ty = sp[2] / 2; ty <= sp[3] / 2; ++ty)
+                for (int tx = sp[0] / 2; tx <= sp[1] / 2; ++tx)
+                {
+                    const int t = ty * kTilesX + tx;
+                    if (!L.split[t])
+                    {
+                        if (!fn(L.tiles[t]))
+                            return false;
+                        continue;
+                    }
+                    for (int fy = (std::max)(sp[2], ty * 2); fy <= (std::min)(sp[3], ty * 2 + 1); ++fy)
+                        for (int fx = (std::max)(sp[0], tx * 2); fx <= (std::min)(sp[1], tx * 2 + 1); ++fx)
+                            if (!fn(L.fine[fy * kFineX + fx]))
+                                return false;
+                }
+            return true;
+        };
+        auto place = [&](Layer& L) {
+            if (!each(L, [&](TileList& tl) { return tl.count < perTile; }))
+                return false;
+            each(L, [&](TileList& tl) { tl.index[tl.count++] = i; return true; });
+            return true;
+        };
+        if (glows[i] && !place(glowL))
+            ++overflow;
+        if (shines[i] && !place(surfL))
+            ++overflow;
+    }
     int fullest = 0;
-    for (int t = 0; t < kTilesX * kTilesY; ++t)
-        fullest = (std::max)(fullest, (std::max)(glowTiles[t].count, surfTiles[t].count));
+    for (const Layer* L : { &glowL, &surfL })
+    {
+        for (int t = 0; t < kTilesX * kTilesY; ++t)
+            fullest = (std::max)(fullest, L->tiles[t].count);
+        for (int t = 0; t < kFineX * kFineY; ++t)
+            fullest = (std::max)(fullest, L->fine[t].count);
+    }
 
     if (logThis)
     {
@@ -625,9 +678,9 @@ bool LampGlowDraw(IDirect3DDevice9* dev)
             Log("lampglow: night darkness: the world x (%.2f %.2f %.2f), the sky x (%.2f %.2f %.2f)", darkWorld[0],
                 darkWorld[1], darkWorld[2], darkSky[0], darkSky[1], darkSky[2]);
         Log("lampglow: %u lights held, %u in the files, %d gathered in view: %d glow, %d light surfaces; the "
-            "fullest tile has %d (up to %d), %d left out of full tiles; gain %.2f, on surfaces %.2f (by day "
+            "fullest tile has %d (up to %d), %d split in four, %d left out for full tiles; gain %.2f, on surfaces %.2f (by day "
             "x %.2f), density %.3f, fog %s%.0f..%.0f; our fog %.4f a yard, lampMist %.2f", LampsTracked(),
-            MapLightCount(), found, glowing, shining, fullest, perTile, overflow, gain, sgain, scale, l.density,
+            MapLightCount(), found, glowing, shining, fullest, perTile, splitCount, overflow, gain, sgain, scale, l.density,
             haveFog ? "" : "(none) ", fogStart, fogEnd, fogDensity, g_cfg.fog.lampMist);
         for (int i = 0; i < found && i < 40; ++i)
             Log("lampglow:   %s %s %6.1f yd  camera-relative (%.1f %.1f %.1f)  colour (%.2f %.2f %.2f)  reach %.1f  "
@@ -716,7 +769,8 @@ bool LampGlowDraw(IDirect3DDevice9* dev)
 
     // One tile: its lights' constants, the shader for that many, and its quad. A slot of the shader past the
     // tile's lights gets a reach too short to pass the shader's test.
-    auto drawTile = [&](int t, const TileList& list, IDirect3DPixelShader9* const* shaders, const float* colours) {
+    auto drawTile = [&](int tx, int ty, int nx, int ny, const TileList& list, IDirect3DPixelShader9* const* shaders,
+                        const float* colours) {
         const int v = Variant(list.count), slots = kVariantLights[v];
         float tp[kTileLights * 4], tc[kTileLights * 4];
         for (int s = 0; s < slots; ++s)
@@ -739,9 +793,8 @@ bool LampGlowDraw(IDirect3DDevice9* dev)
             d->SetPixelShaderConstantF(dev, 8, tp, slots);
             d->SetPixelShaderConstantF(dev, 40, tc, slots);
         }
-        const int tx = t % kTilesX, ty = t / kTilesX;
-        const float u0 = static_cast<float>(tx) / kTilesX, u1 = static_cast<float>(tx + 1) / kTilesX;
-        const float v0 = static_cast<float>(ty) / kTilesY, v1 = static_cast<float>(ty + 1) / kTilesY;
+        const float u0 = static_cast<float>(tx) / nx, u1 = static_cast<float>(tx + 1) / nx;
+        const float v0 = static_cast<float>(ty) / ny, v1 = static_cast<float>(ty + 1) / ny;
         const ClipVertex q[4] = {
             { u0 * 2.0f - 1.0f, 1.0f - v0 * 2.0f, 0.0f, u0, v0 },
             { u1 * 2.0f - 1.0f, 1.0f - v0 * 2.0f, 0.0f, u1, v0 },
@@ -750,12 +803,28 @@ bool LampGlowDraw(IDirect3DDevice9* dev)
         };
         d->DrawPrimitiveUP(dev, D3DPT_TRIANGLESTRIP, 2, q, sizeof(ClipVertex));
     };
+    // Each tile of a layer with a light, or a split tile's four quarters; with all, every one of them.
+    auto drawLayer = [&](const Layer& L, bool all, IDirect3DPixelShader9* const* shaders, const float* colours) {
+        for (int ty = 0; ty < kTilesY; ++ty)
+            for (int tx = 0; tx < kTilesX; ++tx)
+            {
+                const int t = ty * kTilesX + tx;
+                if (!L.split[t])
+                {
+                    if (L.tiles[t].count || all)
+                        drawTile(tx, ty, kTilesX, kTilesY, L.tiles[t], shaders, colours);
+                    continue;
+                }
+                for (int fy = ty * 2; fy <= ty * 2 + 1; ++fy)
+                    for (int fx = tx * 2; fx <= tx * 2 + 1; ++fx)
+                        if (L.fine[fy * kFineX + fx].count || all)
+                            drawTile(fx, fy, kFineX, kFineY, L.fine[fy * kFineX + fx], shaders, colours);
+            }
+    };
     // The glow, over each tile with a light; in a debug view over every tile, black where there is none.
     auto drawGlow = [&]() {
         d->SetPixelShaderConstantF(dev, 4, pc + 16, 2);
-        for (int t = 0; t < kTilesX * kTilesY; ++t)
-            if (glowTiles[t].count || l.debug)
-                drawTile(t, glowTiles[t], g_ps, col);
+        drawLayer(glowL, l.debug != 0, g_ps, col);
     };
 
     // The surfaces first, as scene x (darkness + light); then the glow in the air, added. debug 1 shows the
@@ -771,9 +840,7 @@ bool LampGlowDraw(IDirect3DDevice9* dev)
         d->SetRenderState(dev, D3DRS_ALPHABLENDENABLE, l.debug ? FALSE : TRUE);
         d->SetRenderState(dev, D3DRS_SRCBLEND,         D3DBLEND_DESTCOLOR);
         d->SetRenderState(dev, D3DRS_DESTBLEND,        D3DBLEND_SRCALPHA);
-        for (int t = 0; t < kTilesX * kTilesY; ++t)
-            if (surfTiles[t].count || dark || l.debug)
-                drawTile(t, surfTiles[t], g_psSurf, scol);
+        drawLayer(surfL, dark || l.debug, g_psSurf, scol);
     }
     if (l.debug != 3 && (glowing || l.debug))
     {

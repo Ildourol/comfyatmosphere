@@ -473,6 +473,7 @@ void LoadSettings(const wchar_t* ini)
     s.rays.occlusion       = GetB(kRays, L"occlusion", s.rays.occlusion, ini);
     s.rays.occlusionRadius = Clamp(GetF(kRays, L"occlusionRadius", s.rays.occlusionRadius, ini), 0.01f, 0.5f);
     s.rays.occlusionFull   = Clamp(GetF(kRays, L"occlusionFull",   s.rays.occlusionFull,   ini), 0.05f, 1.0f);
+    s.rays.occlusionThin   = Clamp(GetF(kRays, L"occlusionThin",   s.rays.occlusionThin,   ini), 0.0f, 0.2f);
     if (s.rays.passes < 1)    s.rays.passes = 1;
     if (s.rays.passes > 3)    s.rays.passes = 3;
     if (s.rays.downscale < 1) s.rays.downscale = 1;
