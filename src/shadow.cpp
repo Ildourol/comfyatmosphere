@@ -3953,7 +3953,11 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
     static unsigned replayTick = 0;
     const unsigned tick = replayTick++;
     const unsigned farEvery = s.farEvery > 1 ? static_cast<unsigned>(s.farEvery) : 1u;
-    const bool drawFar = !g_valid || farEvery <= 1 || (tick % farEvery) == 0;
+    // Each replay while a ship under way is within the map's reach (2026-10-17, the owner: a moving ship's far sails
+    // flickered). Between its redraws a map holds the ship where it was, 0.4 yards back at 18 yards a second, and its
+    // shade on the ship's own sails and ropes came and went. The near map is redrawn each time and was steady.
+    const bool shipFar = WaterShipWithin(pl, s.range + 40.0f);
+    const bool drawFar = !g_valid || farEvery <= 1 || (tick % farEvery) == 0 || shipFar;
     if (drawFar)
     {
         g_shadowVP    = sunVP;
@@ -4010,7 +4014,8 @@ void ShadowWorldEnded(IDirect3DDevice9* dev)
     // the frame rate at 2.
     const bool haveMid = s.midRange > 0.0f && g_midSurf;
     const unsigned midEvery = s.midEvery > 1 ? static_cast<unsigned>(s.midEvery) : 1u;
-    const bool doMid = haveMid && (!g_midValid || midEvery <= 1 || (tick % midEvery) == 1 % midEvery);
+    const bool doMid = haveMid && (!g_midValid || midEvery <= 1 || (tick % midEvery) == 1 % midEvery ||
+                                   WaterShipWithin(pl, s.midRange + 40.0f));   // as the far map, for a ship under way
     D3DMATRIX midProj, midVP, midAbsToSun, midCutAbsToSun;
     if (doMid)
         narrowMap(s.midRange, s.size, midProj, midVP, midAbsToSun, midCutAbsToSun);

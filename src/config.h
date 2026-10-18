@@ -346,6 +346,9 @@ struct SunShadowSettings
                                   // sees the sun, so a plant is dark under cover and as drawn in the open; 0 = off
     float foliageEdge   = 0.35f;  // 0..0.5: how far either side of half lit that share turns from dark to lit
     float foliageUnits  = 0.0f;   // 0..1: how much of the creatures' shadows falls on the ground's grass and ferns
+    float grazeShade    = 1.0f;   // 0..1: a model's face the sun grazes goes into its own shade over grazeBand (2026-10-17)
+    float grazeBand     = 0.35f;  // 0.02..0.5: the facing to the sun (its cosine) either side of 0 over which it goes
+    float modelGap      = 0.3f;   // yards: on a model, a blocker nearer than this along the sun does not shade it (2026-10-17)
 };
 
 // Lamps, lanterns and torches (lamps.cpp finds them, lampglow.cpp draws): the fog glowing around them, and

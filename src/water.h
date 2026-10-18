@@ -59,6 +59,10 @@ void WaterFrameEnd(IDirect3DDevice9* dev);   // at Present; also takes the textu
 void WaterNoteHull(IDirect3DDevice9* dev, const D3DMATRIX& world);
 // Within reach of a ship under way (its hull followed from its draws): a model there is one of its parts.
 bool WaterShipNear(const float p[3]);
+// On the origin of a ship under way, within 2 yards: a fixed-function draw placed there is a piece of that ship.
+bool WaterShipPart(const float p[3]);
+// A ship under way within this many yards of p across the ground.
+bool WaterShipWithin(const float p[3], float reach);
 // The light the water takes from what lies under it a yard, by brightness, at the current colour and Clarity (0
 // before the water was first drawn): the sun shadows fade the bed's shade by it.
 float WaterBedFade();

@@ -421,6 +421,9 @@ void LoadSettings(const wchar_t* ini)
     s.sunShadows.foliageRadius = Clamp(GetF(kSunShadows, L"foliageRadius", s.sunShadows.foliageRadius, ini), 0.0f, 10.0f);
     s.sunShadows.foliageEdge = Clamp(GetF(kSunShadows, L"foliageEdge", s.sunShadows.foliageEdge, ini), 0.0f, 0.5f);
     s.sunShadows.foliageUnits = Clamp(GetF(kSunShadows, L"foliageUnits", s.sunShadows.foliageUnits, ini), 0.0f, 1.0f);
+    s.sunShadows.grazeShade = Clamp(GetF(kSunShadows, L"grazeShade", s.sunShadows.grazeShade, ini), 0.0f, 1.0f);
+    s.sunShadows.grazeBand  = Clamp(GetF(kSunShadows, L"grazeBand",  s.sunShadows.grazeBand,  ini), 0.02f, 0.5f);
+    s.sunShadows.modelGap   = Clamp(GetF(kSunShadows, L"modelGap",   s.sunShadows.modelGap,   ini), 0.0f, 2.0f);
 
     s.lamps.enabled      = GetB(kLamps, L"enabled", s.lamps.enabled, ini);
     s.lamps.strength     = Clamp(GetF(kLamps, L"strength",     s.lamps.strength,     ini), 0.0f, 100.0f);

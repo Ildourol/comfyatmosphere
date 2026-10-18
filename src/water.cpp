@@ -4915,6 +4915,30 @@ bool WaterShipNear(const float p[3])
     return false;
 }
 
+bool WaterShipPart(const float p[3])
+{
+    // Every piece of a ship (hull, sails, ropes) is drawn with the ship's own world matrix, so its origin is the
+    // ship's (2026-10-17: 11 pieces of the ship from Ratchet, all at one place). The ship moves under a yard a frame.
+    for (const auto& s : g_movingShips)
+    {
+        const float dx = p[0] - s[0], dy = p[1] - s[1], dz = p[2] - s[2];
+        if (dx * dx + dy * dy + dz * dz < 2.0f * 2.0f)
+            return true;
+    }
+    return false;
+}
+
+bool WaterShipWithin(const float p[3], float reach)
+{
+    for (const auto& s : g_movingShips)
+    {
+        const float dx = p[0] - s[0], dy = p[1] - s[1];
+        if (dx * dx + dy * dy < reach * reach)
+            return true;
+    }
+    return false;
+}
+
 void WaterNoteHull(IDirect3DDevice9* dev, const D3DMATRIX& world)
 {
     // Always, not only with Ship Wake (2026-10-06): the shadow cache files a ship's sails under it (WaterShipNear).

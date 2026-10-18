@@ -91,6 +91,7 @@ namespace
     // and blend. The player's own parts filled 60 of the 80 lines, and a trough beside them went unlogged.
     std::set<std::string> g_probeSeen;
     unsigned g_probeMarked = 0, g_probeUnmarked = 0;
+    unsigned g_probeShip = 0;   // fixed-function draws marked as models, as pieces of a ship under way
 
     // The mask.
     IDirect3DSurface9*     g_msSurf  = nullptr;   // multisampled target, when the depth buffer is
@@ -249,8 +250,26 @@ void BodyMarkDraw(IDirect3DDevice9* dev)
         }
         if (gps) gps->lpVtbl->Release(gps);
     }
+    // A ship's pieces (2026-10-17, the owner: a moving ship's sails flickered after the fixes for model sails). The ship
+    // from Ratchet is drawn fixed-function, sails and ropes too, so its sails never had the model bit, and the sun
+    // shadows' rules for a model's own face (the ramp, modelGap, the push away from the sun) did not apply to them:
+    // a sail is a sheet with no thickness, and its own face came out lit on one frame and shaded on the next, in fine
+    // stripes. A fixed-function draw on the origin of a ship under way (water.cpp's hull tracker) is marked as a model.
+    bool shipPiece = false;
+    if (zw && !mvs && !ground)
+    {
+        D3DMATRIX w;
+        float cam[3], p[3];
+        if (SUCCEEDED(d->GetTransform(dev, D3DTS_WORLD, &w)) && ClientCamera(cam))
+        {
+            p[0] = w.m[3][0] + cam[0]; p[1] = w.m[3][1] + cam[1]; p[2] = w.m[3][2] + cam[2];
+            shipPiece = WaterShipPart(p);
+        }
+    }
+    if (shipPiece && g_probeFrames > 0)
+        ++g_probeShip;
     const DWORD ref = zw && ShadowIsUnitDraw(dev) ? kBit | kModelBit
-                                                  : (mvs ? kModelBit | (at ? kLeafBit : 0) : ground);
+                                                  : (mvs || shipPiece ? kModelBit | (at ? kLeafBit : 0) : ground);
     if (mvs) mvs->lpVtbl->Release(mvs);
     if (ref & kBit)
         g_anyUnit = true;
@@ -337,14 +356,15 @@ void BodyMarkWorldEnded(IDirect3DDevice9* dev)
     g_valid = false;
     if (g_probeFrames > 0)
     {
-        Log("bodymask: frame %d ended: %s; near you %u model draws marked as bodies, %u not", g_probeFrame,
+        Log("bodymask: frame %d ended: %s; near you %u model draws marked as bodies, %u not; %u fixed-function draws "
+            "marked as models, as pieces of a ship under way", g_probeFrame,
             g_skipFrame ? "skipped (the client's stencil)" : g_started ? (g_anyUnit ? "mask built" : "no unit drawn, no mask")
-                        : "the mark never began", g_probeMarked, g_probeUnmarked);
+                        : "the mark never began", g_probeMarked, g_probeUnmarked, g_probeShip);
         --g_probeFrames;
         ++g_probeFrame;
         g_probeLines = 0;
         g_probeSeen.clear();
-        g_probeMarked = g_probeUnmarked = 0;
+        g_probeMarked = g_probeUnmarked = g_probeShip = 0;
     }
     const bool started = g_started, any = g_anyUnit || g_anyModel;
     g_started = false;

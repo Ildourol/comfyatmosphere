@@ -103,7 +103,8 @@ float4 gN2   : register(c14);
 float4 gN3   : register(c15);
 float4 gNB   : register(c16);       // near map: depth bias, normal offset, one texel, 1 if there is one
 float4 gG    : register(c17);       // the largest slope in each map's units: far, near
-float4 gT    : register(c18);       // slope (share used), sunOffset (yards), 1 if the facing is needed
+float4 gT    : register(c18);       // slope (share used), sunOffset (yards), 1 if the facing is needed, modelGap
+                                    // (map units)
 float4 gV    : register(c19);       // the view matrix's third column: camera-relative world -> view depth
 float4 gFog  : register(c20);       // the world's fog start, 1 / (end - start), 1 if there is fog
 float4 gCh   : register(c21);       // leafShade, 1 if near leaf map, 1 if far leaf map, 1 = read the far map
@@ -121,9 +122,9 @@ float4 gM3   : register(c31);
 float4 gMB   : register(c32);       // middle map: depth bias, normal offset, one texel, 1 if there is one
 float4 gTr   : register(c33);       // the terrain: terrainShade, 1 if there is a map of it, its least depth bias
 float4 gFol  : register(c35);       // foliage: the disc's radius (yards, 0 = off), how far each side of half lit it turns,
-                                   // the share of creatures' shadows it takes
+                                   // the share of creatures' shadows it takes; w grazeBand
 float4 gWt   : register(c34);       // the water: 1 if the depth under it is there, light absorbed a yard;
-                                    // w Shadow on Water (0..1)
+                                    // z grazeShade; w Shadow on Water (0..1)
                                     // (map units)
 // The surface's slope in a map: how its depth changes per unit of map uv. Two directions along the
 // surface are carried into the map, and the plane through them solved for depth against u and v.
@@ -460,6 +461,11 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
     // or a tilted sail is lit at the taps beside the point. Not on a body or the ground's grass (offK), nor without
     // the mask, which tells models apart.
     const float awayM = gBody.y > 0.5 ? saturate(-ndl * 5.0) * bodyM.y * offK : 0.0;
+    // A model's own face takes no shade from itself (2026-10-17, the owner: a moving ship's sails still flickered with
+    // the ramp below). A blocker nearer than [sunshadows] modelGap along the sun is the sheet itself, and on a ship
+    // under way its test came out lit on one frame and shaded on the next. The ramp below gives the face its own
+    // shade by its facing; the yards, the ropes and the other sails still shade it. Not on a body or the grass (offK).
+    const float mg = gBody.y > 0.5 ? gT.w * bodyM.y * offK : 0.0;
 
     // The near map where it reaches, blended into the far one over the band from 80% to 90% of its
     // half-width. The far map is read only where the near map does not cover all of the shade.
@@ -475,9 +481,9 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
         {
             float2 gs = Slope(N, gN0, gN1, gN2, gG.y);
             float2 g = gs * gT.x;
-            litN = Lit(sNear, sn + float4(0.0, 0.0, awayM * 2.0 * gNB.x, 0.0), gs * max(gT.x, awayM), gNB.x, gNB.z);
+            litN = Lit(sNear, sn + float4(0.0, 0.0, awayM * 2.0 * gNB.x, 0.0), gs * max(gT.x, awayM), gNB.x + mg, gNB.z);
             [branch] if (gCh.y > 0.5)
-                leafN = Lit5(sNearL, sn, g, gNB.x + fol * gBody.w, gNB.z);
+                leafN = Lit5(sNearL, sn, g, gNB.x + mg + fol * gBody.w, gNB.z);
         }
     }
     // The middle map ([shadow] midRange, 2026-10-02) where the near map does not cover all of the shade,
@@ -492,7 +498,7 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
         [branch] if (wm > 0.0)
         {
             float2 gs = Slope(N, gM0, gM1, gM2, gG.z);
-            litM = Lit(sMid, sm + float4(0.0, 0.0, awayM * 2.0 * gMB.x, 0.0), gs * max(gT.x, awayM), gMB.x, gMB.z);
+            litM = Lit(sMid, sm + float4(0.0, 0.0, awayM * 2.0 * gMB.x, 0.0), gs * max(gT.x, awayM), gMB.x + mg, gMB.z);
         }
     }
 )HLSL" R"HLSL(
@@ -517,9 +523,9 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
         // than the terrain in the map.
         float  bF = gB.x + gLod.x * max(length(P) - gLod.y, 0.0);
         [branch] if (wn < 1.0 && wm < 1.0)
-            litF = lerp(1.0, Lit(sShadow, sf + float4(0.0, 0.0, awayM * 2.0 * bF, 0.0), gs * max(gT.x, awayM), bF, gB.z), fade);
+            litF = lerp(1.0, Lit(sShadow, sf + float4(0.0, 0.0, awayM * 2.0 * bF, 0.0), gs * max(gT.x, awayM), bF + mg, gB.z), fade);
         [branch] if (wn < 1.0 && gCh.z > 0.5)
-            leafF = lerp(1.0, Lit5(sFarL, sf, g, bF + fol * gBody.w, gB.z), fade);
+            leafF = lerp(1.0, Lit5(sFarL, sf, g, bF + mg + fol * gBody.w, gB.z), fade);
         [branch] if (gTr.y > 0.5)
             terr = 1.0 - lerp(1.0, Lit5(sTerr, sf, g, max(bF, gTr.z), gB.z), fade);
         // A tree's shade through a hill (2026-10-03): with the sun low behind a ridge, the trees on its crest
@@ -618,6 +624,25 @@ float4 main(float2 uv : TEXCOORD0) : COLOR
     // taken until then, and with trees and terrain in one map a tree under a mountain's shade added nothing.
     float leaf  = (1.0 - lerp(leafF, leafN, wn)) * (1.0 - through);
     float shade = 1.0 - lerp(lerp(lerp(litF, litM, wm), litN, wn), 1.0, throughS) * (1.0 - gCh.x * leaf) * (1.0 - gTr.x * terr);
+    // A model's face the sun grazes (2026-10-17, the owner: a ship's sails flickered, most with the sun to their side,
+    // and most while the ship moved). A sail is a sheet. Its side turned to the sun is tested off its face, toward the
+    // sun, and reads lit; its side turned from the sun is tested behind it (awayM) and reads in shade. With the sun at
+    // its side, a sway of a few degrees took the facing across 0, and the whole sail went from lit to shaded. Over
+    // grazeBand either side of 0 the face now goes into its own shade gradually, as the light on a surface does
+    // (grazeShade). Only on models, not a body or the ground's grass, and only where the facing two pixels away
+    // agrees with the one a pixel away: a leaf card's edge and a noisy facing are left as they were.
+    [branch] if (gWt.z > 0.0 && gT.z > 0.5 && gBody.y > 0.5)
+    {
+        float k = gWt.z * bodyM.y * offK;
+        [branch] if (k > 0.0)
+        {
+            float3 N2 = cross(Near(uv, raw, P, float2(0.0, 2.0 * gZ.w)), Near(uv, raw, P, float2(2.0 * gZ.z, 0.0)));
+            N2 = N2 / max(length(N2), 1e-8);
+            N2 = dot(N2, P) > 0.0 ? -N2 : N2;
+            k *= smoothstep(0.9, 0.98, dot(N, N2));
+            shade = lerp(shade, 1.0, k * (1.0 - smoothstep(-gFol.w, gFol.w, ndl)));
+        }
+    }
     // Debug 4 and 5 (2026-10-03): where the shade comes from, and where the check above takes it away.
     if (gL.y > 5.5)
         return float4(depthsV, 1.0);                                       // debug 6: caster before the hill, behind it, point behind it
@@ -1264,6 +1289,7 @@ bool SunShadowsDraw(IDirect3DDevice9* dev)
     pc[72] = ss.slope;
     pc[73] = ss.sunOffset;
     pc[74] = (ss.slope > 0.0f || ss.normalBias > 0.0f) ? 1.0f : 0.0f;
+    pc[75] = ss.modelGap / span;
     pc[76] = view.m[0][2]; pc[77] = view.m[1][2]; pc[78] = view.m[2][2]; pc[79] = view.m[3][2];
     // The shade fades with the game's fog, so a shaded tree at the fog wall does not come out darker than it.
     float fogStart = 0.0f, fogEnd = 0.0f;
@@ -1296,6 +1322,7 @@ bool SunShadowsDraw(IDirect3DDevice9* dev)
     pc[111] = ss.foliageSlack / span;                           // foliage against the leaf maps, map units
     pc[140] = ss.foliageRadius; pc[141] = ss.foliageEdge;      // c35: foliage takes a disc's share, dark or lit
     pc[142] = ss.foliageUnits;                                 // and this much of the creatures' shadows
+    pc[138] = ss.grazeShade; pc[143] = ss.grazeBand;          // a model's face the sun grazes
     // The middle map: its texel, and the same bias and normal offset in texels of it.
     const float midTex_ = midRange * 2.0f / size;
     for (int r = 0; r < 4; ++r)

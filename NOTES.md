@@ -1717,7 +1717,7 @@ solid maps' test takes the point two slacks deeper along the sun, which keeps th
 and follows the face's slope across the taps ([sunshadows] slope, still 0 elsewhere: on a body it made patches).
 The owner: the sails look good.
 
-**Open: the shade a moving ship casts on itself jitters.** Riding the ship out of Booty Bay, the owner saw it flicker.
+**The shade a moving ship casts on itself jitters** (fixed 2026-10-17, see *A moving ship's sails*). Riding the ship out of Booty Bay, the owner saw it flicker.
 A 10-second recording (`Recordings\20261016152029-1.mp4` in the test client) shows it frame to frame, 1/30 s apart:
 the yard's shade on a sail changes width, a rope's shade line shifts, the dark area behind the rigging changes shape,
 and the bands on the rope ladder jump. The sails' own backs stay dark. So the maps hold the ship's parts a little off
@@ -4184,3 +4184,27 @@ Stormwind planters) kept each one.
 A brief entry now goes at once when a new entry of the same key came in that frame: it is the same draw, placed
 again. The planters' other places are other keys and keep the grace. Afterwards the owner saw a single stamp
 now and then, and took it as it is; a trace (`[general] trace`) of it was not read.
+
+## A moving ship's sails (2026-10-17)
+
+The owner: a ship's sails flickered, worst with the sun at their side and while the ship moved. The ship from Ratchet
+to Booty Bay. Three causes, found in this order.
+
+- **The facing's step.** A sail is a sheet. The side turned to the sun is tested off its face, toward the sun, and
+  reads lit; the side turned from it is tested behind it and reads in shade. With the sun at its side, a sway of a few
+  degrees took the facing across 0 and the whole sail from lit to shaded. A model's face now goes into its own shade
+  over a band either side of 0 (`[sunshadows] grazeShade` 1, `grazeBand` 0.35), only where the facing two pixels
+  away agrees with the one a pixel away. On a model, a blocker nearer than `modelGap` (0.3 yards) along the sun does
+  not shade it, so the sheet's own face never decides it. The owner: much less, but still a flicker under way.
+- **The ship is not a model.** This ship is drawn fixed-function, sails and ropes too, so the mask never marked it
+  as a model and none of the above applied to it. A recording of Debug View 5 at 17.8 yards a second, with the
+  pixels that change for one frame and back mapped, showed fine stripes on the sails' sunlit faces (792 such pixels
+  a frame). Every piece of a ship is drawn with the ship's world matrix, so its origin is the ship's (11 pieces at one
+  place in a probe). A fixed-function draw within 2 yards of a ship under way (water.cpp's hull tracker,
+  `WaterShipPart`) is marked as a model. The probe's `bodymask:` line counts them.
+- **The far sails.** Past the near map, the middle and far maps were redrawn on every second rebuild, and in between
+  held the ship where it was, 0.4 yards back at 18 yards a second. While a ship under way is within a map's reach
+  (`WaterShipWithin`), that map is redrawn on each rebuild. The owner: "I think we did it".
+
+Tried on the way and left out: Leaves off, Shadow Softness 2 and `minGap` 0.6 changed nothing. Not measured yet: the
+frame time while a ship sails near, and whether the hull, now a model while it moves, takes the foam round objects.
