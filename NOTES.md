@@ -4170,3 +4170,17 @@ views' vertices, and those reads went to the front of the queue. Stormwind's cro
 files (HumanMale.m2 64 times, HumanFemale.m2 48). The view sizes depend on the file only: gear and skin change
 textures and which parts show. Each file's views are now kept (`g_creatureFileViews`), and creature reads go to
 the back of the queue. After the change the game objects' models were read 7 seconds after the login.
+
+## A bird's shade stamped behind it (2026-10-17)
+
+In Astranaar each bird's shade left a row of copies, about half a second long, that followed the bird. It was
+longer while the camera moved or turned. The birds are a doodad the map files place (BIRD02), animated; the
+client draws each one as a model of its own (528 vertices, alpha tested), and no bone stands on the doodad's
+place, so the object table does not take it. The probe listed the copies: one draw each, last drawn 0.3 to 0.5 s
+before, at places 4 to 60 yards apart. The draw's first bone moves further between frames than the move rule
+reaches, so each frame's draw was a new entry, and the brief rule's half second (`kBriefGrace`, for the
+Stormwind planters) kept each one.
+
+A brief entry now goes at once when a new entry of the same key came in that frame: it is the same draw, placed
+again. The planters' other places are other keys and keep the grace. Afterwards the owner saw a single stamp
+now and then, and took it as it is; a trace (`[general] trace`) of it was not read.

@@ -2631,6 +2631,10 @@ namespace
         for (auto kv = g_cache.begin(); kv != g_cache.end(); )
         {
             std::vector<Entry>& list = kv->second;
+            // A new entry of this model this frame (2026-10-17): see kBriefGrace.
+            bool newHere = false;
+            for (const Entry& n : list)
+                newHere = newHere || (n.lastSeen == now && n.drawnFor == 1);
             for (size_t i = 0; i < list.size(); )
             {
                 Entry& e = list[i];
@@ -2734,8 +2738,14 @@ namespace
                         // first frame it was not drawn, each was gone when the map was redrawn, and the planters'
                         // shadows blinked while you walked. A bird's places are caught by the move rule, which
                         // marks them moving, and they still go at once.
+                        // Not when a new entry of the same model came in this frame (2026-10-17): it is the same
+                        // draw, placed again. In Astranaar the client draws each bird the files place (BIRD02, 528
+                        // vertices) as a model of its own, and its first bone is 4 to 60 yards from the last
+                        // frame's, past the move rule. Each frame's place became an entry, kept the half second:
+                        // a row of the bird's shade, stamped behind it, and longer while the camera turned. The
+                        // planters' other places are other keys, so they keep the grace.
                         constexpr double kBriefGrace = 0.5;
-                        const bool brief = e.drawnFor < kBrief && now - e.lastSeen > kBriefGrace &&
+                        const bool brief = e.drawnFor < kBrief && (newHere || now - e.lastSeen > kBriefGrace) &&
                                            (e.rec.vs || (s.mapTerrain && !e.rec.terrain));
                         // Anything that has moved since it was first seen, once it stops being drawn, at any
                         // distance and in view or not (2026-09-30): a ship's pieces that it left out of view
