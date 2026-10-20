@@ -176,6 +176,8 @@ namespace
                         s.lo[j] = (std::min)(s.lo[j], c);
                         s.hi[j] = (std::max)(s.hi[j], c);
                     }
+                if (indoor)
+                    s.room = static_cast<int>(out.indoor.size() / 6) - 1;
                 out.spans.push_back(s);
             }
             return true;
@@ -513,8 +515,12 @@ static void Floors(WmoMesh& out)
     WmoFloors& f = out.floors;
     const float* v = out.v.data();
     float lo[2] = { 1e30f, 1e30f }, hi[2] = { -1e30f, -1e30f };
+    size_t g = 0;   // the group of triangle t: the spans lie in idx in order
     for (size_t t = 0; t + 2 < out.idx.size(); t += 3)
     {
+        while (g < out.spans.size() && t >= out.spans[g].first + out.spans[g].count)
+            ++g;
+        const int room = g < out.spans.size() && t >= out.spans[g].first ? out.spans[g].room : -1;
         const float* a = v + out.idx[t] * 3;
         const float* b = v + out.idx[t + 1] * 3;
         const float* c = v + out.idx[t + 2] * 3;
@@ -524,6 +530,7 @@ static void Floors(WmoMesh& out)
         const float len = sqrtf(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
         if (len < 1e-6f || fabsf(n[2]) < 0.5f * len)
             continue;   // a wall, or steeper than 60 degrees
+        f.room.push_back(static_cast<int16_t>(room));
         for (const float* p : { a, b, c })
         {
             f.tris.insert(f.tris.end(), p, p + 3);

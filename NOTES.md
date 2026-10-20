@@ -1170,6 +1170,20 @@ A map with tiles is not changed. Windhorn Canyon (map 820, `MooCanyon`) has 9 ti
 building comes from the tiles as before. Of `GRANDMOOCANYON.WMO`'s 32 groups, 10 are 0x1049 (exterior, 0x8),
 which never count as indoor; the other 22 (0x2005, 0x3005) count only with a ceiling over the player.
 
+**The group under your feet (2026-10-20).** In the Undercity's Trade Quarter the panel said false: "room 47,
+no ceiling". Offline, room 47 is group 52 (0xba05): its box holds the point (1578.8, 255.6, -61.9), and its
+ceiling is 61.5 yards up, over the 40-yard reach. The reach was a guess from the Stormwind street fault. The
+test now works as the client's own: the group of the floor under the feet decides. `WmoFloors` keeps each floor
+triangle's room (`WmoSpan::room`, -1 for a group that is not a room). `MapIndoors` takes the highest floor at
+most 0.5 yards over the feet, in any building. It is indoors when that floor's group is a room and one of the
+room's triangles lies more than 1.5 yards over the point, at any height: a room's roof is in its own group, so
+a player on an inn's roof stays outdoors. Terrain between that floor and the feet means the player stands on
+the ground over a building (Tirisfal over the Undercity): outdoors. In game: the Undercity spot true (ceiling
+61.7 yd up), the Goldshire inn true (room 3, 6.0 yd), the Trade District street at (-8840, 625) false (the floor
+under you is outdoors). Stormwind takes about 20 seconds to load after a teleport; until then the panel says
+"not loaded yet". A tilted building is not tested, as in `MapFloorHeight`. The core calls the Undercity
+(0x3a05) and Ironforge (0xa005) outdoors: there the flag means a player may mount, not that the sky lights them.
+
 **Candles from the files.** Inside a building the client has no point lights and its candles are particles
 (the Darkshire inn probe), so the lamps never found them. A building's root file places its own doodads
 (MODN names, MODS sets, MODD: 40 bytes, name offset in the low 24 bits, position, rotation as a quaternion,

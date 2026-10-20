@@ -22,6 +22,7 @@ struct WmoFloors
 {
     static constexpr float kCell = 4.0f;
     std::vector<float>    tris;          // 9 floats each, own space
+    std::vector<int16_t>  room;          // each one's group as WmoSpan::room has it (MapIndoors)
     std::vector<uint32_t> first, list;   // cell c holds the triangles list[first[c]] .. list[first[c + 1] - 1]
     float                 lo[2] = {};    // the grid's corner, own space
     int                   nx = 0, ny = 0;
@@ -33,6 +34,7 @@ struct WmoSpan
 {
     uint32_t first = 0, count = 0;   // indices
     float    lo[3] = {}, hi[3] = {};
+    int      room = -1;              // its entry in WmoMesh::indoor when the group is a room, else -1
 };
 
 // A group's liquid (MLIQ, 2026-10-12), in the building's own space: xv x yv heights, kTile yards apart from the

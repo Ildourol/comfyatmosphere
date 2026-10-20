@@ -71,8 +71,9 @@ int MapLightsNear(const float at[3], float radius, MapLight* out, int max);
 unsigned MapLightCount();
 // The probe: every game object within radius yards, with its display id, model and the light it gives.
 void MapObjectsLog(const float at[3], float radius);
-// Whether a point is inside one of the indoor groups (rooms, cellars) of a building from the files. why, if
-// given, gets the step that decided, for the stats panel: the building's file, the room, the ceiling's height.
+// Whether a point stands in one of the indoor groups (rooms, cellars) of a building from the files: the group of
+// the floor under it decides. why, if given, gets the step that decided, for the stats panel: the building's
+// file, the room, the ceiling's height.
 bool MapIndoors(const float p[3], char* why = nullptr, size_t whySize = 0);
 // The highest floor of a building from the files at (x, y) that is not above `below`: for the fog's ground
 // under the terrain (Ironforge, the Undercity, a mine). False where no building has one.

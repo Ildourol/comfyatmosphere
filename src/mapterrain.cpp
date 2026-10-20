@@ -2003,13 +2003,62 @@ void MapObjectsLog(const float at[3], float radius)
 
 bool MapIndoors(const float p[3], char* why, size_t whySize)
 {
-    // why (the stats panel, 2026-10-07): the furthest step any building got to, with its file name.
-    int   whyStep = 0;
-    char  whyText[160] = "no building here";
-    const auto said = [&](int step, const Inst& i, const char* fmt, auto... args) {
-        if (!why || step <= whyStep)
-            return;
-        whyStep = step;
+    // The group under your feet decides (2026-10-20), as the client's own indoor test does. Before, any room
+    // whose box held you counted when one of its triangles lay 1.5 to 40 yards over you: in the Undercity's
+    // Trade Quarter the ceiling is 61.5 yards up, and the city counted as outdoors.
+    // The floor: the highest floor triangle of any building at most 0.5 yards over the feet (a foot can stand
+    // a little under the floor it is on). Upright buildings only, as MapFloorHeight.
+    const Inst* on = nullptr;
+    const Inst* loading = nullptr;
+    int   room = -1;
+    float floorZ = 0.0f, q[3] = {};
+    for (const Inst& i : g_insts)
+    {
+        if (p[0] < i.lo[0] || p[0] > i.hi[0] || p[1] < i.lo[1] || p[1] > i.hi[1] || p[2] < i.lo[2] || p[2] > i.hi[2])
+            continue;
+        if (i.m->state != Model::kReady)
+        {
+            loading = &i;
+            continue;
+        }
+        const WmoFloors& f = i.m->floors;
+        if (f.nx == 0 || i.p->rot[2][2] < 0.999f)
+            continue;
+        // Into the building's own space: world = own * rot + pos, and rot is a turn, so own = (world - pos) rot^T.
+        const float d[3] = { p[0] - i.p->pos[0], p[1] - i.p->pos[1], p[2] - i.p->pos[2] };
+        float o[3];
+        for (int j = 0; j < 3; ++j)
+            o[j] = d[0] * i.p->rot[j][0] + d[1] * i.p->rot[j][1] + d[2] * i.p->rot[j][2];
+        const int cx = static_cast<int>(floorf((o[0] - f.lo[0]) / WmoFloors::kCell));
+        const int cy = static_cast<int>(floorf((o[1] - f.lo[1]) / WmoFloors::kCell));
+        if (cx < 0 || cy < 0 || cx >= f.nx || cy >= f.ny)
+            continue;
+        const size_t c = static_cast<size_t>(cy) * f.nx + cx;
+        for (uint32_t k = f.first[c]; k < f.first[c + 1]; ++k)
+        {
+            const float* a = &f.tris[f.list[k] * 9];
+            const float* b = a + 3;
+            const float* e = a + 6;
+            const float d0x = b[0] - a[0], d0y = b[1] - a[1], d1x = e[0] - a[0], d1y = e[1] - a[1];
+            const float den = d0x * d1y - d1x * d0y;
+            if (den > -1e-6f && den < 1e-6f)
+                continue;
+            const float px = o[0] - a[0], py = o[1] - a[1];
+            const float u = (px * d1y - d1x * py) / den, v = (d0x * py - px * d0y) / den;
+            if (u < 0.0f || v < 0.0f || u + v > 1.0f)
+                continue;
+            const float h = a[2] + u * (b[2] - a[2]) + v * (e[2] - a[2]);
+            if (h <= o[2] + 0.5f && (!on || h + i.p->pos[2] > floorZ))
+            {
+                on = &i;
+                floorZ = h + i.p->pos[2];
+                room = f.list[k] < f.room.size() ? f.room[f.list[k]] : -1;
+                memcpy(q, o, sizeof(q));
+            }
+        }
+    }
+    char whyText[160] = "no building here";
+    const auto said = [&](const Inst& i, const char* fmt, auto... args) {
         const size_t slash = i.p->name.find_last_of('\\');
         const char*  file = i.p->name.c_str() + (slash == std::string::npos ? 0 : slash + 1);
         char rest[96];
@@ -2017,76 +2066,43 @@ bool MapIndoors(const float p[3], char* why, size_t whySize)
         snprintf(whyText, sizeof(whyText), "%s: %s", file, rest);
     };
     bool in = false;
-    for (const Inst& i : g_insts)
+    float gz = 0.0f;
+    if (!on)
     {
-        if (p[0] < i.lo[0] || p[0] > i.hi[0] || p[1] < i.lo[1] || p[1] > i.hi[1] || p[2] < i.lo[2] || p[2] > i.hi[2])
-            continue;
-        if (i.m->state != Model::kReady)
+        if (loading)
+            said(*loading, "not loaded yet");
+    }
+    else if (MapGroundHeight(p[0], p[1], gz) && gz > floorZ && gz <= p[2] + 0.5f)
+        said(*on, "on the ground, %.1f yd over its floor", gz - floorZ);   // a cellar or a city under the ground
+    else if (room < 0 || static_cast<size_t>(room) >= on->m->indoorTris.size())
+        said(*on, "the floor under you is outdoors");
+    else
+    {
+        // A room's roof is in the room's group too: one of its triangles must lie over you, at any height.
+        const std::vector<float>& t = on->m->indoorTris[room];
+        float over = -1.0f;   // the lowest of them
+        for (size_t n = 0; n + 8 < t.size(); n += 9)
         {
-            said(1, i, "not loaded yet");
-            continue;
-        }
-        if (i.m->indoor.empty())
-        {
-            said(2, i, "no rooms");
-            continue;
-        }
-        said(3, i, "in no room's box");
-        // Into the building's own space: world = own * rot + pos, and rot is a turn, so own = (world - pos) rot^T.
-        const float d[3] = { p[0] - i.p->pos[0], p[1] - i.p->pos[1], p[2] - i.p->pos[2] };
-        float q[3];
-        for (int j = 0; j < 3; ++j)
-            q[j] = d[0] * i.p->rot[j][0] + d[1] * i.p->rot[j][1] + d[2] * i.p->rot[j][2];
-        const std::vector<float>& b = i.m->indoor;
-        for (size_t k = 0; k + 5 < b.size(); k += 6)
-        {
-            if (!(q[0] >= b[k] && q[0] <= b[k + 3] && q[1] >= b[k + 1] && q[1] <= b[k + 4] && q[2] >= b[k + 2] &&
-                  q[2] <= b[k + 5]))
+            const float* a = &t[n];
+            const float* c = &t[n + 3];
+            const float* e = &t[n + 6];
+            const float d0x = c[0] - a[0], d0y = c[1] - a[1], d1x = e[0] - a[0], d1y = e[1] - a[1];
+            const float den = d0x * d1y - d1x * d0y;
+            if (den > -1e-6f && den < 1e-6f)
+                continue;   // a wall, seen from above
+            const float px = q[0] - a[0], py = q[1] - a[1];
+            const float u = (px * d1y - d1x * py) / den, v = (d0x * py - px * d0y) / den;
+            if (u < 0.0f || v < 0.0f || u + v > 1.0f)
                 continue;
-            // A room's box can reach over a street: all of Stormwind is one building, and in the Trade
-            // District the sun shadows were off in the open (2026-09-30). The room must also have a ceiling
-            // over the point: one of its triangles straight above, more than 1.5 yards up and within 40.
-            const size_t g = k / 6;
-            if (g >= i.m->indoorTris.size())
-            {
-                said(5, i, "room %d, by its box alone", static_cast<int>(g));
-                in = true;   // no triangles kept: the box alone, as before
-                break;
-            }
-            float above = -1.0f;   // the lowest of the room's triangles over the point, for why
-            const std::vector<float>& t = i.m->indoorTris[g];
-            for (size_t n = 0; n + 8 < t.size(); n += 9)
-            {
-                const float* a = &t[n];
-                const float* c = &t[n + 3];
-                const float* e = &t[n + 6];
-                const float d0x = c[0] - a[0], d0y = c[1] - a[1], d1x = e[0] - a[0], d1y = e[1] - a[1];
-                const float den = d0x * d1y - d1x * d0y;
-                if (den > -1e-6f && den < 1e-6f)
-                    continue;   // a wall, seen from above
-                const float px = q[0] - a[0], py = q[1] - a[1];
-                const float u = (px * d1y - d1x * py) / den, v = (d0x * py - px * d0y) / den;
-                if (u < 0.0f || v < 0.0f || u + v > 1.0f)
-                    continue;
-                const float z = a[2] + u * (c[2] - a[2]) + v * (e[2] - a[2]);
-                if (z > q[2] + 1.5f && z < q[2] + 40.0f)
-                {
-                    said(5, i, "room %d, ceiling %.1f yd up", static_cast<int>(g), z - q[2]);
-                    in = true;
-                    break;
-                }
-                if (z > q[2] && (above < 0.0f || z - q[2] < above))
-                    above = z - q[2];
-            }
-            if (in)
-                break;
-            if (above >= 0.0f)
-                said(4, i, "room %d, no ceiling (lowest %.1f yd up)", static_cast<int>(g), above);
-            else
-                said(4, i, "room %d, nothing above you", static_cast<int>(g));
+            const float z = a[2] + u * (c[2] - a[2]) + v * (e[2] - a[2]) - q[2];
+            if (z > 1.5f && (over < 0.0f || z < over))
+                over = z;
         }
+        in = over > 0.0f;
         if (in)
-            break;
+            said(*on, "room %d, ceiling %.1f yd up", room, over);
+        else
+            said(*on, "room %d, nothing over you (on its roof)", room);
     }
     if (why)
         strncpy_s(why, whySize, whyText, _TRUNCATE);
