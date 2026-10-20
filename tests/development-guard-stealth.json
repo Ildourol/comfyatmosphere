@@ -278,9 +278,9 @@
             "min": 1
         },
         {
-            "about": "In stealth: the world's depth is copied into the scratch once, before his depth passes",
+            "about": "In stealth: the world's depth is copied into the scratch once, before his depth passes. A layer may come before his first colour pass (2026-10-20: 34 parts, not 32, and one drew its layer first)",
             "probeAt": 1,
-            "probe": "in order: [+]D+C[CL]*;",
+            "probe": "in order: [+]D+[CL]+;",
             "min": 1
         },
         {
