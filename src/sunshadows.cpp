@@ -1178,7 +1178,8 @@ bool SunShadowsDraw(IDirect3DDevice9* dev)
         if (haveVp)
             d->SetViewport(dev, &vp);
     }
-    IDirect3DPixelShader9* psF4 = ss.fetch4 && g_f4State == 1 ? Fetch4Shader(dev, ss.softness == 1.0f ? 1 : 0) : nullptr;
+    const bool isSoft1 = fabsf(ss.softness - 1.0f) < 0.01f;
+    IDirect3DPixelShader9* psF4 = ss.fetch4 && g_f4State == 1 ? Fetch4Shader(dev, isSoft1 ? 1 : 0) : nullptr;
     const bool f4 = psF4 != nullptr;
     d->SetDepthStencilSurface(dev, nullptr);   // the scene's depth is read, so it cannot be bound
     d->SetRenderState(dev, D3DRS_ZENABLE,           D3DZB_FALSE);

@@ -496,8 +496,9 @@ bool LampGlowDraw(IDirect3DDevice9* dev)
     D3DMATRIX camVP, inv;
     Mul(view, proj, camVP);
 
+    const int maxGather = (std::min)(kLampsMax, (std::max)(1, g_cfg.lamps.maxLights));
     static LampLight lights[kLampsMax];
-    int found = LampsOn() ? LampsGather(cam, camVP, lights, kLampsMax) : 0;
+    int found = LampsOn() ? LampsGather(cam, camVP, lights, maxGather) : 0;
     // The lighthouses' lamps (2026-10-05, the owner): each lights the surfaces round it, the tower's top and the
     // rocks below, so Night Darkness is cut round it as round a street lamp. A fill light: the glow is beacon.cpp's.
     if (LampsOn())
@@ -505,7 +506,7 @@ bool LampGlowDraw(IDirect3DDevice9* dev)
         float lh[4][3], fades[4];
         const int nl = BeaconLamps(lh, 4, fades);
         const LighthouseSettings& ls = g_cfg.lighthouse;
-        for (int i = 0; i < nl && found < kLampsMax; ++i)
+        for (int i = 0; i < nl && found < maxGather; ++i)
         {
             LampLight& L = lights[found++];
             for (int j = 0; j < 3; ++j)

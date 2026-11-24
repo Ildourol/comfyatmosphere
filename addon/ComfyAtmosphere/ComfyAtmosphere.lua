@@ -137,6 +137,9 @@ COMFYATMOSPHERE_SHADOW_RANGE   = "Far Shadow Distance";
 COMFYATMOSPHERE_SHADOW_MID_RANGE = "Mid Shadow Distance";
 COMFYATMOSPHERE_SHADOW_MIN_TRIANGLES = "Shadow Model Culling";
 COMFYATMOSPHERE_SHADOW_FAR_EVERY = "Far Shadow Redraw";
+COMFYATMOSPHERE_SHADOW_MID_EVERY = "Mid Shadow Redraw";
+COMFYATMOSPHERE_SHADOW_TERRAIN_LEAVES = "Terrain Soft Shade";
+COMFYATMOSPHERE_SHADOW_HORIZON_DEPTH = "Horizon Shadow Distance";
 COMFYATMOSPHERE_RAYS           = "Sun Rays";
 COMFYATMOSPHERE_RAYS_STRENGTH  = "Sun Rays Strength";
 COMFYATMOSPHERE_RAYS_SOFTEN    = "Sun Rays Softness";
@@ -1604,6 +1607,35 @@ local ENTRIES = {
 		minval = 1,
 		maxval = 6,
 		step = 1,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_SHADOW_MID_EVERY",
+		desc = "Redraw the middle shadow cascade on every Nth frame rebuild (1 to 4). Higher values reduce shadow draw calls.",
+		type = "slider",
+		cvar = "comfyShadowMidEvery",
+		dependency = { "comfyVolume", "1" },
+		minval = 1,
+		maxval = 4,
+		step = 1,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_SHADOW_TERRAIN_LEAVES",
+		desc = "Enables soft terrain part-shade on mountains and ridgelines. Ticking off skips an entire terrain depth render pass for higher FPS.",
+		type = "checkbutton",
+		cvar = "comfyShadowTerrainLeaves",
+		dependency = { "comfyVolume", "1" },
+	},
+	{
+		name = "COMFYATMOSPHERE_SHADOW_HORIZON_DEPTH",
+		desc = "Maximum distance in yards for far mountain ridgelines to cast shadows. Lower values cull distant background terrain triangles.",
+		type = "slider",
+		cvar = "comfyShadowHorizonDepth",
+		dependency = { "comfyVolume", "1" },
+		minval = 500,
+		maxval = 1500,
+		step = 100,
 		numberLabels = 1,
 	},
 	{

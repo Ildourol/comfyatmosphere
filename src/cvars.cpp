@@ -109,6 +109,7 @@ namespace
                 kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kRiseFrom, kHighest,
                 kVolumeSteps, kVolumeDownscale, kLampMaxLights, kLampMaxDist, kShadowRange, kShadowMidRange, kShadowMinTriangles, kShadowFarEvery, kRaysPasses,
                 kVolumeBlur, kVolumeOcclusion, kVolumeSmooth, kVolumeLeafShade,
+                kShadowMidEvery, kShadowTerrainLeaves, kShadowHorizonDepth,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -299,6 +300,10 @@ namespace
         "comfyVolumeOcclusion",
         "comfyVolumeSmooth",
         "comfyVolumeLeafShade",
+        // Extended Shadow Scalability & Culling
+        "comfyShadowMidEvery",
+        "comfyShadowTerrainLeaves",
+        "comfyShadowHorizonDepth",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -607,6 +612,9 @@ namespace
         case kVolumeOcclusion: snprintf(out, cap, "%d", s.volume.occlusion ? 1 : 0); break;
         case kVolumeSmooth:   snprintf(out, cap, "%.0f", s.volume.smooth * 100.0f); break;
         case kVolumeLeafShade: snprintf(out, cap, "%.0f", s.volume.leafShade * 100.0f); break;
+        case kShadowMidEvery:  snprintf(out, cap, "%d", s.shadow.midEvery); break;
+        case kShadowTerrainLeaves: snprintf(out, cap, "%d", s.shadow.terrainLeaves ? 1 : 0); break;
+        case kShadowHorizonDepth:  snprintf(out, cap, "%.0f", s.shadow.horizonDepth); break;
         }
     }
 
@@ -820,6 +828,9 @@ namespace
         if (c[kVolumeOcclusion].seen)   s.volume.occlusion = (c[kVolumeOcclusion].value != 0.0f);
         if (c[kVolumeSmooth].seen)      s.volume.smooth = Clamp(c[kVolumeSmooth].value * 0.01f, 0.0f, 0.95f);
         if (c[kVolumeLeafShade].seen)   s.volume.leafShade = Clamp(c[kVolumeLeafShade].value * 0.01f, 0.0f, 1.0f);
+        if (c[kShadowMidEvery].seen)      s.shadow.midEvery = static_cast<int>(Clamp(c[kShadowMidEvery].value, 1.0f, 4.0f) + 0.5f);
+        if (c[kShadowTerrainLeaves].seen) s.shadow.terrainLeaves = (c[kShadowTerrainLeaves].value != 0.0f);
+        if (c[kShadowHorizonDepth].seen)  s.shadow.horizonDepth = Clamp(c[kShadowHorizonDepth].value, 200.0f, 2500.0f);
 
         // The Atmosphere Effects box: off, every effect is off, whatever its own box says. The depth
         // buffer and the shadow map go too, since nothing reads them.
