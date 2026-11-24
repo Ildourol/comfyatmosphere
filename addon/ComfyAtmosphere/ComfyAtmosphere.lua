@@ -31,12 +31,16 @@ COMFYATMOSPHERE_MASTER         = "Atmosphere Effects";
 COMFYATMOSPHERE_VOLUME         = "Volumetric Light";
 COMFYATMOSPHERE_VOLUME_STRENGTH = "Volumetric Light Strength";
 COMFYATMOSPHERE_VOLUME_QUALITY = "Volumetric Light Quality";
+COMFYATMOSPHERE_VOLUME_STEPS   = "Volumetric Light Steps";
+COMFYATMOSPHERE_VOLUME_DOWNSCALE = "Light Resolution Scale";
 COMFYATMOSPHERE_VOLUME_DENSITY = "Light Density";
 COMFYATMOSPHERE_VOLUME_DISTANCE = "Light Distance";
 COMFYATMOSPHERE_VOLUME_DIRECTION = "Light Toward the Sun";
 COMFYATMOSPHERE_LAMPS          = "Lamps";
 COMFYATMOSPHERE_LAMP_GLOW      = "Lamp Glow";
 COMFYATMOSPHERE_LAMP_DISTANCE  = "Lamp Distance";
+COMFYATMOSPHERE_LAMP_MAX_LIGHTS = "Max Screen Lights";
+COMFYATMOSPHERE_LAMP_MAX_DIST  = "Lamp Draw Distance";
 COMFYATMOSPHERE_LANTERN_LIGHT  = "Lantern Light";
 COMFYATMOSPHERE_TORCH_LIGHT    = "Torch Light";
 COMFYATMOSPHERE_INDOOR_LAMPS   = "Indoor Lamps";
@@ -125,10 +129,15 @@ COMFYATMOSPHERE_SHADOW_RESOLUTION = "Shadow Resolution";
 COMFYATMOSPHERE_SHADOW_SOFTNESS = "Shadow Softness";
 COMFYATMOSPHERE_SHADOW_EVERY   = "Shadow Redraw";
 COMFYATMOSPHERE_SHADOW_NEAR    = "Near Shadow Distance";
+COMFYATMOSPHERE_SHADOW_RANGE   = "Far Shadow Distance";
+COMFYATMOSPHERE_SHADOW_MID_RANGE = "Mid Shadow Distance";
+COMFYATMOSPHERE_SHADOW_MIN_TRIANGLES = "Shadow Model Culling";
+COMFYATMOSPHERE_SHADOW_FAR_EVERY = "Far Shadow Redraw";
 COMFYATMOSPHERE_RAYS           = "Sun Rays";
 COMFYATMOSPHERE_RAYS_STRENGTH  = "Sun Rays Strength";
 COMFYATMOSPHERE_RAYS_SOFTEN    = "Sun Rays Softness";
 COMFYATMOSPHERE_RAYS_SMOOTH    = "Sun Rays Smoothing";
+COMFYATMOSPHERE_RAYS_PASSES    = "Sun Rays Blur Passes";
 COMFYATMOSPHERE_DEBUG_VIEW     = "Debug View";
 COMFYATMOSPHERE_NIGHT_STRENGTH = "Night Strength";
 COMFYATMOSPHERE_NIGHT_DARKNESS = "Night Darkness";
@@ -217,6 +226,28 @@ local ENTRIES = {
 		minval = 1,
 		maxval = 3,
 		step = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_VOLUME_STEPS",
+		desc = "Number of light samples along each ray. Lower runs faster; 32 to 48 gives great performance with no visible loss.",
+		type = "slider",
+		cvar = "comfyVolumeSteps",
+		dependency = { "comfyVolume", "1" },
+		minval = 16,
+		maxval = 96,
+		step = 8,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_VOLUME_DOWNSCALE",
+		desc = "Work resolution of the volumetric light (1: Full, 2: Half, 3: Third, 4: Quarter). Higher numbers run much faster.",
+		type = "slider",
+		cvar = "comfyVolumeDownscale",
+		dependency = { "comfyVolume", "1" },
+		minval = 1,
+		maxval = 4,
+		step = 1,
+		numberLabels = 1,
 	},
 	{
 		-- Thousandths: comfyatmos.dll divides by 1000 for [volume] density (15 is 0.015).
@@ -471,6 +502,28 @@ local ENTRIES = {
 		dependency = { "comfyLamps", "1" },
 		minval = 50,
 		maxval = 400,
+		step = 10,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_LAMP_MAX_LIGHTS",
+		desc = "Maximum number of lights drawn on screen at once. Lowering this increases FPS in cities like Stormwind or Ironforge.",
+		type = "slider",
+		cvar = "comfyLampMaxLights",
+		dependency = { "comfyLamps", "1" },
+		minval = 4,
+		maxval = 32,
+		step = 4,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_LAMP_MAX_DIST",
+		desc = "How far away, in yards, a lamp's light is still drawn. Shorter culls distant lights and saves GPU time.",
+		type = "slider",
+		cvar = "comfyLampMaxDistance",
+		dependency = { "comfyLamps", "1" },
+		minval = 30,
+		maxval = 180,
 		step = 10,
 		numberLabels = 1,
 	},
@@ -1470,6 +1523,50 @@ local ENTRIES = {
 		numberLabels = 1,
 	},
 	{
+		name = "COMFYATMOSPHERE_SHADOW_RANGE",
+		desc = "How far away, in yards, world objects cast shadows into the far map. Shorter runs faster.",
+		type = "slider",
+		cvar = "comfyShadowRange",
+		dependency = { "comfyVolume", "1" },
+		minval = 100,
+		maxval = 400,
+		step = 25,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_SHADOW_MID_RANGE",
+		desc = "Middle shadow cascade distance in yards (0 = off). Lowering or turning off saves VRAM and shadow draw calls.",
+		type = "slider",
+		cvar = "comfyShadowMidRange",
+		dependency = { "comfyVolume", "1" },
+		minval = 0,
+		maxval = 150,
+		step = 10,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_SHADOW_MIN_TRIANGLES",
+		desc = "Models with fewer triangles stay out of the far shadow map past 60 yards. Higher culls small doodads and saves CPU/GPU time.",
+		type = "slider",
+		cvar = "comfyShadowMinTriangles",
+		dependency = { "comfyVolume", "1" },
+		minval = 0,
+		maxval = 500,
+		step = 50,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_SHADOW_FAR_EVERY",
+		desc = "Redraw the far shadow map on every Nth frame rebuild. Higher values save significant GPU replay time.",
+		type = "slider",
+		cvar = "comfyShadowFarEvery",
+		dependency = { "comfyVolume", "1" },
+		minval = 1,
+		maxval = 6,
+		step = 1,
+		numberLabels = 1,
+	},
+	{
 		name = "COMFYATMOSPHERE_RAYS",
 		desc = "Rays of light from the sun, through gaps in the trees and clouds.",
 		type = "checkbutton",
@@ -1507,6 +1604,17 @@ local ENTRIES = {
 		minval = 0,
 		maxval = 90,
 		step = 5,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_RAYS_PASSES",
+		desc = "Number of blur passes for sun rays (1 to 3). 1 or 2 runs faster on lower-end GPUs.",
+		type = "slider",
+		cvar = "comfyRaysPasses",
+		dependency = { "comfyRays", "1" },
+		minval = 1,
+		maxval = 3,
+		step = 1,
 		numberLabels = 1,
 	},
 	{
@@ -2212,21 +2320,22 @@ end
 local WINDOW_VALUE_TEXT = {
 	comfyVolumeQuality = { "Low", "Medium", "High" },
 	comfyShadowResolution = { "1024", "2048", "4096" },
+	comfyVolumeDownscale = { "Full", "Half", "Third", "Quarter" },
 };
 local WINDOW_SECTIONS = {
-	{ "Light", { "comfyVolume", "comfyVolumeStrength", "comfyVolumeQuality", "comfyVolumeDensity",
+	{ "Light", { "comfyVolume", "comfyVolumeStrength", "comfyVolumeQuality", "comfyVolumeSteps", "comfyVolumeDownscale", "comfyVolumeDensity",
 	             "comfyVolumeDistance", "comfyVolumeDirection" } },
 	{ "Fog", { "comfyMist", "comfyMistDensity", "comfyMistHeight", "comfyMistBrightness", "comfyMistSun", "comfyMistToward", "comfyMistHorizon",
 	           "comfyMistReach", "comfyMistSky", "comfyMistPatches", "comfyMistLow", "comfyMistWater",
 	           "comfyMistMorning", "comfyMistLamps", "comfyMistWind", "comfyMistWindDir" } },
-	{ "Lamps", { "comfyLamps", "comfyLampGlow", "comfyLampDistance", "comfyLanternLight", "comfyTorchLight",
+	{ "Lamps", { "comfyLamps", "comfyLampGlow", "comfyLampDistance", "comfyLampMaxLights", "comfyLampMaxDistance", "comfyLanternLight", "comfyTorchLight",
 	             "comfyIndoorLamps", "comfyLampsDay", "comfyLighthouses", "comfyLighthouseBeam", "comfyLighthouseBeacon", "comfyLighthouseLength", "comfyLighthouseDistance", "comfyLighthouseWidth", "comfyLighthouseSpread", "comfyLighthouseSpeed", "comfyLighthouseTwoBeams", "comfyLighthouseGlint", "comfyLighthouseFace", "comfyLighthouseFaceTilt", "comfyLighthouseFaceSoft", "comfyLighthouseWaterWidth" } },
 	{ "Shadows", { "comfySunShadows", "comfySunShadowsWorld", "comfySunShadowsUnits", "comfyShadowLock",
 	               "comfyShadowTilt", "comfyShadowRiseFrom", "comfyShadowHighest", "comfySunShadowStrength", "comfySunShadowsNight",
 	               "comfySunShadowsUnitStrength", "comfySunShadowsBody", "comfyShadowOnWater", "comfySunGlide", "comfyTreeShade", "comfyFoliageShadeSize", "comfyFoliageShadeEdge", "comfyFoliageSelfShade", "comfyFoliageCreatureShadow", "comfySunlight", "comfyShadeTint",
 	               "comfySunTint", "comfyShadowResolution", "comfyShadowSoftness", "comfyShadowEvery",
-	               "comfyShadowNear" } },
-	{ "Sky", { "comfyRays", "comfyRaysStrength", "comfyRaysSoften", "comfyRaysSmooth", "comfyNightStrength",
+	               "comfyShadowNear", "comfyShadowRange", "comfyShadowMidRange", "comfyShadowMinTriangles", "comfyShadowFarEvery" } },
+	{ "Sky", { "comfyRays", "comfyRaysStrength", "comfyRaysSoften", "comfyRaysSmooth", "comfyRaysPasses", "comfyNightStrength",
 	           "comfyNightDarkness", "comfyRainDarkness", "comfyMoonlight" } },
 	{ "Clouds", { "comfyClouds", "comfyCloudCover", "comfyCloudSoftness", "comfyCloudPuffiness", "comfyCloudScale",
 	              "comfyCloudLayerSoftness", "comfyCloudReshape", "comfyCloudSpeed", "comfyCloudTransition",

@@ -107,6 +107,7 @@ namespace
                 kCloudCover, kCloudShapes, kCloudSoftness, kCloudBillows, kCloudClearing,
                 kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
                 kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kRiseFrom, kHighest,
+                kVolumeSteps, kVolumeDownscale, kLampMaxLights, kLampMaxDist, kShadowRange, kShadowMidRange, kShadowMinTriangles, kShadowFarEvery, kRaysPasses,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -282,6 +283,16 @@ namespace
         // Low Sun From (2026-10-14) and Highest Sun (2026-10-15): [sunshadows] riseFrom and highest, in degrees.
         "comfyShadowRiseFrom",
         "comfyShadowHighest",
+        // Extended Performance & Optimization Knobs
+        "comfyVolumeSteps",
+        "comfyVolumeDownscale",
+        "comfyLampMaxLights",
+        "comfyLampMaxDistance",
+        "comfyShadowRange",
+        "comfyShadowMidRange",
+        "comfyShadowMinTriangles",
+        "comfyShadowFarEvery",
+        "comfyRaysPasses",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -577,6 +588,15 @@ namespace
         case kFogPatches:     snprintf(out, cap, "%.0f", s.fog.patchiness * 100.0f); break;
         case kFogWind:        snprintf(out, cap, "%.0f", s.fog.windSpeed * 10.0f); break;   // tenths of a yard a second
         case kFogWindDir:     snprintf(out, cap, "%.0f", fmodf(fmodf(s.fog.windDeg, 360.0f) + 360.0f, 360.0f)); break;
+        case kVolumeSteps:    snprintf(out, cap, "%d", s.volume.steps); break;
+        case kVolumeDownscale: snprintf(out, cap, "%d", s.volume.downscale); break;
+        case kLampMaxLights:  snprintf(out, cap, "%d", s.lamps.maxLights); break;
+        case kLampMaxDist:    snprintf(out, cap, "%.0f", s.lamps.maxDistance); break;
+        case kShadowRange:    snprintf(out, cap, "%.0f", s.shadow.range); break;
+        case kShadowMidRange: snprintf(out, cap, "%.0f", s.shadow.midRange); break;
+        case kShadowMinTriangles: snprintf(out, cap, "%d", s.shadow.minTriangles); break;
+        case kShadowFarEvery: snprintf(out, cap, "%d", s.shadow.farEvery); break;
+        case kRaysPasses:     snprintf(out, cap, "%d", s.rays.passes); break;
         }
     }
 
@@ -773,6 +793,19 @@ namespace
         // Last: the quality level replaces the values it covers, whichever of the ini and the controls
         // set it.
         ApplyVolumeQuality(s);
+
+        // Extended performance and scalability overrides:
+        if (c[kLampMaxLights].seen)     s.lamps.maxLights = static_cast<int>(Clamp(c[kLampMaxLights].value, 1.0f, 32.0f) + 0.5f);
+        if (c[kLampMaxDist].seen)       s.lamps.maxDistance = Clamp(c[kLampMaxDist].value, 20.0f, 500.0f);
+        if (c[kShadowRange].seen)       s.shadow.range = Clamp(c[kShadowRange].value, 50.0f, 1000.0f);
+        if (c[kShadowMidRange].seen)    s.shadow.midRange = Clamp(c[kShadowMidRange].value, 0.0f, 500.0f);
+        if (c[kShadowMinTriangles].seen) s.shadow.minTriangles = static_cast<int>(Clamp(c[kShadowMinTriangles].value, 0.0f, 2000.0f) + 0.5f);
+        if (c[kShadowFarEvery].seen)    s.shadow.farEvery = static_cast<int>(Clamp(c[kShadowFarEvery].value, 1.0f, 8.0f) + 0.5f);
+        if (c[kRaysPasses].seen)        s.rays.passes = static_cast<int>(Clamp(c[kRaysPasses].value, 1.0f, 4.0f) + 0.5f);
+
+        // User explicit steps / downscale overrides (applied over presets)
+        if (c[kVolumeSteps].seen)       s.volume.steps = static_cast<int>(Clamp(c[kVolumeSteps].value, 8.0f, 128.0f) + 0.5f);
+        if (c[kVolumeDownscale].seen)   s.volume.downscale = static_cast<int>(Clamp(c[kVolumeDownscale].value, 1.0f, 4.0f) + 0.5f);
 
         // The Atmosphere Effects box: off, every effect is off, whatever its own box says. The depth
         // buffer and the shadow map go too, since nothing reads them.
