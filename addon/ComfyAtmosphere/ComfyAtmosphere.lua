@@ -33,6 +33,10 @@ COMFYATMOSPHERE_VOLUME_STRENGTH = "Volumetric Light Strength";
 COMFYATMOSPHERE_VOLUME_QUALITY = "Volumetric Light Quality";
 COMFYATMOSPHERE_VOLUME_STEPS   = "Volumetric Light Steps";
 COMFYATMOSPHERE_VOLUME_DOWNSCALE = "Light Resolution Scale";
+COMFYATMOSPHERE_VOLUME_BLUR    = "Volumetric Blur";
+COMFYATMOSPHERE_VOLUME_OCCLUSION = "Sun Occlusion Fade";
+COMFYATMOSPHERE_VOLUME_SMOOTH  = "Light Smoothing";
+COMFYATMOSPHERE_VOLUME_LEAF_SHADE = "Canopy Light Shafts";
 COMFYATMOSPHERE_VOLUME_DENSITY = "Light Density";
 COMFYATMOSPHERE_VOLUME_DISTANCE = "Light Distance";
 COMFYATMOSPHERE_VOLUME_DIRECTION = "Light Toward the Sun";
@@ -247,6 +251,42 @@ local ENTRIES = {
 		minval = 1,
 		maxval = 4,
 		step = 1,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_VOLUME_BLUR",
+		desc = "Smooth the noise pattern left by ray steps. Ticking off skips the blur pass to save GPU time.",
+		type = "checkbutton",
+		cvar = "comfyVolumeBlur",
+		dependency = { "comfyVolume", "1" },
+	},
+	{
+		name = "COMFYATMOSPHERE_VOLUME_OCCLUSION",
+		desc = "Fades the volumetric light when the sun disc is hidden behind distant terrain. Ticking off skips occlusion tests.",
+		type = "checkbutton",
+		cvar = "comfyVolumeOcclusion",
+		dependency = { "comfyVolume", "1" },
+	},
+	{
+		name = "COMFYATMOSPHERE_VOLUME_SMOOTH",
+		desc = "How much of the previous frame's glow is kept and reprojected. Lower values reduce historical ghosting; higher values produce smoother shafts at low step counts.",
+		type = "slider",
+		cvar = "comfyVolumeSmooth",
+		dependency = { "comfyVolume", "1" },
+		minval = 0,
+		maxval = 95,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_VOLUME_LEAF_SHADE",
+		desc = "How much leaves and branches block light in the air (0 = all light passes through, 100 = shafts through leaf gaps). 0 skips leaf shadow lookups in the air.",
+		type = "slider",
+		cvar = "comfyVolumeLeafShade",
+		dependency = { "comfyVolume", "1" },
+		minval = 0,
+		maxval = 100,
+		step = 10,
 		numberLabels = 1,
 	},
 	{
@@ -2323,8 +2363,9 @@ local WINDOW_VALUE_TEXT = {
 	comfyVolumeDownscale = { "Full", "Half", "Third", "Quarter" },
 };
 local WINDOW_SECTIONS = {
-	{ "Light", { "comfyVolume", "comfyVolumeStrength", "comfyVolumeQuality", "comfyVolumeSteps", "comfyVolumeDownscale", "comfyVolumeDensity",
-	             "comfyVolumeDistance", "comfyVolumeDirection" } },
+	{ "Light", { "comfyVolume", "comfyVolumeStrength", "comfyVolumeQuality", "comfyVolumeSteps", "comfyVolumeDownscale",
+	             "comfyVolumeBlur", "comfyVolumeOcclusion", "comfyVolumeSmooth", "comfyVolumeLeafShade",
+	             "comfyVolumeDensity", "comfyVolumeDistance", "comfyVolumeDirection" } },
 	{ "Fog", { "comfyMist", "comfyMistDensity", "comfyMistHeight", "comfyMistBrightness", "comfyMistSun", "comfyMistToward", "comfyMistHorizon",
 	           "comfyMistReach", "comfyMistSky", "comfyMistPatches", "comfyMistLow", "comfyMistWater",
 	           "comfyMistMorning", "comfyMistLamps", "comfyMistWind", "comfyMistWindDir" } },

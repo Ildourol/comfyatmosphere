@@ -108,6 +108,7 @@ namespace
                 kCloudSpeed, kCloudTransition, kCloudScale, kCloudLayerSoftness, kCloudCutoutWidth, kCloudShapeSize, kCloudReshape, kCloudPuffiness, kCloudShapesOn,
                 kJumpRipple, kGameGlow, kWetSandReach, kZoneSaturation, kRiseFrom, kHighest,
                 kVolumeSteps, kVolumeDownscale, kLampMaxLights, kLampMaxDist, kShadowRange, kShadowMidRange, kShadowMinTriangles, kShadowFarEvery, kRaysPasses,
+                kVolumeBlur, kVolumeOcclusion, kVolumeSmooth, kVolumeLeafShade,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -293,6 +294,11 @@ namespace
         "comfyShadowMinTriangles",
         "comfyShadowFarEvery",
         "comfyRaysPasses",
+        // Extended Light Toggles & Sliders
+        "comfyVolumeBlur",
+        "comfyVolumeOcclusion",
+        "comfyVolumeSmooth",
+        "comfyVolumeLeafShade",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -597,6 +603,10 @@ namespace
         case kShadowMinTriangles: snprintf(out, cap, "%d", s.shadow.minTriangles); break;
         case kShadowFarEvery: snprintf(out, cap, "%d", s.shadow.farEvery); break;
         case kRaysPasses:     snprintf(out, cap, "%d", s.rays.passes); break;
+        case kVolumeBlur:     snprintf(out, cap, "%d", s.volume.blur ? 1 : 0); break;
+        case kVolumeOcclusion: snprintf(out, cap, "%d", s.volume.occlusion ? 1 : 0); break;
+        case kVolumeSmooth:   snprintf(out, cap, "%.0f", s.volume.smooth * 100.0f); break;
+        case kVolumeLeafShade: snprintf(out, cap, "%.0f", s.volume.leafShade * 100.0f); break;
         }
     }
 
@@ -806,6 +816,10 @@ namespace
         // User explicit steps / downscale overrides (applied over presets)
         if (c[kVolumeSteps].seen)       s.volume.steps = static_cast<int>(Clamp(c[kVolumeSteps].value, 8.0f, 128.0f) + 0.5f);
         if (c[kVolumeDownscale].seen)   s.volume.downscale = static_cast<int>(Clamp(c[kVolumeDownscale].value, 1.0f, 4.0f) + 0.5f);
+        if (c[kVolumeBlur].seen)        s.volume.blur = (c[kVolumeBlur].value != 0.0f);
+        if (c[kVolumeOcclusion].seen)   s.volume.occlusion = (c[kVolumeOcclusion].value != 0.0f);
+        if (c[kVolumeSmooth].seen)      s.volume.smooth = Clamp(c[kVolumeSmooth].value * 0.01f, 0.0f, 0.95f);
+        if (c[kVolumeLeafShade].seen)   s.volume.leafShade = Clamp(c[kVolumeLeafShade].value * 0.01f, 0.0f, 1.0f);
 
         // The Atmosphere Effects box: off, every effect is off, whatever its own box says. The depth
         // buffer and the shadow map go too, since nothing reads them.
