@@ -360,9 +360,11 @@ namespace
         bool  seen    = false;     // a value was read at least once
         float value   = 0.0f;
         char  last[32] = {};
+        unsigned long changeSeq = 0;
     };
 
     Slot     g_slots[kKnobs];
+    unsigned long g_changeSeq = 0;
     Settings g_base;                // the settings as the ini gave them, before the controls
     bool     g_haveBase = false;
     bool     g_ready    = false;    // the CVars are registered
@@ -821,9 +823,14 @@ namespace
         if (c[kShadowFarEvery].seen)    s.shadow.farEvery = static_cast<int>(Clamp(c[kShadowFarEvery].value, 1.0f, 8.0f) + 0.5f);
         if (c[kRaysPasses].seen)        s.rays.passes = static_cast<int>(Clamp(c[kRaysPasses].value, 1.0f, 4.0f) + 0.5f);
 
-        // User explicit steps / downscale overrides (applied over presets)
-        if (c[kVolumeSteps].seen)       s.volume.steps = static_cast<int>(Clamp(c[kVolumeSteps].value, 8.0f, 128.0f) + 0.5f);
-        if (c[kVolumeDownscale].seen)   s.volume.downscale = static_cast<int>(Clamp(c[kVolumeDownscale].value, 1.0f, 4.0f) + 0.5f);
+        // User explicit steps / downscale overrides: apply when Quality is High (3) or when
+        // the user moved the individual slider more recently than the Quality preset.
+        if (c[kVolumeSteps].seen &&
+            (s.volume.quality >= 3 || c[kVolumeSteps].changeSeq > c[kVolumeQuality].changeSeq))
+            s.volume.steps = static_cast<int>(Clamp(c[kVolumeSteps].value, 8.0f, 128.0f) + 0.5f);
+        if (c[kVolumeDownscale].seen &&
+            (s.volume.quality >= 3 || c[kVolumeDownscale].changeSeq > c[kVolumeQuality].changeSeq))
+            s.volume.downscale = static_cast<int>(Clamp(c[kVolumeDownscale].value, 1.0f, 4.0f) + 0.5f);
         if (c[kVolumeBlur].seen)        s.volume.blur = (c[kVolumeBlur].value != 0.0f);
         if (c[kVolumeOcclusion].seen)   s.volume.occlusion = (c[kVolumeOcclusion].value != 0.0f);
         if (c[kVolumeSmooth].seen)      s.volume.smooth = Clamp(c[kVolumeSmooth].value * 0.01f, 0.0f, 0.95f);
@@ -838,6 +845,7 @@ namespace
         {
             s.volume.enabled = s.depth.enabled = s.shadow.enabled = s.fog.enabled = false;
             s.rays.enabled = s.sunShadows.enabled = s.lamps.enabled = s.colour.enabled = false;
+            s.water.enabled = s.grass.enabled = s.sky.clouds = s.lighthouse.enabled = false;
         }
     }
 
@@ -975,6 +983,8 @@ bool CVarsPoll()
             continue;
         strcpy_s(s.last, buf);
         s.value = static_cast<float>(atof(buf));
+        if (s.seen)
+            s.changeSeq = ++g_changeSeq;
         s.seen = true;
         changed = true;
         Log("--- control: %s = %s ---", kNames[k], buf);
