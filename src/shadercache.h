@@ -17,6 +17,7 @@ HRESULT ShaderCacheCompile(PFN_D3DCompile real, LPCVOID src, SIZE_T size, LPCSTR
 void ShaderPrecompile(const char* name, const char* src, const char* profile, const char* const* defines = nullptr);
 
 // Each pass lists its shaders with these (defined in its own file).
+void AaShaderList();
 void BeaconShaderList();
 void BodyMaskShaderList();
 void CoverShaderList();

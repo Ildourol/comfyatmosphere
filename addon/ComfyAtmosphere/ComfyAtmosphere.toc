@@ -4,4 +4,5 @@
 ## Author: comfy-wow
 ## SavedVariables: ComfyAtmosphereDB
 
+Presets.lua
 ComfyAtmosphere.lua

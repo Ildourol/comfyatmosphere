@@ -110,6 +110,7 @@ namespace
                 kVolumeSteps, kVolumeDownscale, kLampMaxLights, kLampMaxDist, kShadowRange, kShadowMidRange, kShadowMinTriangles, kShadowFarEvery, kRaysPasses,
                 kVolumeBlur, kVolumeOcclusion, kVolumeSmooth, kVolumeLeafShade,
                 kShadowMidEvery, kShadowTerrainLeaves, kShadowHorizonDepth,
+                kAaMode, kAaQuality, kAaSharpen,
                 kKnobs };
 
     const char* const kNames[kKnobs] = {
@@ -304,6 +305,10 @@ namespace
         "comfyShadowMidEvery",
         "comfyShadowTerrainLeaves",
         "comfyShadowHorizonDepth",
+        // Post-process Anti-Aliasing (Off / FXAA / SMAA) & RCAS Sharpening
+        "comfyAA",
+        "comfyAAQuality",
+        "comfySharpen",
     };
 
     // The Debug View slider: one number for every effect's debug view, so a view is one move in the
@@ -617,6 +622,9 @@ namespace
         case kShadowMidEvery:  snprintf(out, cap, "%d", s.shadow.midEvery); break;
         case kShadowTerrainLeaves: snprintf(out, cap, "%d", s.shadow.terrainLeaves ? 1 : 0); break;
         case kShadowHorizonDepth:  snprintf(out, cap, "%.0f", s.shadow.horizonDepth); break;
+        case kAaMode:              snprintf(out, cap, "%d", s.aa.mode); break;
+        case kAaQuality:           snprintf(out, cap, "%d", s.aa.quality); break;
+        case kAaSharpen:           snprintf(out, cap, "%.0f", s.aa.sharpen * 100.0f); break;
         }
     }
 
@@ -838,6 +846,9 @@ namespace
         if (c[kShadowMidEvery].seen)      s.shadow.midEvery = static_cast<int>(Clamp(c[kShadowMidEvery].value, 1.0f, 4.0f) + 0.5f);
         if (c[kShadowTerrainLeaves].seen) s.shadow.terrainLeaves = (c[kShadowTerrainLeaves].value != 0.0f);
         if (c[kShadowHorizonDepth].seen)  s.shadow.horizonDepth = Clamp(c[kShadowHorizonDepth].value, 200.0f, 2500.0f);
+        if (c[kAaMode].seen)              s.aa.mode = static_cast<int>(Clamp(c[kAaMode].value, 0.0f, 2.0f) + 0.5f);
+        if (c[kAaQuality].seen)           s.aa.quality = static_cast<int>(Clamp(c[kAaQuality].value, 1.0f, 3.0f) + 0.5f);
+        if (c[kAaSharpen].seen)           s.aa.sharpen = Clamp(c[kAaSharpen].value * 0.01f, 0.0f, 1.0f);
 
         // The Atmosphere Effects box: off, every effect is off, whatever its own box says. The depth
         // buffer and the shadow map go too, since nothing reads them.
@@ -846,6 +857,7 @@ namespace
             s.volume.enabled = s.depth.enabled = s.shadow.enabled = s.fog.enabled = false;
             s.rays.enabled = s.sunShadows.enabled = s.lamps.enabled = s.colour.enabled = false;
             s.water.enabled = s.grass.enabled = s.sky.clouds = s.lighthouse.enabled = false;
+            s.aa.mode = 0; s.aa.sharpen = 0.0f;
         }
     }
 

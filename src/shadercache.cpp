@@ -260,6 +260,7 @@ void ShaderCacheStart(const wchar_t* dir)
     LampGlowShaderList();
     BeaconShaderList();
     GradeShaderList();
+    AaShaderList();
     GrassShaderList();
     CloudsShaderList();
     BodyMaskShaderList();

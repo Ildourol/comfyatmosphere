@@ -153,6 +153,17 @@ COMFYATMOSPHERE_MOONLIGHT      = "Moonlight Colour";
 COMFYATMOSPHERE_COLOR          = "Color Effects";
 COMFYATMOSPHERE_DAY_SATURATION = "Day Saturation";
 COMFYATMOSPHERE_NIGHT_SATURATION = "Night Saturation";
+COMFYATMOSPHERE_AA             = "Post-Process AA";
+COMFYATMOSPHERE_AA_QUALITY     = "AA Quality";
+COMFYATMOSPHERE_SHARPEN        = "Sharpening";
+COMFYATMOSPHERE_MSAA           = "MSAA";
+COMFYATMOSPHERE_ANISO          = "Anisotropic";
+COMFYATMOSPHERE_TRILINEAR      = "Trilinear";
+COMFYATMOSPHERE_SPECULAR       = "Specular";
+COMFYATMOSPHERE_FFX_GLOW       = "Full-Screen Glow";
+COMFYATMOSPHERE_FAR_CLIP       = "View Distance";
+COMFYATMOSPHERE_WEATHER_DENSITY = "Weather Density";
+COMFYATMOSPHERE_APPLY_VIDEO    = "Apply Video";
 COMFYATMOSPHERE_CLOUDS         = "Clouds";
 COMFYATMOSPHERE_CLOUD_COVER    = "Cloud Cover";
 COMFYATMOSPHERE_CLOUD_SHAPES_ON = "Cloud Shapes";
@@ -1774,10 +1785,110 @@ local ENTRIES = {
 		desc = "How strong the game's Full Screen Glow is. 100 is the game's own. 0 is none. Needs Full Screen Glow on.",
 		type = "slider",
 		cvar = "comfyGameGlow",
+		dependency = { "ffxGlow", "1" },
 		minval = 0,
 		maxval = 200,
 		step = 5,
 		numberLabels = 1,
+	},
+	-- Display & Anti-Aliasing controls (AA + native hardware MSAA / Anisotropic / View Distance)
+	{
+		name = "COMFYATMOSPHERE_AA",
+		desc = "Post-process anti-aliasing on the 3D world before UI draws (UI text stays crisp). Off, FXAA (fast), or SMAA (3-pass morphological, sharpest).",
+		type = "slider",
+		cvar = "comfyAA",
+		minval = 0,
+		maxval = 2,
+		step = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_AA_QUALITY",
+		desc = "Edge search quality for FXAA and SMAA: Low, Medium, or High.",
+		type = "slider",
+		cvar = "comfyAAQuality",
+		notDependency = { "comfyAA", "0" },
+		minval = 1,
+		maxval = 3,
+		step = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_SHARPEN",
+		desc = "Contrast-adaptive sharpening (RCAS) for crisp textures alongside FXAA, SMAA, or MSAA. 0 is off.",
+		type = "slider",
+		cvar = "comfySharpen",
+		minval = 0,
+		maxval = 100,
+		step = 5,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_MSAA",
+		desc = "Hardware Multisample Anti-Aliasing (SetMultisampleFormat): Off (1x), 2x, 4x, or 8x. Click Apply MSAA / Aniso below to apply.",
+		type = "slider",
+		cvar = "gxMultisample",
+		values = { 1, 2, 4, 8 },
+		minval = 1,
+		maxval = 4,
+		step = 1,
+		isEnabled = function()
+			return ComfyAtmosphere_MsaaSupported();
+		end,
+	},
+	{
+		name = "COMFYATMOSPHERE_ANISO",
+		desc = "Hardware Anisotropic Texture Filtering: 1x, 2x, 4x, 8x, or 16x. Keeps ground textures sharp at oblique angles. Click Apply below if needed.",
+		type = "slider",
+		cvar = "anisotropic",
+		values = { 1, 2, 4, 8, 16 },
+		minval = 1,
+		maxval = 5,
+		step = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_TRILINEAR",
+		desc = "Smooth mipmap transitions across ground and architecture.",
+		type = "checkbutton",
+		cvar = "trilinear",
+	},
+	{
+		name = "COMFYATMOSPHERE_SPECULAR",
+		desc = "Hardware specular highlights on armor, water, and terrain.",
+		type = "checkbutton",
+		cvar = "specular",
+	},
+	{
+		name = "COMFYATMOSPHERE_FFX_GLOW",
+		desc = "The game's built-in Full-Screen Glow post-process.",
+		type = "checkbutton",
+		cvar = "ffxGlow",
+	},
+	{
+		name = "COMFYATMOSPHERE_FAR_CLIP",
+		desc = "World view distance (farClip). Higher values show distant mountains and cities.",
+		type = "slider",
+		cvar = "farClip",
+		minval = 177,
+		maxval = 1277,
+		step = 50,
+		numberLabels = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_WEATHER_DENSITY",
+		desc = "Rain and snow particle density: Off, Low, Medium, or High.",
+		type = "slider",
+		cvar = "weatherDensity",
+		minval = 0,
+		maxval = 3,
+		step = 1,
+	},
+	{
+		name = "COMFYATMOSPHERE_APPLY_VIDEO",
+		desc = "Restarts the graphics engine (RestartGx) so Hardware MSAA, Anisotropic Filtering, and Trilinear changes take effect immediately.",
+		type = "button",
+		cvar = "__applyVideo",
+		onClick = function()
+			ComfyAtmosphere_ApplyVideo();
+		end,
 	},
 	{
 		name = "COMFYATMOSPHERE_CLOUDS",
@@ -2393,8 +2504,16 @@ local WINDOW_VALUE_TEXT = {
 	comfyVolumeQuality = { "Low", "Medium", "High" },
 	comfyShadowResolution = { "1024", "2048", "4096" },
 	comfyVolumeDownscale = { "Full", "Half", "Third", "Quarter" },
+	comfyAA = { "Off", "FXAA", "SMAA" },
+	comfyAAQuality = { "Low", "Medium", "High" },
+	gxMultisample = { "Off (1x)", "2x", "4x", "8x" },
+	anisotropic = { "Off (1x)", "2x", "4x", "8x", "16x" },
+	weatherDensity = { "Off", "Low", "Medium", "High" },
 };
 local WINDOW_SECTIONS = {
+	{ "Presets", {} },  -- controls of its own (PresetsSectionBuild), synced with the tabs below
+	{ "Display", { "comfyAA", "comfyAAQuality", "comfySharpen", "gxMultisample", "anisotropic",
+	               "trilinear", "specular", "ffxGlow", "farClip", "weatherDensity", "__applyVideo" } },
 	{ "Light", { "comfyVolume", "comfyVolumeStrength", "comfyVolumeQuality", "comfyVolumeSteps", "comfyVolumeDownscale",
 	             "comfyVolumeBlur", "comfyVolumeOcclusion", "comfyVolumeSmooth", "comfyVolumeLeafShade",
 	             "comfyVolumeDensity", "comfyVolumeDistance", "comfyVolumeDirection" } },
@@ -2437,16 +2556,105 @@ local CHIP_GAP = 0;
 local window = nil;
 local windowControls = {};
 local windowRefreshing = false;
+local pendingMsaaFormatIndex = nil;
+
+local function GetSupportedMsaaList()
+	local list = {};
+	if not GetMultisampleFormats then
+		return list;
+	end
+	local formats = { GetMultisampleFormats() };
+	local n = table.getn(formats);
+	local targetColor = tonumber(GetCVar("gxColorBits")) or 24;
+	local targetDepth = tonumber(GetCVar("gxDepthBits")) or 24;
+	local bySamples = {};
+	local i = 1;
+	local fmtIdx = 1;
+	while i + 2 <= n do
+		local cBits = formats[i];
+		local dBits = formats[i + 1];
+		local samples = formats[i + 2];
+		if samples and samples >= 1 then
+			local exact = (cBits == targetColor and dBits == targetDepth);
+			local prev = bySamples[samples];
+			if not prev or (exact and not prev.exact) then
+				bySamples[samples] = { samples = samples, formatIndex = fmtIdx, exact = exact };
+			end
+		end
+		i = i + 3;
+		fmtIdx = fmtIdx + 1;
+	end
+	for _, entry in pairs(bySamples) do
+		table.insert(list, entry);
+	end
+	table.sort(list, function(a, b) return a.samples < b.samples; end);
+	return list;
+end
+
+function ComfyAtmosphere_MsaaSupported()
+	return GetMultisampleFormats ~= nil and table.getn(GetSupportedMsaaList()) > 1;
+end
+
+function ComfyAtmosphere_ApplyVideo()
+	local list = GetSupportedMsaaList();
+	if SetMultisampleFormat and pendingMsaaFormatIndex then
+		SetMultisampleFormat(pendingMsaaFormatIndex);
+	end
+	if RestartGx then
+		RestartGx();
+	end
+	local msaaText = GetCVar("gxMultisample") or "1";
+	if GetCurrentMultisampleFormat and table.getn(list) > 0 then
+		local curFmt = pendingMsaaFormatIndex or GetCurrentMultisampleFormat();
+		for _, entry in ipairs(list) do
+			if entry.formatIndex == curFmt then
+				msaaText = tostring(entry.samples);
+				break;
+			end
+		end
+	end
+	local anisoText = GetCVar("anisotropic") or "1";
+	if DEFAULT_CHAT_FRAME then
+		DEFAULT_CHAT_FRAME:AddMessage("|cff88cc88comfyatmosphere|r: Applied video settings (MSAA " .. msaaText .. "x, Anisotropic " .. anisoText .. "x).");
+	end
+end
 
 local function WindowLabel(option)
 	return getglobal(option.name) or option.name;
 end
 
+local function ValueToSliderIndex(option, raw)
+	if not option.values then
+		return raw;
+	end
+	local best = 1;
+	local bestDiff = 1e9;
+	for idx = 1, table.getn(option.values) do
+		local d = math.abs(option.values[idx] - raw);
+		if d < bestDiff then
+			bestDiff = d;
+			best = idx;
+		end
+	end
+	return best;
+end
+
 local function WindowSliderText(control)
-	local value = tonumber(GetCVar(control.option.cvar)) or control.option.minval;
-	local names = WINDOW_VALUE_TEXT[control.option.cvar];
-	local shown = names and names[value - control.option.minval + 1] or tostring(value);
-	getglobal(control.frame:GetName() .. "Text"):SetText(WindowLabel(control.option) .. ": " .. shown);
+	local o = control.option;
+	local raw = tonumber(GetCVar(o.cvar)) or (o.values and o.values[1] or o.minval);
+	if o.cvar == "gxMultisample" and pendingMsaaFormatIndex then
+		local list = GetSupportedMsaaList();
+		for _, entry in ipairs(list) do
+			if entry.formatIndex == pendingMsaaFormatIndex then
+				raw = entry.samples;
+				break;
+			end
+		end
+	end
+	local idx = ValueToSliderIndex(o, raw);
+	local names = WINDOW_VALUE_TEXT[o.cvar];
+	local shown = names and names[idx - o.minval + 1] or tostring(raw);
+	getglobal(control.frame:GetName() .. "Text"):SetText(WindowLabel(o) .. ": " .. shown);
 end
 
 local function WindowRefresh()
@@ -2454,18 +2662,63 @@ local function WindowRefresh()
 		return;
 	end
 	windowRefreshing = true;
+	-- Sync gxMultisample slider to hardware-supported formats on this adapter.
+	local msaaList = GetSupportedMsaaList();
+	if table.getn(msaaList) > 0 then
+		local curFmt = pendingMsaaFormatIndex or (GetCurrentMultisampleFormat and GetCurrentMultisampleFormat());
+		for _, control in ipairs(windowControls) do
+			if control.option.cvar == "gxMultisample" then
+				local vals = {};
+				local labels = {};
+				for _, entry in ipairs(msaaList) do
+					table.insert(vals, entry.samples);
+					table.insert(labels, entry.samples == 1 and "Off (1x)" or (tostring(entry.samples) .. "x"));
+					if curFmt and entry.formatIndex == curFmt then
+						pendingMsaaFormatIndex = entry.formatIndex;
+					end
+				end
+				control.option.values = vals;
+				control.option.minval = 1;
+				control.option.maxval = table.getn(vals);
+				WINDOW_VALUE_TEXT.gxMultisample = labels;
+				control.frame:SetMinMaxValues(1, control.option.maxval);
+				getglobal(control.frame:GetName() .. "Low"):SetText(labels[1] or "1x");
+				getglobal(control.frame:GetName() .. "High"):SetText(labels[table.getn(labels)] or "8x");
+				break;
+			end
+		end
+	end
+
+	local masterOff = HasCVar(WINDOW_MASTER) and GetCVar(WINDOW_MASTER) ~= "1";
 	for _, control in ipairs(windowControls) do
 		local option = control.option;
-		-- A dependency is pairs of a CVar and the value it needs; every pair must hold.
 		local enabled = true;
-		if option.dependency then
+		-- All comfy* controls (except the master toggle itself) require comfyAtmosphere == "1".
+		if masterOff and option.cvar ~= WINDOW_MASTER and string.sub(option.cvar, 1, 5) == "comfy" then
+			enabled = false;
+		end
+		-- A dependency is pairs of a CVar and the value it needs; every pair must hold.
+		if enabled and option.dependency then
 			for i = 1, table.getn(option.dependency), 2 do
 				if GetCVar(option.dependency[i]) ~= option.dependency[i + 1] then
 					enabled = false;
 				end
 			end
 		end
-		if option.type == "checkbutton" then
+		-- A notDependency is pairs of a CVar and a forbidden value; any match disables it.
+		if enabled and option.notDependency then
+			for i = 1, table.getn(option.notDependency), 2 do
+				if GetCVar(option.notDependency[i]) == option.notDependency[i + 1] then
+					enabled = false;
+				end
+			end
+		end
+		if enabled and option.isEnabled and not option.isEnabled() then
+			enabled = false;
+		end
+		if option.type == "button" then
+			-- Action button (e.g. Apply Video Changes): always clickable.
+		elseif option.type == "checkbutton" then
 			control.frame:SetChecked(GetCVar(option.cvar) == "1");
 			local text = getglobal(control.frame:GetName() .. "Text");
 			if enabled then
@@ -2476,10 +2729,32 @@ local function WindowRefresh()
 				text:SetTextColor(GRAY_FONT_COLOR.r, GRAY_FONT_COLOR.g, GRAY_FONT_COLOR.b);
 			end
 		else
-			control.frame:SetValue(tonumber(GetCVar(option.cvar)) or option.minval);
+			local raw = tonumber(GetCVar(option.cvar)) or (option.values and option.values[1] or option.minval);
+			if option.cvar == "gxMultisample" and pendingMsaaFormatIndex then
+				for _, entry in ipairs(msaaList) do
+					if entry.formatIndex == pendingMsaaFormatIndex then
+						raw = entry.samples;
+						break;
+					end
+				end
+			end
+			control.frame:SetValue(ValueToSliderIndex(option, raw));
 			WindowSliderText(control);
 			control.frame:EnableMouse(enabled);
 			control.frame:SetAlpha(enabled and 1 or 0.4);
+			local fname = control.frame:GetName();
+			local lbl = getglobal(fname .. "Text");
+			local low = getglobal(fname .. "Low");
+			local high = getglobal(fname .. "High");
+			if enabled then
+				if lbl then lbl:SetTextColor(NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b); end
+				if low then low:SetTextColor(HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b); end
+				if high then high:SetTextColor(HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b); end
+			else
+				if lbl then lbl:SetTextColor(GRAY_FONT_COLOR.r, GRAY_FONT_COLOR.g, GRAY_FONT_COLOR.b); end
+				if low then low:SetTextColor(GRAY_FONT_COLOR.r, GRAY_FONT_COLOR.g, GRAY_FONT_COLOR.b); end
+				if high then high:SetTextColor(GRAY_FONT_COLOR.r, GRAY_FONT_COLOR.g, GRAY_FONT_COLOR.b); end
+			end
 		end
 	end
 	windowRefreshing = false;
@@ -2621,10 +2896,25 @@ local function WindowBuild()
 	end
 
 	-- One control, at y in its frame; returns the y under it.
-	local function Add(option, i, parent, x, y, width)
-		local name = "ComfyAtmosphereWindowControl" .. i;
+	local controlId = 0;
+	local function Add(option, parent, x, y, width)
+		controlId = controlId + 1;
+		local name = "ComfyAtmosphereWindowControl" .. controlId;
 		local control = { option = option };
-		if option.type == "checkbutton" then
+		if option.type == "button" then
+			local btn = CreateFrame("Button", name, parent, "UIPanelButtonTemplate");
+			btn:SetWidth(width - 12);
+			btn:SetHeight(22);
+			btn:SetPoint("TOPLEFT", parent, "TOPLEFT", x + 6, y - 4);
+			btn:SetText(WindowLabel(option));
+			btn:SetScript("OnClick", function()
+				if this.comfyOption and this.comfyOption.onClick then
+					this.comfyOption.onClick();
+				end
+			end);
+			control.frame = btn;
+			y = y - 34;
+		elseif option.type == "checkbutton" then
 			local box = CreateFrame("CheckButton", name, parent, "UICheckButtonTemplate");
 			box:SetWidth(26);
 			box:SetHeight(26);
@@ -2652,8 +2942,21 @@ local function WindowBuild()
 				end
 				local o = this.comfyOption;
 				local value = o.minval + math.floor((this:GetValue() - o.minval) / o.step + 0.5) * o.step;
-				SetCVar(o.cvar, tostring(value));
+				local outVal = o.values and o.values[value] or value;
+				if o.cvar == "gxMultisample" then
+					local list = GetSupportedMsaaList();
+					local entry = list[value];
+					if entry then
+						pendingMsaaFormatIndex = entry.formatIndex;
+						outVal = entry.samples;
+						if SetMultisampleFormat and pendingMsaaFormatIndex then
+							SetMultisampleFormat(pendingMsaaFormatIndex);
+						end
+					end
+				end
+				SetCVar(o.cvar, tostring(outVal));
 				WindowSliderText(this.comfyControl);
+				WindowRefresh();
 			end);
 			slider.comfyControl = control;
 			control.frame = slider;
@@ -2668,9 +2971,13 @@ local function WindowBuild()
 
 	-- Atmosphere Effects, at the top, over every section.
 	local chipTop = -32;
-	for i, option in ipairs(ENTRIES) do
+	local entryByCvar = {};
+	for _, option in ipairs(ENTRIES) do
+		if option.cvar then
+			entryByCvar[option.cvar] = option;
+		end
 		if option.cvar == WINDOW_MASTER and HasCVar(option.cvar) then
-			Add(option, i, window, 12, chipTop, CONTENT_WIDTH);
+			Add(option, window, 12, chipTop, CONTENT_WIDTH);
 			chipTop = chipTop - 30;
 		end
 	end
@@ -2718,14 +3025,94 @@ local function WindowBuild()
 		contents[t] = content;
 		heights[t] = -4;
 	end
-	for i, option in ipairs(ENTRIES) do
-		if option.cvar ~= WINDOW_MASTER and not WINDOW_LEFT_OUT[option.cvar] and HasCVar(option.cvar) then
+	for _, option in ipairs(ENTRIES) do
+		if option.cvar ~= WINDOW_MASTER and not WINDOW_LEFT_OUT[option.cvar] and (option.type == "button" or HasCVar(option.cvar)) then
 			local t = sectionOf[option.cvar] or others;
-			heights[t] = Add(option, i, contents[t], 0, heights[t], CONTENT_WIDTH);
+			heights[t] = Add(option, contents[t], 0, heights[t], CONTENT_WIDTH);
 		end
 	end
 	for t = 1, count do
-		if WINDOW_SECTIONS[t][1] == "Time" then
+		if WINDOW_SECTIONS[t][1] == "Presets" then
+			local parent = contents[t];
+			local py = heights[t];
+
+			local hdr1 = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall");
+			hdr1:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, py - 2);
+			hdr1:SetText("Performance Presets");
+			py = py - 18;
+
+			local presets = {
+				{ "verylow", "Very Low", "Minimum GPU load: core effects off, fast view distance." },
+				{ "low",     "Low",      "Light fog, lamps & water with low shadow/volume cost." },
+				{ "medium",  "Medium",   "Balanced FXAA, medium shadows & volumetric light." },
+				{ "high",    "High",     "SMAA, 2048 shadows, full water & sun rays." },
+				{ "ultra",   "Ultra",    "Maximum quality: 4096 shadows, full volumetrics & SMAA." },
+			};
+			for idx = 1, table.getn(presets) do
+				local p = presets[idx];
+				local btn = CreateFrame("Button", "ComfyAtmospherePresetBtn" .. idx, parent, "UIPanelButtonTemplate");
+				local isLast = (idx == 5);
+				local col = (idx == 2 or idx == 4) and 1 or 0;
+				local bx = isLast and 4 or (4 + col * 96);
+				local bw = isLast and (CONTENT_WIDTH - 10) or 92;
+				btn:SetWidth(bw);
+				btn:SetHeight(20);
+				btn:SetPoint("TOPLEFT", parent, "TOPLEFT", bx, py);
+				btn:SetText(p[2]);
+				GreyButton(btn);
+				btn.comfyPresetKey = p[1];
+				btn.comfyPresetTitle = p[2];
+				btn.comfyPresetDesc = p[3];
+				btn:SetScript("OnClick", function()
+					if ComfyAtmosphere_ApplyPreset then
+						ComfyAtmosphere_ApplyPreset(this.comfyPresetKey, WindowRefresh);
+					end
+				end);
+				btn:SetScript("OnEnter", function()
+					GameTooltip:SetOwner(this, "ANCHOR_RIGHT");
+					GameTooltip:SetText(this.comfyPresetTitle .. " Preset", 1, 1, 1);
+					GameTooltip:AddLine(this.comfyPresetDesc, NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b, 1);
+					GameTooltip:Show();
+				end);
+				btn:SetScript("OnLeave", function() GameTooltip:Hide(); end);
+				if col == 1 or isLast then
+					py = py - 24;
+				end
+			end
+
+			py = py - 4;
+			local hdr2 = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall");
+			hdr2:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, py);
+			hdr2:SetText("Major Systems");
+			py = py - 16;
+
+			local toggles = {
+				"comfyVolume", "comfySunShadows", "comfyMist", "comfyLamps",
+				"comfyRays", "comfyClouds", "comfyWater", "comfyGrass", "comfyColor",
+			};
+			for _, cvar in ipairs(toggles) do
+				local opt = entryByCvar[cvar];
+				if opt and HasCVar(cvar) then
+					py = Add(opt, parent, 0, py, CONTENT_WIDTH);
+				end
+			end
+
+			py = py - 4;
+			local hdr3 = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall");
+			hdr3:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, py);
+			hdr3:SetText("Quality Balance");
+			py = py - 18;
+
+			local sliders = { "comfyAA", "comfyVolumeQuality", "comfyShadowResolution" };
+			for _, cvar in ipairs(sliders) do
+				local opt = entryByCvar[cvar];
+				if opt and HasCVar(cvar) then
+					py = Add(opt, parent, 0, py, CONTENT_WIDTH);
+				end
+			end
+
+			heights[t] = py;
+		elseif WINDOW_SECTIONS[t][1] == "Time" then
 			heights[t] = TimeSectionBuild(contents[t], heights[t], CONTENT_WIDTH);
 		end
 	end

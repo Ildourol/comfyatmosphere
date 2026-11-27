@@ -105,6 +105,15 @@ struct ColourSettings
                                 // 2026-10-16 (the owner), 80 before
 };
 
+// Post-process Anti-Aliasing & Sharpening (aa.cpp): FXAA 3.11, 3-pass SMAA 1x, and RCAS sharpening.
+// Runs at the world -> UI boundary so UI text stays 100% crisp.
+struct AaSettings
+{
+    int   mode    = 2;          // 0 = Off, 1 = FXAA, 2 = SMAA
+    int   quality = 2;          // 1 = Low, 2 = Medium, 3 = High
+    float sharpen = 0.20f;      // 0..1: RCAS contrast-adaptive sharpening (0 = off)
+};
+
 // A readable depth buffer (depth.cpp), which the volumetric light reads. Off unless enabled.
 struct DepthSettings
 {
@@ -729,6 +738,7 @@ struct Settings
     SunSettings  sun;
     NightSettings night;
     ColourSettings colour;
+    AaSettings aa;
     LighthouseSettings lighthouse;
     GrassSettings grass;
     TimeSettings time;

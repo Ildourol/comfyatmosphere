@@ -41,6 +41,7 @@ add_library(comfyatmos SHARED
     src/report.cpp
     src/water.cpp
     src/grade.cpp
+    src/aa.cpp
     src/grass.cpp
     src/timeofday.cpp
     src/beacon.cpp

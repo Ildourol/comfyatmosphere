@@ -20,6 +20,7 @@
 #include <windows.h>
 #include <d3d9.h>
 
+#include "aa.h"
 #include "beacon.h"
 #include "bench.h"
 #include <intrin.h>
@@ -877,6 +878,8 @@ namespace
         BenchSectionBegin(dev, kBenchGrade);
         const bool graded = GradeBeforeUI(dev);
         BenchSectionEnd(dev, kBenchGrade, graded);
+        // Post-process Anti-Aliasing (FXAA / SMAA) & RCAS sharpening, right before UI so UI text stays crisp.
+        AaBeforeUI(dev);
         if (graded && g_probe.active)
             Log("  [draw %4u] SATURATION     x %.2f", g_probe.draws, GradeSaturationNow());
         // The sun's dots last, over everything ([sun] debug, sundot.cpp).
@@ -1145,6 +1148,7 @@ namespace
             GameGlowReset();
             WaterReset();
             GradeReset();
+            AaReset();
         SunDotReset();
             CloudsReset();
             ForgetMistTextures();
@@ -1292,6 +1296,7 @@ namespace
         GameGlowReset();
         WaterReset();
         GradeReset();
+        AaReset();
         SunDotReset();
         BeaconReset();
         GrassReset();
@@ -1551,6 +1556,7 @@ namespace
         GameGlowReset();
         WaterReset();
         GradeReset();
+        AaReset();
         SunDotReset();
         CloudsReset();
         ForgetMistTextures();

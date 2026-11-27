@@ -60,6 +60,7 @@ namespace
     const wchar_t* kRays    = L"rays";
     const wchar_t* kNight   = L"night";
     const wchar_t* kColour  = L"colour";
+    const wchar_t* kAa      = L"aa";
     const wchar_t* kLighthouse = L"lighthouse";
     const wchar_t* kGrass   = L"grass";
     const wchar_t* kTime    = L"time";
@@ -522,6 +523,14 @@ void LoadSettings(const wchar_t* ini)
     s.colour.day   = Clamp(GetF(kColour, L"day",   s.colour.day,   ini), 0.0f, 200.0f);
     s.colour.night = Clamp(GetF(kColour, L"night", s.colour.night, ini), 0.0f, 200.0f);
     s.colour.gameGlow = Clamp(GetF(kColour, L"gameGlow", s.colour.gameGlow, ini), 0.0f, 200.0f);
+
+    s.aa.mode    = GetI(kAa, L"mode", s.aa.mode, ini);
+    if (s.aa.mode < 0) s.aa.mode = 0;
+    if (s.aa.mode > 2) s.aa.mode = 2;
+    s.aa.quality = GetI(kAa, L"quality", s.aa.quality, ini);
+    if (s.aa.quality < 1) s.aa.quality = 1;
+    if (s.aa.quality > 3) s.aa.quality = 3;
+    s.aa.sharpen = Clamp(GetF(kAa, L"sharpen", s.aa.sharpen, ini), 0.0f, 1.0f);
 
     GrassSettings& g = s.grass;
     g.enabled         = GetB(kGrass, L"enabled", g.enabled, ini);
